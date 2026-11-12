@@ -413,10 +413,19 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.4.0';
+export const VERSION = '1.4.1';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd141', version: '1.4.1', date: 'Nov 2026', title: 'Profiles and safer saves', tag: 'Fix',
+    body: [
+      'Click your name (top right) to open your Profile: name, avatar, title and name colour, your stats and character levels.',
+      'Your progress is now also saved on your device outside the game page (the Windows app keeps a file, the Android app its own copy), so it survives updates.',
+      'Backup code: Profile > Copy backup code. Paste it on another device (or after reinstalling) with Restore from a code to bring everything back.',
+      'Fixed: The Child of Slendrina was missing in the Store and Loadout pictures.',
+    ],
+  },
   {
     id: 'gdbd14', version: '1.4.0', date: 'Nov 2026', title: 'Levels, seasons and the Child', tag: 'Update',
     gift: { embers: 5000, label: 'Update gift: 5,000 Embers' },

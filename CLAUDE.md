@@ -61,13 +61,14 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   `rawglb.mjs file.glb prefix` plays a GLB's own clips with plain three.js; `render-devlog.mjs` + `devlog13-page.js` /
   `devlog14-page.js` the devlog banners (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
   `match14.mjs` a 2v8 match as Angeline with the Child (`GM=classic K=granny` to change). simtest takes `MODE=duo` and
-  `KID=1`. Playwright resolves through `tools/test/node_modules` -> `$(npm root -g)` (a symlink, not committed: recreate it).
+  `KID=1`. `offline141.mjs` runs the offline single file (Store picture, Profile panel, save mirror with a fake disk;
+  `MOBILE=1` for phone size); `offkid.mjs` checks the Child loads in a match in the offline file. Playwright resolves through `tools/test/node_modules` -> `$(npm root -g)` (a symlink, not committed: recreate it).
 - `server.js` optional LAN server (`node server.js 8090`), `start-*.bat/.sh/.command` launchers.
 - `README.md` is still Nightbound's old README (outdated; don't trust it for this game).
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.0'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.1'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -125,12 +126,22 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   -> shriek: revealed 4 s (14 s per survivor), event `kidcry`. Model slendrina_child.glb ("DVloper - Slendrina's Child
   (Official Model)" by danielthesecond, CC BY 4.0; own clips idle/walk/attack/eat...), `makeChild` in grannyGlb.js; game.js
   `updateKids` draws it and fades it near the camera. Bot killers bring it 35% of the time. Portrait: public/img/child.png
-  (tools/test/childshot.mjs).
+  (tools/test/childshot.mjs, then convert to public/img/child.jpg).
 - Two Killers / 2 vs 8 (1.4): `MODES.duo` (killers 2, survivors 8, 6 of 7 generators). Bot killers stop patrolling generators
   once the gates are powered and pace in front of their own gate (`killersOf(S).filter(bot).indexOf(p)`).
 - Third-person camera (1.4): besides the collision boxes it ray-casts the house model (`W.glb`, ~15/s) and a point 0.7 m
   lower, so it no longer ends up inside walls/the broken gate that have no collision box.
 - HUD perks: four perk diamonds sit top/left/right/bottom (`#perks .diamond:nth-child(4)`).
+- Saves (1.4.1): `store` in main.js writes localStorage AND a disk copy when there is one: the Windows app's
+  `tools/electron/preload.js` (`window.gdbdDisk`, sync IPC to main.js -> `%APPDATA%\Granny x DBD\saves\profile.json` /
+  `settings.json`, written atomically) and the Android app's `GameStore` (JavascriptInterface, SharedPreferences
+  `gdbd_saves`). Every profile save bumps `profile._sv`; on load the copy with the higher `_sv` wins, so a cleared or
+  replaced browser storage comes back from disk. Uninstalling the APK still deletes everything: that's what the backup code is for.
+- Profile panel (1.4.1, click the name top right, `renderProfile`): name (= settings.name), avatar (`profile.avatar`, one of the
+  8 characters), title (`profile.title`, `titlesList()`: level, ranks, achievements, badges), name colour (`profile.accent`),
+  character levels, and a backup code (`GDBD1:` + base64 of {n: name, p: profile}; Copy / Show / Restore from a code).
+- Images used by the offline builds must come through the stylesheet (`url(../img/...)` is inlined by build.mjs): a
+  plain `<img src="img/...">` works on the web build only. The Child's picture is `.child-art` (public/img/child.jpg).
 - Headless bot-only matches (Sim + Bots, no rendering) run ~10 game minutes per second: useful to find stalls.
 
 ## Build
@@ -190,7 +201,9 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.4 (current): character levels + stats, The Child of Slendrina sidekick, Two Killers (2v8), seasons + ranks + season
+1.4.1 (current): Profile panel, disk save mirror (exe + apk), backup codes, the Child's picture in the offline builds.
+APK versionCode 16 / 1.4.1, Windows 1.4.1, `VERSION = '1.4.1'` (NET_PROTOCOL still 13: plays with 1.4.0).
+1.4: character levels + stats, The Child of Slendrina sidekick, Two Killers (2v8), seasons + ranks + season
 pass with a premium track, perk HUD fix, camera ray-cast. APK versionCode 15 / 1.4.0 (signed with grannyxdbd-1.3.jks),
 Windows app 1.4.0. Devlog banner "LEVEL UP · AND MEET THE CHILD" (tools/test/devlog14-page.js, PAGE=... OUT=... render-devlog.mjs).
 1.3.1: Angeline animated in code (see Angeline above); APK versionCode 14 / 1.3.1, Windows app 1.3.1

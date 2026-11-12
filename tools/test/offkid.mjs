@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+const pg = await br.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.addInitScript(() => { localStorage.setItem('gdbd_profile', JSON.stringify({ seen: { intro: true, help: true, tut: true }, killer: { char: 'granny', perks: [], pet: 'child' }, survivor: { char: 'mara', perks: [] }, stats: { embers: 0, matches: 1, escapes: 0, kills: 0 }, pets: { child: true } })); localStorage.setItem('gdbd_settings', JSON.stringify({ quality: 'low', name: 'T' })); });
+await pg.goto('file:///home/user/granny-x-dbd/GrannyDBD.html');
+await pg.waitForFunction(() => window.__nb && document.querySelector('#mainnav button'), null, { timeout: 180000 });
+await pg.evaluate(() => document.querySelector('[data-act="play-killer"]').click()); await pg.waitForTimeout(600);
+await pg.evaluate(() => document.querySelector('#btn-bots-start').click());
+await pg.waitForFunction(() => window.__nb.session && window.__nb.session.game && window.__nb.session.sim && window.__nb.session.sim.S.t > 2, null, { timeout: 240000 });
+await pg.waitForTimeout(3000);
+console.log(await pg.evaluate(() => { const g = window.__nb.session.game; return JSON.stringify({ simKids: window.__nb.session.sim.S.kids.length, drawn: g.kids ? g.kids.size : 0 }); }), 'errors', errs);
+await br.close();

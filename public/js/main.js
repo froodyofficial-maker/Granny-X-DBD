@@ -58,9 +58,30 @@ if (MOBILE) {
   }
 }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Saves live in localStorage, and (1.4.1) also on disk where there is one: the Windows app writes a file in its data
+// folder (preload.js), the Android app keeps a copy in its own storage (GameStore). If the browser storage ever comes up
+// empty or older (a cleared cache, a reinstall that kept app data, a moved app), the disk copy brings everything back.
+// Each profile save is numbered (_sv); the copy with the higher number wins.
+const disk = (() => {
+  try {
+    if (window.gdbdDisk) return window.gdbdDisk;
+    if (window.GameStore) return { load: k => window.GameStore.load(k) || null, save: (k, v) => window.GameStore.save(k, v) };
+  } catch {}
+  return null;
+})();
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('gdbd_' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('gdbd_' + k, JSON.stringify(v)); } catch {} },
+  get(k, d) {
+    let a = null, b = null;
+    try { const v = localStorage.getItem('gdbd_' + k); a = v ? JSON.parse(v) : null; } catch {}
+    try { const v = disk && disk.load(k); b = v ? JSON.parse(v) : null; } catch {}
+    if (a && b && typeof a === 'object' && typeof b === 'object') return ((b._sv | 0) > (a._sv | 0) ? b : a);
+    return a || b || d;
+  },
+  set(k, v) {
+    let j; try { j = JSON.stringify(v); } catch { return; }
+    try { localStorage.setItem('gdbd_' + k, j); } catch {}
+    try { disk && disk.save(k, j); } catch {}
+  },
 };
 
 // Pick a sensible default for the machine: integrated / software GPUs start on Low or Very Low.
@@ -114,7 +135,7 @@ const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
 const perkFits = (k, char) => { const P = SURV_PERKS[k] || KILLER_PERKS[k]; return !P || !P.only || P.only === char; };
 const charName0 = id => (KILLERS[id] || SURVIVORS[id] || {}).name || id;
 const saveSettings = () => store.set('settings', settings);
-const saveProfile = () => store.set('profile', profile);
+const saveProfile = () => { profile._sv = (profile._sv | 0) + 1; store.set('profile', profile); };
 saveSettings();
 sound.vol = settings.vol; sound.music = settings.music;
 
@@ -207,11 +228,13 @@ function renderShowcase() {
   }
   const st = profile.stats;
   const lv = levelOf((profile.prog || {}).xp || 0), rk = rankOf(((profile.prog || {}).ranks || {})[menuMode === 'killer' ? 'killer' : 'survivor'] || 0);
-  $('profile').innerHTML = `<div class="pn">${esc(settings.name)}</div><div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
+  const tl = titleOf();
+  $('profile').style.setProperty('--acc', profile.accent || '#efe6d6');
+  $('profile').innerHTML = `<div class="pn">${avatarHTML(36)}<span class="pname">${esc(settings.name)}</span></div>${tl ? `<div class="ptitle">${esc(tl)}</div>` : ''}<div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
 }
 
 // ---------- side panel ----------
-const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends'];
+const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends', 'p-profile'];
 let openSection = null;
 function openPanel(id, title, wide = false) {
   for (const p of SECTIONS) $(p).classList.toggle('hidden', p !== id);
@@ -229,6 +252,7 @@ function openPanel(id, title, wide = false) {
   if (id === 'p-online') { detectModeHint(); startBrowse(); } else stopBrowse();
   if (id === 'p-inbox') renderInbox();
   if (id === 'p-pass') renderPass();
+  if (id === 'p-profile') renderProfile();
   if (id === 'p-friends') renderFriends();
 }
 function closePanel() {
@@ -322,7 +346,7 @@ function bindLevel(container, role, char, rerender) {
 }
 function kidRowHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
-  return `<div class="kid-row ${on ? 'on' : ''}"><img alt="" src="${(document.querySelector('script[type=importmap]') ? '' : 'public/')}img/child.png"><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
+  return `<div class="kid-row ${on ? 'on' : ''}"><span class="child-art"></span><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
 }
 function renderLoadout(container, role, compact, onChange) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS;
@@ -620,7 +644,7 @@ function sidekicksHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
   const act = !own ? `<span class="ch-price">${price(D.price)}</span><button class="btn primary" data-kidbuy>Buy</button>` : `<button class="btn ${on ? '' : 'primary'}" data-kidtoggle>${on ? 'Unequip' : 'Equip'}</button>${on ? '<span class="of-p eq">Equipped</span>' : ''}`;
   return `<div class="ch-row-title">Sidekicks · companions for killers</div>
-    <div class="kid-card"><div class="kid-img" style="background-image:url(${(document.querySelector('script[type=importmap]') ? '' : 'public/')}img/child.png)"></div>
+    <div class="kid-card"><div class="kid-img child-art"></div>
       <div class="kid-body"><small>Killer sidekick</small><h3>${esc(D.name)}</h3><p>${esc(D.desc)}</p><p class="hint">It can't be hurt and never blocks anyone. When it falls behind (a wall, the stairs, a Haunt or a Creep) it catches up out of sight. Equip it in the killer Loadout.</p><div class="row">${act}</div></div></div>`;
 }
 
@@ -1521,6 +1545,77 @@ function renderPass() {
     P.season.prem = true; saveProfile(); sound.play('escaped'); renderPass();
   });
 }
+
+// ---------- profile (1.4.1): name, avatar, title, name colour, stats, backup code ----------
+const ACCENTS = ['#efe6d6', '#e8241c', '#e0b84a', '#7ed08a', '#8b98ff', '#d070ff', '#60d0e0'];
+function titlesList() {
+  const P = progOf(profile), st = profile.stats, rs = rankOf(P.ranks.survivor || 0), rk = rankOf(P.ranks.killer || 0), lv = levelOf(P.xp).lvl;
+  const T = [
+    { id: '', label: 'No title', ok: true },
+    { id: 'lvl', label: `Level ${lv}`, ok: true },
+    { id: 'rank-s', label: `${rs.name} Survivor`, ok: true },
+    { id: 'rank-k', label: `${rk.name} Killer`, ok: true },
+    { id: 'esc', label: 'Escape Artist', ok: st.escapes >= 25, need: '25 escapes' },
+    { id: 'kills', label: 'Night Terror', ok: st.kills >= 50, need: '50 kills' },
+    { id: 'vet', label: 'Regular Guest', ok: st.matches >= 100, need: '100 matches' },
+    { id: 'child', label: "The Child's Keeper", ok: !!profile.pets.child, need: 'own The Child of Slendrina' },
+    { id: 'pass', label: 'Season Pass Holder', ok: !!P.season.prem, need: 'the premium Season Pass' },
+  ];
+  for (const b of Object.keys(P.badges || {})) T.push({ id: 'b:' + b, label: /-final$/.test(b) ? `Season ${b.replace(/^s|-.*$/g, '')} Finisher` : `Season ${b.replace(/^s|-.*$/g, '')} Veteran`, ok: true });
+  return T;
+}
+const titleOf = () => { const t = titlesList().find(x => x.id === (profile.title || '') && x.ok); return t && t.id ? t.label : ''; };
+function avatarHTML(size) {
+  const c = KILLERS[profile.avatar] || SURVIVORS[profile.avatar] ? profile.avatar : profile.survivor.char;
+  return `<img class="pav" alt="" width="${size}" height="${size}" src="${art('portrait', c, skinId(c), 96, 96)}">`;
+}
+// a backup code: the whole profile (and name), so progress can be carried to another device or restored after a reinstall
+const backupCode = () => 'GDBD1:' + btoa(unescape(encodeURIComponent(JSON.stringify({ n: settings.name, p: profile }))));
+function readBackup(code) {
+  const m = String(code || '').trim().replace(/\s+/g, '').match(/^GDBD1:([A-Za-z0-9+/=]+)$/);
+  if (!m) return null;
+  try { const o = JSON.parse(decodeURIComponent(escape(atob(m[1])))); return o && o.p && o.p.stats && o.p.killer && o.p.survivor ? o : null; } catch { return null; }
+}
+function renderProfile() {
+  const P = progOf(profile), st = profile.stats, lv = levelOf(P.xp);
+  const chars = [...PLAY_K, ...PLAY_S];
+  const av = KILLERS[profile.avatar] || SURVIVORS[profile.avatar] ? profile.avatar : profile.survivor.char;
+  const titles = titlesList().map(t => `<button class="pf-title ${(profile.title || '') === t.id ? 'on' : ''} ${t.ok ? '' : 'locked'}" ${t.ok ? `data-title="${esc(t.id)}"` : 'disabled'} title="${t.ok ? '' : 'Unlock: ' + esc(t.need)}">${esc(t.label)}${t.ok ? '' : `<small>${esc(t.need)}</small>`}</button>`).join('');
+  const levels = chars.map(c => `<span><b>${esc(charName0(c).replace(/^The /, ''))}</b> ${charLv(charOf(profile, c).xp).lvl}</span>`).join('');
+  $('profile-body').innerHTML = `
+    <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span><span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
+    <div class="field"><label>Name <span class="hint-inline">(what other players see online)</span></label><input id="pf-name" maxlength="16" value="${esc(settings.name)}" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label>Avatar</label><div class="pf-avs">${chars.map(c => `<button class="pf-av ${av === c ? 'on' : ''}" data-av="${c}" title="${esc(charName0(c))}"><img alt="" src="${art('portrait', c, skinId(c), 96, 96)}"></button>`).join('')}</div></div>
+    <div class="field"><label>Title</label><div class="pf-titles">${titles}</div></div>
+    <div class="field"><label>Name colour</label><div class="pf-accs">${ACCENTS.map(a => `<button class="pf-acc ${(profile.accent || ACCENTS[0]) === a ? 'on' : ''}" data-acc="${a}" style="background:${a}"></button>`).join('')}</div></div>
+    <div class="field"><label>Character levels</label><div class="pf-lvls">${levels}</div></div>
+    <div class="field"><label>Backup <span class="hint-inline">(keep your progress: copy the code somewhere safe, or paste it on another device)</span></label>
+      <div class="pf-bk"><button class="btn small" id="pf-copy">Copy backup code</button><button class="btn small" id="pf-show">Show code</button><button class="btn small" id="pf-restore">Restore from a code…</button></div>
+      <textarea id="pf-code" class="hidden" rows="3" spellcheck="false"></textarea><div class="pf-bk hidden" id="pf-apply-row"><button class="btn small primary" id="pf-apply">Restore this backup</button><span class="hint">Replaces everything on this device with the backup.</span></div></div>`;
+  const B = $('profile-body');
+  $('pf-name').oninput = e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); $('set-name').value = settings.name; renderShowcase(); B.querySelector('.pf-name').textContent = settings.name; };
+  B.querySelectorAll('[data-av]').forEach(b => b.onclick = () => { profile.avatar = b.dataset.av; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
+  B.querySelectorAll('[data-title]').forEach(b => b.onclick = () => { profile.title = b.dataset.title; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
+  B.querySelectorAll('[data-acc]').forEach(b => b.onclick = () => { profile.accent = b.dataset.acc; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
+  const code = $('pf-code');
+  $('pf-show').onclick = () => { code.classList.remove('hidden'); code.readOnly = true; code.value = backupCode(); code.focus(); code.select(); $('pf-apply-row').classList.add('hidden'); };
+  $('pf-copy').onclick = async () => {
+    const c = backupCode();
+    try { await navigator.clipboard.writeText(c); toast('Backup code copied. Keep it somewhere safe.'); }
+    catch { code.classList.remove('hidden'); code.readOnly = true; code.value = c; code.focus(); code.select(); try { document.execCommand('copy'); toast('Backup code copied.'); } catch { toast('Select the code and copy it.'); } }
+  };
+  $('pf-restore').onclick = () => { code.classList.remove('hidden'); code.readOnly = false; code.value = ''; code.placeholder = 'Paste a backup code (GDBD1:...)'; code.focus(); $('pf-apply-row').classList.remove('hidden'); };
+  $('pf-apply').onclick = () => {
+    const o = readBackup(code.value);
+    if (!o) { toast("That isn't a Granny x DBD backup code."); return; }
+    if (!confirm(`Restore this backup? (${(o.p.stats.embers | 0).toLocaleString()} Embers, ${o.p.stats.matches | 0} matches.) It replaces the progress on this device.`)) return;
+    for (const k of Object.keys(profile)) delete profile[k];
+    Object.assign(profile, o.p); profile._sv = Math.max(profile._sv | 0, 0);
+    if (o.n) { settings.name = String(o.n).slice(0, 16); saveSettings(); }
+    saveProfile(); toast('Backup restored.'); setTimeout(() => location.reload(), 600);
+  };
+}
+$('profile').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-profile', 'Profile', true); });
 
 // ---------- friends ----------
 const friends = new Friends(profile, saveProfile, () => settings.name);

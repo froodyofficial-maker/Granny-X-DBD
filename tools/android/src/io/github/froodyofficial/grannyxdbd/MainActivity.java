@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     s.setBuiltInZoomControls(false);
     s.setDisplayZoomControls(false);
     web.setWebChromeClient(new WebChromeClient());
+    web.addJavascriptInterface(new GameStore(this), "GameStore"); // a copy of the saves in the app's storage
     web.setWebViewClient(new GameClient(this));
     setContentView(web);
     immersive();

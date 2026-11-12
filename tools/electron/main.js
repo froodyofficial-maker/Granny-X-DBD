@@ -7,7 +7,7 @@
 //    Safe Graphics mode: no hardware acceleration, WebGL in software (SwiftShader). Slower, but it runs.
 //    Safe mode sticks for later launches; start with --gpu to try the graphics card again.
 //  - everything that goes wrong is written to log.txt in the app's data folder (%APPDATA%\Granny x DBD)
-const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
+const { app, BrowserWindow, shell, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -43,6 +43,16 @@ function toSafeMode(why) {
   return true;
 }
 
+// saves on disk (see preload.js): written to a temp file first, then renamed, so a crash never leaves half a file
+const saveDir = path.join(dataDir, 'saves');
+ipcMain.on('gdbd-load', (e, k) => {
+  try { e.returnValue = /^(profile|settings)$/.test(k) ? fs.readFileSync(path.join(saveDir, k + '.json'), 'utf8') : null; } catch { e.returnValue = null; }
+});
+ipcMain.on('gdbd-save', (e, k, v) => {
+  if (!/^(profile|settings)$/.test(k) || typeof v !== 'string') return;
+  try { fs.mkdirSync(saveDir, { recursive: true }); const f = path.join(saveDir, k + '.json'); fs.writeFileSync(f + '.tmp', v); fs.renameSync(f + '.tmp', f); } catch (err) { log('save failed:', err && err.message); }
+});
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   let win = null;
@@ -62,7 +72,7 @@ else {
     win = new BrowserWindow({
       width: 1280, height: 760, minWidth: 960, minHeight: 600, show: false, backgroundColor: '#050405',
       title: 'Granny x DBD', icon: path.join(__dirname, 'icon.png'), autoHideMenuBar: true,
-      webPreferences: { backgroundThrottling: false, contextIsolation: true, sandbox: true, spellcheck: false },
+      webPreferences: { backgroundThrottling: false, contextIsolation: true, sandbox: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
     });
     let shown = false;
     const show = () => { if (shown || win.isDestroyed()) return; shown = true; win.maximize(); win.show(); };

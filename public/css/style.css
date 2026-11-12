@@ -902,7 +902,7 @@ html:not(.mobile) .touch-word { display: none; }
 /* the killer's sidekick */
 .kid-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.35); padding: 6px 10px; }
 .kid-row.on { border-color: rgba(200,60,50,.6); }
-.kid-row img { width: 52px; height: 52px; object-fit: cover; background: #0a0808; }
+.kid-row .child-art { width: 52px; height: 52px; flex: none; }
 .kid-row div { flex: 1; display: flex; flex-direction: column; } .kid-row small { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
 .kid-row b { font-family: var(--display); font-weight: 400; font-size: 20px; letter-spacing: .04em; color: var(--bone); } .kid-row span { font-size: 12px; color: #a89e90; }
 .kid-card { display: grid; grid-template-columns: minmax(220px, 380px) 1fr; gap: 20px; border: 1px solid var(--line); background: rgba(0,0,0,.45); }
@@ -928,3 +928,26 @@ html:not(.mobile) .touch-word { display: none; }
 .of.pass { --rar: #d8b56a; }
 .lv-acts .ico, .sp-prem .ico, .kid-body .ico { width: 16px; height: 16px; vertical-align: -3px; display: inline-block; }
 .lv-acts .btn.small { display: inline-flex; align-items: center; gap: 6px; }
+
+/* (in the stylesheet so the offline builds embed it) */
+.child-art { background: #0a0808 url(../img/child.jpg) center / cover no-repeat; display: block; }
+
+/* 1.4.1: profile (top right, clickable) and the Profile panel */
+button.profile { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; }
+button.profile:hover .pname { text-decoration: underline; text-decoration-color: var(--red2); }
+.profile .pname { color: var(--acc, var(--bone)); }
+.profile .ptitle { color: var(--acc, var(--gold)); opacity: .85; font-size: 12px; letter-spacing: .16em; }
+.pav { border-radius: 50%; object-fit: cover; background: #120c0c; border: 2px solid var(--acc, rgba(233,224,208,.5)); flex: none; }
+.pf-top { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+.pf-top > div { display: flex; flex-direction: column; gap: 2px; }
+.pf-name { font-family: var(--display); font-weight: 400; font-size: 34px; letter-spacing: .04em; color: var(--acc); line-height: 1; }
+.pf-tl { font-family: var(--cond); letter-spacing: .16em; text-transform: uppercase; color: var(--gold); font-size: 13px; }
+.pf-avs, .pf-titles, .pf-accs, .pf-lvls, .pf-bk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pf-av { width: 64px; height: 64px; padding: 0; border: 2px solid var(--line); background: #120c0c; cursor: pointer; border-radius: 50%; overflow: hidden; }
+.pf-av img { width: 100%; height: 100%; object-fit: cover; } .pf-av.on { border-color: var(--gold); box-shadow: 0 0 12px rgba(216,181,106,.4); }
+.pf-title { padding: 6px 10px; border: 1px solid var(--line); background: rgba(0,0,0,.4); color: var(--bone); cursor: pointer; font-family: var(--cond); letter-spacing: .1em; text-transform: uppercase; font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; }
+.pf-title.on { border-color: var(--gold); color: var(--gold); } .pf-title.locked { opacity: .45; cursor: default; } .pf-title small { font-size: 10px; color: var(--dim); text-transform: none; letter-spacing: .02em; }
+.pf-acc { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(0,0,0,.6); cursor: pointer; } .pf-acc.on { box-shadow: 0 0 0 2px var(--bone); }
+.pf-lvls span { padding: 4px 8px; border: 1px solid var(--line); font-size: 12px; color: #a89e90; } .pf-lvls b { color: var(--bone); font-weight: 600; }
+#pf-code { width: 100%; margin-top: 8px; font-family: monospace; font-size: 11px; background: rgba(0,0,0,.5); color: var(--bone); border: 1px solid var(--line); padding: 6px; resize: vertical; }
+.pf-top .ico, .hint .ico { width: 14px; height: 14px; vertical-align: -2px; display: inline-block; color: var(--gold); }
