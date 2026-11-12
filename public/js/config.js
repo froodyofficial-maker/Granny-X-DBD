@@ -413,10 +413,20 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.4.1';
+export const VERSION = '1.4.2';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd142', version: '1.4.2', date: 'Nov 2026', title: 'Skill checks, Two Killers, Angeline', tag: 'Fix',
+    body: [
+      'New skill check: a cleaner ring with the success zone outlined and the great zone filled in, a red needle and the key in the middle.',
+      'Two Killers (2 vs 8): pick both killers (or your partner) in the bot match menu.',
+      "Angeline's head is no longer squashed flat when she turns it.",
+      'Windows: starting a new version now closes an older copy that was still open, instead of bringing the old one back.',
+      'Backup code: also in Settings (Backup & restore).',
+    ],
+  },
   {
     id: 'gdbd141', version: '1.4.1', date: 'Nov 2026', title: 'Profiles and safer saves', tag: 'Fix',
     body: [

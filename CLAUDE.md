@@ -68,7 +68,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.1'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.2'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -157,7 +157,7 @@ cp GrannyDBD.html tools/electron/app/index.html
 cd tools/electron && npm install
 npx @electron/packager . GrannyxDBD --platform=win32 --arch=x64 --out=out --overwrite --icon=icon.ico
 (cd out && zip -qr ../GrannyxDBD-Windows.zip GrannyxDBD-win32-x64)   # backup: the folder, must be extracted
-npx electron-builder --win portable --x64 --prepackaged out/GrannyxDBD-win32-x64 --config builder.json  # → dist/GrannyxDBD.exe
+npx electron-builder --win portable --x64 --prepackaged out/GrannyxDBD-win32-x64 --config builder.json -c.portable.unpackDirName=GrannyxDBD-<version>  # → dist/GrannyxDBD.exe
 ```
 The single portable `dist/GrannyxDBD.exe` (with `splash.bmp`) is what the owner uploads: people ran the old .exe
 from inside the zip. Without Wine, `--icon` can't be applied by the packager: set icon + version on the packaged exe
@@ -166,6 +166,9 @@ before the electron-builder step: `node tools/electron/seticon.mjs out/GrannyxDB
 (no `--icon`), run seticon, then electron-builder. The owner can't download a bare .exe from the chat: send it zipped
 (`zip -9 GrannyxDBD-<ver>-Windows.zip GrannyxDBD.exe`).
 
+Since 1.4.2 each version unpacks to its own temp folder (`-c.portable.unpackDirName=GrannyxDBD-<version>`), and main.js passes
+its version with the single-instance lock: an OLDER copy still running closes itself when a different version starts (the
+new one retries the lock for ~8 s). Before, a still-open old copy was just brought to the front ("it's like the old version").
 `main.js` opens `app/index.html`, maximised, no menu bar, F11/Alt+Enter fullscreen, single instance, logs to
 `%APPDATA%\Granny x DBD\log.txt`; repeated GPU/page crashes relaunch it in Safe Graphics mode (software WebGL,
 sticky; `--gpu` resets it). External links go to the real browser.
@@ -201,7 +204,11 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.4.1 (current): Profile panel, disk save mirror (exe + apk), backup codes, the Child's picture in the offline builds.
+1.4.2 (current): DBD-style skill check (`drawSkill`, HiDPI), second-killer picker for Two Killers bot matches
+(`botsCfg.killer2`), Angeline's bone matrices kept rigid (no squashed head: `toBindPose` composes position from K and the
+rotation only), version-aware single instance + versioned unpack dir for the exe, backup button in Settings.
+APK versionCode 17 / 1.4.2, Windows 1.4.2, VERSION '1.4.2'.
+1.4.1: Profile panel, disk save mirror (exe + apk), backup codes, the Child's picture in the offline builds.
 APK versionCode 16 / 1.4.1, Windows 1.4.1, `VERSION = '1.4.1'` (NET_PROTOCOL still 13: plays with 1.4.0).
 1.4: character levels + stats, The Child of Slendrina sidekick, Two Killers (2v8), seasons + ranks + season
 pass with a premium track, perk HUD fix, camera ray-cast. APK versionCode 15 / 1.4.0 (signed with grannyxdbd-1.3.jks),

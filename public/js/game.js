@@ -917,18 +917,41 @@ export class Game {
     sound.play(s.res === 'great' ? 'sc-great' : s.res === 'good' ? 'sc-good' : 'genfail');
     if (s.res === 'miss') this.shake = 0.4;
   }
+  // DBD-style skill check: a thin ring, the success zone as an outlined band with the great part filled in, a red needle
+  // sweeping from the top, the key in the middle. Drawn at the screen's pixel density.
   drawSkill() {
-    const c = this.skillCtx, s = this.skill, W = 180, R = 70;
-    c.clearRect(0, 0, W, W);
-    const a = f => -Math.PI / 2 + f * Math.PI * 2;
-    c.lineWidth = 6; c.strokeStyle = 'rgba(255,255,255,0.25)'; c.beginPath(); c.arc(W / 2, W / 2, R, 0, 7); c.stroke();
-    c.lineWidth = 9; c.strokeStyle = 'rgba(240,240,240,0.9)'; c.beginPath(); c.arc(W / 2, W / 2, R, a(s.great), a(s.end)); c.stroke();
-    c.strokeStyle = '#ffffff'; c.lineWidth = 12; c.beginPath(); c.arc(W / 2, W / 2, R, a(s.start), a(s.great)); c.stroke();
-    const n = Math.min(s.needle || 0, 1.2);
-    c.strokeStyle = s.res === 'miss' ? '#ff3030' : s.res ? '#ffd23a' : '#ff4040'; c.lineWidth = 4;
-    c.beginPath(); c.moveTo(W / 2 + Math.cos(a(n)) * (R - 18), W / 2 + Math.sin(a(n)) * (R - 18)); c.lineTo(W / 2 + Math.cos(a(n)) * (R + 12), W / 2 + Math.sin(a(n)) * (R + 12)); c.stroke();
-    c.fillStyle = '#fff'; c.font = 'bold 20px Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(s.res ? (s.res === 'great' ? 'GREAT' : s.res === 'good' ? 'GOOD' : 'FAILED') : MOBILE ? 'TAP' : 'SPACE', W / 2, W / 2);
+    const cv = this.skillCanvas, s = this.skill, dpr = Math.min(2, window.devicePixelRatio || 1), CSS = 220;
+    if (cv.width !== Math.round(CSS * dpr)) { cv.width = cv.height = Math.round(CSS * dpr); cv.style.width = cv.style.height = CSS + 'px'; }
+    const c = this.skillCtx, C = CSS / 2, R = 76, a = f => -Math.PI / 2 + f * Math.PI * 2;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, CSS, CSS);
+    const done = s.phase === 'done', fade = done ? Math.max(0, 1 - (s.t2 || 0) / 0.45) : Math.min(1, (s.t || 0) / 0.08);
+    c.globalAlpha = fade;
+    // a soft dark disc so it reads over anything
+    const bg = c.createRadialGradient(C, C, R - 30, C, C, R + 24); bg.addColorStop(0, 'rgba(0,0,0,0.0)'); bg.addColorStop(0.55, 'rgba(0,0,0,0.35)'); bg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bg; c.beginPath(); c.arc(C, C, R + 24, 0, 7); c.fill();
+    // the ring
+    const col = s.res === 'great' ? '#ffd23a' : s.res === 'good' ? '#ffffff' : s.res === 'miss' ? '#ff3a30' : '#ffffff';
+    c.lineWidth = 2; c.strokeStyle = done ? col : 'rgba(255,255,255,0.9)'; c.beginPath(); c.arc(C, C, R, 0, Math.PI * 2); c.stroke();
+    // the success zone: outlined band (good), filled band (great)
+    const band = (f0, f1) => { c.beginPath(); c.arc(C, C, R + 8, a(f0), a(f1)); c.arc(C, C, R - 8, a(f1), a(f0), true); c.closePath(); };
+    band(s.start, s.end); c.fillStyle = 'rgba(255,255,255,0.14)'; c.fill(); c.lineWidth = 2; c.strokeStyle = '#ffffff'; c.stroke();
+    band(s.start, s.great); c.fillStyle = '#ffffff'; c.fill();
+    // the needle, from inside the ring to past it
+    const n = Math.min(s.needle || 0, 1.2), cx = Math.cos(a(n)), sy = Math.sin(a(n));
+    c.save(); c.shadowColor = '#ff2a1a'; c.shadowBlur = 10; c.strokeStyle = s.res === 'miss' ? '#ff3a30' : s.res ? col : '#ff3328'; c.lineWidth = 3.5; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(C + cx * (R - 26), C + sy * (R - 26)); c.lineTo(C + cx * (R + 16), C + sy * (R + 16)); c.stroke(); c.restore();
+    // the key (or the result)
+    if (s.res) {
+      c.fillStyle = col; c.font = '600 26px "Bebas Neue", Oswald, Impact, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(s.res === 'great' ? 'GREAT' : s.res === 'good' ? 'GOOD' : 'FAILED', C, C);
+    } else {
+      const label = MOBILE ? 'TAP' : KL(KB_SETTINGS, 'space').toUpperCase(), w = Math.max(54, label.length * 13 + 22);
+      c.fillStyle = 'rgba(10,8,8,0.75)'; c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.5;
+      c.beginPath(); c.roundRect(C - w / 2, C - 15, w, 30, 5); c.fill(); c.stroke();
+      c.fillStyle = '#ffffff'; c.font = '600 18px "Barlow Condensed", Oswald, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(label, C, C + 1);
+    }
+    c.globalAlpha = 1;
   }
 
   // ---------------- characters ----------------

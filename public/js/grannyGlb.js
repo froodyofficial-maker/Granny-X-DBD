@@ -75,9 +75,13 @@ function toBindPose(scene) {
     const K = pairs.length >= 6 ? new THREE.Matrix4().set(fx[0], 0, 0, fx[1], 0, fy[0], 0, fy[1], 0, 0, fz[0], fz[1], 0, 0, 0, 1) : new THREE.Matrix4();
     const Ki = new THREE.Matrix4().copy(K).invert();
     const bind = new Map();
+    // each joint goes where the mesh has it (K applied to its position) but keeps a plain rotation: no stretch in the
+    // bone matrices, or every turned bone (her head, her arms) would come out squashed
+    const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
     sk.bones.forEach((b, i) => {
-      const w = new THREE.Matrix4().copy(sk.boneInverses[i]).invert().premultiply(K); // joint where the mesh has it
-      bind.set(b, w); sk.boneInverses[i].copy(w).invert();                           // = IBM * K^-1: the mesh stays put
+      new THREE.Matrix4().copy(sk.boneInverses[i]).invert().decompose(_p, _q, _s);
+      const w = new THREE.Matrix4().compose(_p.applyMatrix4(K), _q, one);
+      bind.set(b, w); sk.boneInverses[i].copy(w).invert();                           // the mesh stays where it was
     });
     const m = new THREE.Matrix4();
     for (const b of sk.bones) {

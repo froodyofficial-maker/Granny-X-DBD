@@ -752,7 +752,7 @@ if (profile.lastVersion !== VERSION) {
 }
 
 // ---------- bot match ----------
-const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', diff: 'normal', map: 'granny', gm: 'classic' };
+const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', killer2: 'random', diff: 'normal', map: 'granny', gm: 'classic' };
 // game mode pickers (bot match and lobby)
 const gmOptions = () => Object.entries(MODES).map(([id, m]) => `<option value="${id}">${m.name} (${m.short})</option>`).join('');
 $('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
@@ -765,11 +765,15 @@ seg('bots-surv', v => { botsCfg.surv = +v; });
 seg('bots-diff', v => { botsCfg.diff = v; });
 $('bots-map').addEventListener('change', e => { botsCfg.map = e.target.value; });
 $('bots-killer').addEventListener('change', e => { botsCfg.killer = e.target.value; });
+$('bots-killer2').addEventListener('change', e => { botsCfg.killer2 = e.target.value; });
 function renderBotsPanel() {
   const k = botsCfg.role === 'killer', duo = botsCfg.gm === 'duo';
   $('bots-teammates-row').classList.toggle('hidden', k || duo);
   $('bots-killer-row').classList.toggle('hidden', k);
   $('bots-survivors-row').classList.toggle('hidden', !k || duo);
+  // Two Killers: pick the other killer too (as a survivor: both bot killers; as a killer: your partner)
+  $('bots-killer2-row').classList.toggle('hidden', !duo);
+  $('bots-killer2-l').textContent = k ? 'Your partner killer' : 'Second bot killer';
   renderLoadout($('bots-loadout'), botsCfg.role, true);
 }
 const randomPerks = (pool, n = PERK_SLOTS, char) => Object.keys(pool).filter(k => perkFits(k, char)).sort(() => Math.random() - 0.5).slice(0, n);
@@ -857,9 +861,9 @@ $('btn-bots-start').addEventListener('click', () => {
   const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
     for (let i = 0; i < (ns ? ns - 1 : botsCfg.team); i++) roster.push(botSurvivor(i + 1, used));
-    for (let i = 0; i < nk; i++) roster.push(botKiller(i ? 'random' : botsCfg.killer, i, roster.filter(r => r.role === 'killer').map(r => r.char)));
+    for (let i = 0; i < nk; i++) roster.push(botKiller(i ? botsCfg.killer2 : botsCfg.killer, i, roster.filter(r => r.role === 'killer').map(r => r.char)));
   } else {
-    for (let i = 1; i < nk; i++) roster.push(botKiller('random', i, [profile.killer.char]));
+    for (let i = 1; i < nk; i++) roster.push(botKiller(i === 1 ? botsCfg.killer2 : 'random', i, [profile.killer.char]));
     for (let i = 0; i < (ns || botsCfg.surv); i++) roster.push(botSurvivor(i + 1, used));
   }
   const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, net: null, kind: 'bots', map, mode: gm });
@@ -1616,6 +1620,7 @@ function renderProfile() {
   };
 }
 $('profile').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-profile', 'Profile', true); });
+$('set-backup').addEventListener('click', () => { sound.play('click'); openPanel('p-profile', 'Profile', true); const b = $('pf-copy'); if (b) b.scrollIntoView({ block: 'center' }); });
 
 // ---------- friends ----------
 const friends = new Friends(profile, saveProfile, () => settings.name);

@@ -53,10 +53,15 @@ ipcMain.on('gdbd-save', (e, k, v) => {
   try { fs.mkdirSync(saveDir, { recursive: true }); const f = path.join(saveDir, k + '.json'); fs.writeFileSync(f + '.tmp', v); fs.renameSync(f + '.tmp', f); } catch (err) { log('save failed:', err && err.message); }
 });
 
-if (!app.requestSingleInstanceLock()) app.quit();
-else {
+// One copy at a time, but a NEWER version always wins: an older copy that is still open (maybe minimised) closes itself
+// when a different version starts, instead of being brought to the front (which looked like the update hadn't worked).
+const myVersion = app.getVersion();
+function boot() {
   let win = null;
-  app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+  app.on('second-instance', (e, argv, cwd, data) => {
+    if (data && data.v && data.v !== myVersion) { log('version ' + data.v + ' started: closing ' + myVersion); app.exit(0); return; }
+    if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+  });
 
   const gpuCrashes = [];
   app.on('child-process-gone', (e, d) => {
@@ -108,4 +113,13 @@ else {
   }
   app.whenReady().then(create);
   app.on('window-all-closed', () => app.quit());
+}
+if (app.requestSingleInstanceLock({ v: myVersion })) boot();
+else {
+  // another copy is running: if it's an older version it closes itself (above) and the lock comes free
+  let n = 0;
+  const t = setInterval(() => {
+    if (app.requestSingleInstanceLock({ v: myVersion })) { clearInterval(t); boot(); }
+    else if (++n > 20) { clearInterval(t); app.quit(); }
+  }, 400);
 }

@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+const pg = await br.newPage({ viewport: { width: 1280, height: 720 } });
+await pg.addInitScript(() => { localStorage.setItem('gdbd_profile', JSON.stringify({ seen: { intro: true, help: true, tut: true }, killer: { char: 'granny', perks: [] }, survivor: { char: 'mara', perks: [] }, stats: { embers: 0, matches: 1, escapes: 0, kills: 0 } })); localStorage.setItem('gdbd_settings', JSON.stringify({ quality: 'low', name: 'T' })); });
+await pg.goto('file:///home/user/granny-x-dbd/GrannyDBD.html');
+await pg.waitForFunction(() => window.__nb && document.querySelector('#mainnav button'), null, { timeout: 180000 });
+await pg.addStyleTag({ content: '#announce{display:none!important}' });
+await pg.evaluate(() => document.querySelector('[data-act="play-survivor"]').click()); await pg.waitForTimeout(600);
+await pg.selectOption('#bots-gm', 'duo'); await pg.selectOption('#bots-killer', 'slendrina'); await pg.selectOption('#bots-killer2', 'angeline'); await pg.waitForTimeout(400);
+await pg.screenshot({ path: 'duo_sel.png' });
+await pg.evaluate(() => document.querySelector('#btn-bots-start').click());
+await pg.waitForFunction(() => window.__nb.session && window.__nb.session.sim && window.__nb.session.sim.S.t > 0.5, null, { timeout: 240000 });
+console.log(await pg.evaluate(() => window.__nb.session.sim.S.players.filter(p => p.role === 'killer').map(p => p.char).join(',')));
+await br.close();

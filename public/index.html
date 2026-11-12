@@ -63,6 +63,8 @@
             <div class="seg" id="bots-surv"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4" class="on">4</button></div></div>
           <div class="field" id="bots-killer-row"><label>Bot killer</label>
             <select id="bots-killer"><option value="granny">Granny</option><option value="grandpa">Grandpa</option><option value="slendrina">Slendrina</option><option value="angeline">Angeline</option><option value="random">Random</option></select></div>
+          <div class="field hidden" id="bots-killer2-row"><label id="bots-killer2-l">Second killer</label>
+            <select id="bots-killer2"><option value="random">Random</option><option value="granny">Granny</option><option value="grandpa">Grandpa</option><option value="slendrina">Slendrina</option><option value="angeline">Angeline</option></select></div>
           <div class="field"><label>Bot difficulty</label>
             <div class="seg" id="bots-diff"><button data-v="easy">Easy</button><button data-v="normal" class="on">Normal</button><button data-v="hard">Hard</button></div></div>
           <div class="field"><label>Map</label>
@@ -179,6 +181,7 @@
           <div class="field pc-only"><label>Keybinds <span class="hint-inline">(click an action, then press a key · Esc cancels)</span></label>
             <div id="keybinds" class="keybinds"></div>
             <button class="btn small" id="keys-reset">Reset keybinds</button></div>
+          <div class="field"><label>Backup code <span class="hint-inline">(save your progress as a code, or restore it on another device)</span></label><button class="btn small" id="set-backup">Backup &amp; restore…</button></div>
           <div class="field pc-only"><label>Online connection</label><select id="set-net"><option value="auto">Auto (game server if available, otherwise online)</option><option value="relay">Game server only (node server.js)</option><option value="p2p">Online (direct WebRTC + relay fallback)</option></select></div>
         </section>
 
