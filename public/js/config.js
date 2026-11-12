@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 12;
+export const NET_PROTOCOL = 13;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -52,6 +52,7 @@ export const RULES = {
 // ---------------- Game modes ----------------
 export const MODES = {
   classic: { name: 'Classic', short: '1 vs 4', desc: 'One killer, four survivors. Repair generators, power the gates and escape.' },
+  duo: { name: 'Two Killers', short: '2 vs 8', killers: 2, survivors: 8, desc: 'Two killers hunt eight survivors. Six generators power the gates, and the killers can work together: one chases while the other cuts them off.' },
   dark: { name: 'Lights Out', short: 'Horror', desc: 'The lights never come on. Thick fog, no auras for survivors, half-charged flashlights.' },
   rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
   glass: { name: 'Glass Bones', short: 'One hit', desc: 'Every hit puts a survivor straight down. To make up for it, generators repair 40% faster. One mistake and you are on the floor.' },
@@ -242,8 +243,39 @@ export const PERK_PRICES = {
   static: 1500, dread: 1500, brute: 1500, rust: 2000, sentry: 2000, fury: 1500, irongrip: 2000, stalker: 2500, stunless: 6000, extreme: 500000,
 };
 export const PERK_SLOTS = 4;
-// ---------------- Sidekicks (cosmetic companions, for survivors and killers) ----------------
-export const SIDEKICKS = {};
+// ---------------- Sidekicks (1.4: killers only) ----------------
+// The Child of Slendrina crawls after its killer. A survivor who comes into its sight close by makes it shriek:
+// they are revealed to every killer for a few seconds. Bought once in the Store, equipped in the killer Loadout.
+export const SIDEKICKS = {
+  child: { id: 'child', name: 'The Child of Slendrina', role: 'killer', price: 20000, range: 11, reveal: 4, cooldown: 14, speed: 5.2,
+    desc: "Slendrina's baby crawls after you on all fours. When a survivor comes within 11m of it and it can see them, it shrieks: they are revealed to you for 4s (14s before it shrieks at the same survivor again)." },
+};
+// ---------------- Character levels and stats (1.4) ----------------
+// Every character has its own level, earned with match XP (or trained with Embers). Each level past 1 gives a stat
+// point; points go into the stats below (10 each at most), and can be taken back out for free.
+export const CHAR_LEVEL = { max: 41, xp: lvl => 350 + lvl * 50, train: lvl => 400 + lvl * 100 };
+export const STATS = {
+  survivor: [
+    { id: 'spd', name: 'Agility', short: 'speed', per: 0.008, max: 10, unit: '% movement speed' },
+    { id: 'rep', name: 'Mechanic', short: 'repair', per: 0.025, max: 10, unit: '% repair and exit gate speed' },
+    { id: 'heal', name: 'Medic', short: 'healing', per: 0.03, max: 10, unit: '% healing speed' },
+    { id: 'grit', name: 'Grit', short: 'struggle', per: 0.05, max: 10, unit: '% struggle and unhook speed' },
+  ],
+  killer: [
+    { id: 'spd', name: 'Stalker', short: 'speed', per: 0.006, max: 10, unit: '% movement speed' },
+    { id: 'cd', name: 'Focus', short: 'recharge', per: 0.025, max: 10, unit: '% faster power recharge' },
+    { id: 'brut', name: 'Brutality', short: 'actions', per: 0.04, max: 10, unit: '% breaking, kicking, picking up and hooking speed' },
+    { id: 'reach', name: 'Reach', short: 'lunge', per: 0.015, max: 10, unit: '% lunge distance' },
+  ],
+};
+// a character's stats as sent into a match: whole numbers, each 0..max, and no more points than the top level gives
+export function cleanStats(role, st) {
+  const out = {}; let left = CHAR_LEVEL.max - 1;
+  for (const d of STATS[role] || []) { const v = Math.max(0, Math.min(d.max, Math.floor(+((st || {})[d.id]) || 0), left)); if (v) out[d.id] = v; left -= v; }
+  return out;
+}
+// the bonus a stat gives (0 = none), e.g. statK(p, 'spd') = 0.048 for 6 points of Agility
+export const statK = (p, id) => { const v = p && p.stats && p.stats[id]; if (!v) return 0; const d = (STATS[p.role] || []).find(x => x.id === id); return d ? v * d.per : 0; };
 export const DEFAULT_SURV_PERKS = ['steady', 'shared', 'lastwind'];
 export const DEFAULT_KILLER_PERKS = ['scent', 'overload', 'relentless'];
 
@@ -338,6 +370,7 @@ export const SKINS = {
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
     { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
+    { id: 'longnight', name: 'The Long Night', price: -1, pass: true, tint: 0x3a2a5a, tintK: 0.45, glow: 0x7a40c0, glowK: 0.3, desc: 'Season Pass reward (tier 30). Dressed for a night that never ends.' },
   ],
   grandpa: [
     { id: 'default', name: 'Night Watch', price: 0, grandpa: true, desc: 'Braces, a dirty vest, his old shotgun and a bad mood.' },
@@ -350,6 +383,7 @@ export const SKINS = {
   angeline: [
     { id: 'default', name: 'Mother', price: 0, desc: 'Her black dress, her long hair, and the yellow light in her eyes.' },
     { id: 'pale', name: 'Ghost Mother', price: 0, tint: 0xd8e4f0, tintK: 0.4, glow: 0x8a9a6a, glowK: 0.25, desc: 'Faded, glowing faintly, like the photo on the cellar wall.' },
+    { id: 'gilded', name: 'Gilded Mother', price: -1, pass: true, tint: 0xd8b050, tintK: 0.35, glow: 0xffc030, glowK: 0.3, desc: 'Season Pass reward (tier 15). The yellow light got into everything.' },
   ],
   bateman: [
     { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
@@ -379,10 +413,21 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.0';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd14', version: '1.4.0', date: 'Nov 2026', title: 'Levels, seasons and the Child', tag: 'Update',
+    gift: { embers: 5000, label: 'Update gift: 5,000 Embers' },
+    body: [
+      'Character levels: every character levels up on their own. Each level gives a stat point to spend on speed, repairs, healing and more (survivors) or speed, power recharge, brutality and reach (killers). Train a level with Embers if you are in a hurry.',
+      'Sidekick: The Child of Slendrina (killers only). It crawls after you and shrieks when it sees a survivor nearby, revealing them. Get it in the Store, equip it in the killer Loadout.',
+      'New mode: Two Killers (2 vs 8). Two killers, eight survivors, six generators.',
+      'Seasons and ranks are back: a rank for survivor and killer, a new season every six weeks, and a Season Pass with a free track and a premium track you unlock with Embers (outfits for Granny and Angeline).',
+      'Fixed: four perks no longer overlap on the HUD.',
+    ],
+  },
   {
     id: 'gdbd13', version: '1.3.0', date: 'Nov 2026', title: 'Angeline arrives', tag: 'Update',
     gift: { embers: 1500, label: 'Update gift: 1,500 Embers' },

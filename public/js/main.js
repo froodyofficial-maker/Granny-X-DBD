@@ -16,7 +16,7 @@ import { loadRealism, realismReady } from './realism.js';
 import { loadSlappy, slappyReady } from './slappyGlb.js';
 import { loadStatic } from './glbModels.js';
 import { loadScene, sceneReady } from './sceneGlb.js';
-import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady } from './grannyGlb.js';
+import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadChild, childReady } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -26,9 +26,9 @@ import { showLoading, loadingUp, sceneShownAt } from './loadscreen.js';
 import { initTouch, MOBILE, mobileText } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
-import { ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
+import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
-import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE } from './progress.js';
+import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
@@ -103,6 +103,11 @@ profile.survivor.perks = (profile.survivor.perks || []).filter(k => SURV_PERKS[k
 // perks are bought with Embers; defaults are free, and anything already equipped stays owned
 profile.perksOwned ||= {}; profile.pets ||= {};
 const petOf = () => '';
+// 1.4: the killer's sidekick (only one so far: The Child of Slendrina), and what each character brings into a match
+// a new season (every six weeks): rank rewards, ranks drop a tier, a fresh pass
+{ const msg = seasonRoll(profile); if (msg) setTimeout(() => toast(msg, 9000), 3000); }
+const kidOf = () => profile.pets.child && profile.killer.pet === 'child' ? 'child' : '';
+const extrasOf = (role, char) => ({ stats: matchStats(profile, char, role), ...(role === 'killer' ? { kid: kidOf() } : {}) });
 for (const k of [...profile.survivor.perks, ...profile.killer.perks]) profile.perksOwned[k] = true;
 const perkPrice = k => PERK_PRICES[k] || 0;
 const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
@@ -176,13 +181,13 @@ loadSlendrina().then(m => { if (m) { forgetArt('slendrina'); if (menu && menu.ki
 loadAngeline().then(m => { if (m) { forgetArt('angeline'); if (menu && menu.killerChar === 'angeline') menu.setKiller('angeline', menu.killerSkin); } });
 // a match with Chucky in it waits (on the loading screen) for his real model, up to 20s
 const spiderOk = () => !!window.__nbSpiderLoaded;
-loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; });
+loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; }); loadChild();
 async function waitForModels(need) {
   if (need && need.spider && !realismReady('spiderman')) { loading(true, 'Spider-Man is swinging in…'); await Promise.race([loadRealism('spiderman'), new Promise(r => setTimeout(r, 25000))]); }
   // the Granny's House scenery (a big model) must be in before any match can use the map
   if (!sceneReady('granny_map') || !sceneReady('granny1_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all([loadScene('granny_map'), loadScene('granny1_map')]), new Promise(r => setTimeout(r, 25000))]); }
   // Granny and her granddaughter, when she's in the match
-  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk() || !grandpaReady() || !slendrinaReady() || !angelineReady()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom(), loadSlendrina(), loadAngeline()]), new Promise(r => setTimeout(r, 25000))]); } }
+  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk() || !grandpaReady() || !slendrinaReady() || !angelineReady() || !childReady()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom(), loadSlendrina(), loadAngeline(), loadChild()]), new Promise(r => setTimeout(r, 25000))]); } }
   if (need && need.granny) need = need.chucky;
   if (!need || (chuckyReady() && slappyReady())) return;
   loading(true, "Waking Chucky up…");
@@ -202,7 +207,7 @@ function renderShowcase() {
   }
   const st = profile.stats;
   const lv = levelOf((profile.prog || {}).xp || 0), rk = rankOf(((profile.prog || {}).ranks || {})[menuMode === 'killer' ? 'killer' : 'survivor'] || 0);
-  $('profile').innerHTML = `<div class="pn">${esc(settings.name)}</div><div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
+  $('profile').innerHTML = `<div class="pn">${esc(settings.name)}</div><div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
 }
 
 // ---------- side panel ----------
@@ -287,6 +292,38 @@ function loreHTML(id, open = false) {
   return `<details class="lore-card" ${open ? 'open' : ''}><summary><span class="lore-k">Lore · ${esc(name)}</span><b>${esc(L.title)}</b><p>${esc(L.story[0])}</p><i>Read more</i></summary>${L.story.slice(1).map(x => `<p>${esc(x)}</p>`).join('')}</details>`;
 }
 let loSel = null; // perk selected on the full Loadout screen
+// ---------- character levels and stats (1.4) ----------
+function levelHTML(role, char) {
+  const C = charOf(profile, char), L = charLv(C.xp), free = freePoints(profile, char), cost = CHAR_LEVEL.train(L.lvl);
+  const rows = (STATS[role] || []).map(d => { const v = C.st[d.id] | 0;
+    return `<div class="st-row"><span class="st-n" title="+${(d.per * 100).toFixed(d.per * 100 % 1 ? 1 : 0)}${esc(d.unit)} per point">${esc(d.name)}</span><span class="st-pips">${Array.from({ length: d.max }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span><span class="st-v" title="+${(d.per * 100).toFixed(d.per * 100 % 1 ? 1 : 0)}${esc(d.unit)} per point">+${(v * d.per * 100).toFixed(v * d.per * 100 % 1 ? 1 : 0)}% ${esc(d.short)}</span><button class="st-b" data-stat="${d.id}" data-d="-1" ${v ? '' : 'disabled'}>−</button><button class="st-b" data-stat="${d.id}" data-d="1" ${free > 0 && v < d.max ? '' : 'disabled'}>+</button></div>`; }).join('');
+  return `<div class="lv-box"><div class="lv-top"><div class="lv-badge"><b>${L.lvl}</b><small>Level</small></div><div class="lv-mid"><div class="bar"><div style="width:${L.max ? 100 : (L.into / L.need * 100).toFixed(1)}%"></div></div><span>${L.max ? 'Max level' : `${L.into.toLocaleString()} / ${L.need.toLocaleString()} XP to level ${L.lvl + 1}`} · <b class="${free ? 'pts' : ''}">${free} point${free === 1 ? '' : 's'} to spend</b></span></div>
+    <div class="lv-acts">${L.max ? '' : `<button class="btn small" data-train>Train +1 level · ${price(cost)}</button>`}${(profile.lvTokens | 0) && !L.max ? `<button class="btn small primary" data-token>Use level token (${profile.lvTokens})</button>` : ''}${statsSpent(C) ? '<button class="btn small" data-respec>Reset points</button>' : ''}</div></div>
+    <div class="st-grid">${rows}</div></div>`;
+}
+function bindLevel(container, role, char, rerender) {
+  const C = charOf(profile, char);
+  container.querySelectorAll('[data-stat]').forEach(b => b.onclick = () => {
+    const d = (STATS[role] || []).find(x => x.id === b.dataset.stat), dv = +b.dataset.d, v = C.st[d.id] | 0;
+    if (dv > 0 && (freePoints(profile, char) <= 0 || v >= d.max)) return;
+    if (dv < 0 && v <= 0) return;
+    C.st[d.id] = v + dv; if (!C.st[d.id]) delete C.st[d.id];
+    saveProfile(); sound.play('click'); rerender();
+  });
+  container.querySelectorAll('[data-train]').forEach(b => b.onclick = () => {
+    const L = charLv(C.xp); if (L.max || !spend(CHAR_LEVEL.train(L.lvl), `${charName0(char)} level ${L.lvl + 1}`)) return;
+    trainOne(profile, char); saveProfile(); sound.play('escaped'); toast(`${charName0(char)} reached level ${L.lvl + 1}: a stat point to spend`); rerender();
+  });
+  container.querySelectorAll('[data-token]').forEach(b => b.onclick = () => {
+    if (!(profile.lvTokens > 0) || !trainOne(profile, char)) return;
+    profile.lvTokens--; saveProfile(); sound.play('escaped'); toast(`${charName0(char)} reached level ${charLv(C.xp).lvl}`); rerender();
+  });
+  container.querySelectorAll('[data-respec]').forEach(b => b.onclick = () => { C.st = {}; saveProfile(); sound.play('click'); rerender(); });
+}
+function kidRowHTML() {
+  const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
+  return `<div class="kid-row ${on ? 'on' : ''}"><img alt="" src="${(document.querySelector('script[type=importmap]') ? '' : 'public/')}img/child.png"><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
+}
 function renderLoadout(container, role, compact, onChange) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS;
   const perks = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
@@ -307,6 +344,7 @@ function renderLoadout(container, role, compact, onChange) {
     container.innerHTML = `<div class="lo-sub"><span>${role === 'killer' ? 'Killer' : 'Survivor'}</span></div>
       <div class="chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<div class="char ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" style="--c:${color(c)}"><b>${esc(c.name)}${ownsChar(c.id) ? '' : ` <span class="newtag">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</span>`}</b>${c.ability ? `<div class="ab">${icon(POWER_ICON[c.id])}${esc(c.ability.name)}</div>` : ''}</div>`).join('')}</div>
       
+      <div class="lo-sub"><span>Level ${charLv(charOf(profile, lo.char).xp).lvl}${freePoints(profile, lo.char) > 0 ? ` · <b class="pts">${freePoints(profile, lo.char)} stat point${freePoints(profile, lo.char) === 1 ? '' : 's'} to spend in Loadout</b>` : ''}</span><span>${role === 'killer' && kidOf() ? 'Sidekick: The Child' : ''}</span></div>
       <div class="lo-sub"><span>Perks</span><span>${lo.perks.length} / ${PERK_SLOTS} · buy more in Loadout</span></div>
       <div class="perkgrid">${usable.map(([k, p]) => `<div class="pk ${lo.perks.includes(k) ? 'on' : ''}" data-p="${k}"><div class="diamond ${role === 'killer' ? 'k' : ''} ${p.only ? 'ex' : ''}">${icon(k)}</div><div><b>${esc(p.name)}</b><small>${esc(p.desc)}</small></div></div>`).join('')}</div>`;
     container.querySelectorAll('.pk').forEach(el => el.onclick = () => { toggle(el.dataset.p); rerender(); });
@@ -327,6 +365,8 @@ function renderLoadout(container, role, compact, onChange) {
     container.innerHTML = `<div class="lo2">
       <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
       <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
+      ${levelHTML(role, lo.char)}
+      ${role === 'killer' ? kidRowHTML() : ''}
       
 
       <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
@@ -339,6 +379,11 @@ function renderLoadout(container, role, compact, onChange) {
       if (cur >= L.max) return;
       if (!spend(L.cost, `${L.power} +${L.step}m`)) return;
       profile.levels[c] = cur + L.step; saveProfile(); sound.play('escaped'); toast(`${L.power} now reaches ${cur + L.step}m`); rerender();
+    });
+    bindLevel(container, role, lo.char, rerender);
+    container.querySelectorAll('[data-kideq]').forEach(b => b.onclick = () => {
+      if (!profile.pets.child) { sound.play('click'); openStore('sidekicks'); return; }
+      profile.killer.pet = profile.killer.pet === 'child' ? '' : 'child'; saveProfile(); sound.play('click'); rerender();
     });
     container.querySelectorAll('[data-gstyle]').forEach(b => b.onclick = () => { profile.grannyStyle = b.dataset.gstyle; saveProfile(); sound.play('click'); rerender(); });
     container.querySelectorAll('.inv-d').forEach(el => {
@@ -461,7 +506,7 @@ $('pause-vol').addEventListener('input', e => { settings.vol = +e.target.value; 
 // ---------- store ----------
 // ---------- store (full screen, DbD-style) ----------
 const RARITY0 = p => p === 0 ? '' : p < 2000 ? 'common' : p < 3500 ? 'rare' : p < 5000 ? 'epic' : 'legendary';
-const RARITY = (p, sk) => sk && sk.god ? 'god' : sk && sk.limited ? 'limited' : RARITY0(p);
+const RARITY = (p, sk) => sk && sk.god ? 'god' : sk && sk.limited ? 'limited' : sk && sk.pass ? 'pass' : RARITY0(p);
 let storeTab = 'characters', storeRole = 'survivor', storeChar = null, storePreview = null;
 const ownsChapter = id => !!(profile.dlc && profile.dlc[id]);
 // ---------- killer power levels (reach in metres, bought with Embers) ----------
@@ -527,7 +572,7 @@ function renderStore() {
   else if (storeTab === 'app') body.innerHTML = appHTML();
   else body.innerHTML = charactersHTML();
   bindStore(body);
-  if (menu && storeTab === 'sidekicks') { const role = storePetRole; menu.setShowcase(profile[role].char, skinId(profile[role].char), 0.3, storePet); menu.setMode('show'); menu.showFor = null; }
+  if (menu && storeTab === 'sidekicks') { menu.setShowcase(profile.killer.char, skinId(profile.killer.char), 0.3, ''); menu.setMode('show'); menu.showFor = null; }
   else if (menu) { if (storeTab === 'characters') { if (!menu.showRig || menu.showFor !== storeChar + ':' + (storePreview || skinId(storeChar))) { menu.showFor = storeChar + ':' + (storePreview || skinId(storeChar)); previewSkin(storePreview || skinId(storeChar)); } else menu.setMode('show'); } else menu.setMode(menuMode); }
 }
 function chaptersHTML() { return ''; }
@@ -539,7 +584,7 @@ function charactersHTML() {
   const grid = chars.map(c => `<button class="cs-por ${c === storeChar ? 'on' : ''}" data-c="${c}"><img alt="" src="${art('portrait', c, skinId(c), 224, 224)}">${ownsChar(c) ? '' : `<i class="lock">${LIMITED(c) ? 'LIMITED' : 'DLC'}</i>`}<span>${esc(charName(c).replace(/^The /, ''))}</span></button>`).join('');
   const outfits = list.map(sk => {
     const own = ownsSkin(storeChar, sk), eq = skinId(storeChar) === sk.id, r = RARITY(sk.price, sk) || 'base';
-    const tag = eq ? '<span class="of-p eq">Equipped</span>' : own ? '<span class="of-p own">Owned</span>' : `<span class="of-p">${price(sk.price)}</span>`;
+    const tag = eq ? '<span class="of-p eq">Equipped</span>' : own ? '<span class="of-p own">Owned</span>' : sk.pass ? '<span class="of-p">Season Pass</span>' : `<span class="of-p">${price(sk.price)}</span>`;
     return `<div class="of ${r} ${sel && sel.id === sk.id ? 'on' : ''}" data-s="${sk.id}"><img alt="" src="${art('portrait', storeChar, sk.id, 180, 180)}"><span class="of-n">${esc(sk.name)}</span>${sk.god ? '<span class="of-god">GOD TIER</span>' : ''}${tag}</div>`;
   }).join('');
   let detail = '';
@@ -549,8 +594,9 @@ function charactersHTML() {
     const act = locked && LIMITED(storeChar) ? `<span class="ch-price">${price(LIMITED(storeChar).price)}</span><button class="btn primary" data-buychar="${storeChar}">Unlock ${esc(charName(storeChar))}</button><span class="lim-left">Limited · ${leftTxt(storeChar)}, then gone forever</span>`
       : locked ? `<button class="btn primary" data-tab="chapters">Get the ${esc(CHAPTERS.find(c => c.killer === storeChar).name)} chapter</button>`
       : eq ? '<span class="of-p eq" style="font-size:16px">Equipped</span>' : own ? `<button class="btn primary" data-eq="${sel.id}">Equip</button>`
+      : sel.pass ? '<span class="of-p">Unlocked through the premium Season Pass (Progress)</span>'
       : `<span class="ch-price">${price(sel.price)}</span><button class="btn primary" data-buy="${sel.id}">Buy</button>`;
-    detail = `<div class="cs-detail ${r}"><div class="rk">${r === 'base' ? 'Default outfit' : r === 'limited' ? 'Limited edition' : r === 'god' ? 'God tier · changes how you play' : r}</div><h3>${esc(sel.name)}</h3><p>${esc(charName(storeChar))}${sel.desc ? ` · ${esc(sel.desc)}` : ''}</p><div class="row">${act}</div></div>`;
+    detail = `<div class="cs-detail ${r}"><div class="rk">${r === 'base' ? 'Default outfit' : r === 'limited' ? 'Limited edition' : r === 'god' ? 'God tier · changes how you play' : r === 'pass' ? 'Season Pass' : r}</div><h3>${esc(sel.name)}</h3><p>${esc(charName(storeChar))}${sel.desc ? ` · ${esc(sel.desc)}` : ''}</p><div class="row">${act}</div></div>`;
   }
   return `<div class="cs-wrap"><div class="cs-roles"><button data-role="survivor" class="${storeRole === 'survivor' ? 'on' : ''}">Survivors</button><button data-role="killer" class="${storeRole === 'killer' ? 'on' : ''}">Killers</button></div>
     <div class="cs-grid">${grid}</div>
@@ -570,9 +616,17 @@ function collectionsHTML() {
 }
 // ---------- sidekicks ----------
 let storePet = 'ted', storePetRole = 'survivor';
-function sidekicksHTML() { return ''; }
+function sidekicksHTML() {
+  const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
+  const act = !own ? `<span class="ch-price">${price(D.price)}</span><button class="btn primary" data-kidbuy>Buy</button>` : `<button class="btn ${on ? '' : 'primary'}" data-kidtoggle>${on ? 'Unequip' : 'Equip'}</button>${on ? '<span class="of-p eq">Equipped</span>' : ''}`;
+  return `<div class="ch-row-title">Sidekicks · companions for killers</div>
+    <div class="kid-card"><div class="kid-img" style="background-image:url(${(document.querySelector('script[type=importmap]') ? '' : 'public/')}img/child.png)"></div>
+      <div class="kid-body"><small>Killer sidekick</small><h3>${esc(D.name)}</h3><p>${esc(D.desc)}</p><p class="hint">It can't be hurt and never blocks anyone. When it falls behind (a wall, the stairs, a Haunt or a Creep) it catches up out of sight. Equip it in the killer Loadout.</p><div class="row">${act}</div></div></div>`;
+}
 
 function bindStore(body) {
+  body.querySelectorAll('[data-kidbuy]').forEach(b => b.onclick = () => { if (profile.pets.child || !spend(SIDEKICKS.child.price, SIDEKICKS.child.name)) return; profile.pets.child = true; profile.killer.pet = 'child'; saveProfile(); sound.play('escaped'); renderStore(); });
+  body.querySelectorAll('[data-kidtoggle]').forEach(b => b.onclick = () => { profile.killer.pet = kidOf() ? '' : 'child'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-pet]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; storePet = el.dataset.pet; sound.play('hover'); renderStore(); });
   body.querySelectorAll('[data-petbuy]').forEach(b => b.onclick = () => { const id = b.dataset.petbuy; if (profile.pets[id] || !spend(SIDEKICKS[id].price, SIDEKICKS[id].name)) return; profile.pets[id] = true; profile.survivor.pet ||= id; saveProfile(); storePet = id; renderStore(); });
   body.querySelectorAll('[data-petequip]').forEach(b => b.onclick = () => { const id = b.dataset.petequip, r = b.dataset.petrole; profile[r].pet = profile[r].pet === id ? '' : id; storePet = id; storePetRole = r; saveProfile(); sound.play('click'); renderStore(); });
@@ -715,7 +769,7 @@ function botKiller(char, n = 0, avoid = []) {
   const picked = char && char !== 'random' && c === char, outfits = SKINS[c].slice(1).filter(k => !k.god);
   const skin = picked || !outfits.length || Math.random() < 0.5 ? 'default' : outfits[Math.floor(Math.random() * outfits.length)].id;
   if (window.__killerSkin) return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin: window.__killerSkin, perks: randomPerks(KILLER_PERKS), bot: true }; // trailer capture
-  return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true };
+  return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true, kid: Math.random() < 0.35 ? 'child' : '' };
 }
 // ---------- Testing Area: everything unlocked, nothing earned ----------
 const testCfg = { role: 'survivor', char: { survivor: 'mara', killer: 'granny' }, skin: {}, item: 'flashlight', reach: {}, perks: { survivor: [], killer: [] }, opp: 'random', surv: 4, map: 'granny', gm: 'classic', bots: 'normal', diff: 'normal' };
@@ -774,7 +828,7 @@ $('btn-bots-start').addEventListener('click', () => {
   const meRole = botsCfg.role;
   if (meRole === 'survivor' && !ownsChar(profile.survivor.char)) { toast(`${charName(profile.survivor.char)} is locked. Unlock them in the Store, or pick another survivor.`, 5000); profile.survivor.char = 'mara'; saveProfile(); return; }
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
-  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}) });
+  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
   const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
@@ -1021,10 +1075,10 @@ function onMatchEnd(S, me, sess) {
     $('results-list').insertAdjacentHTML('beforeend', '<div class="prog-sum"><div class="ps-xp"><b>Testing Area</b><span>No XP, Embers or rank in test matches</span></div></div>');
     me = null; // nothing below is recorded
   }
-  if (false) {
+  if (me) {
     const r = applyMatch(profile, S, me);
     const pipTxt = r.pips > 0 ? `+${r.pips} pip${r.pips > 1 ? 's' : ''}` : r.pips < 0 ? `${r.pips} pip` : 'no change';
-    $('results-list').insertAdjacentHTML('beforeend', `<div class="prog-sum"><div class="ps-xp"><b>+${r.xp} XP</b><span>Level ${r.level}${r.levelUp ? ' <i>Level up!</i>' : ''}</span></div><div class="ps-rank">${rankBadge(r.rank, 40)}<div><b>${r.rank.name}</b><span>${r.role === 'killer' ? 'Killer' : 'Survivor'} rank · ${pipTxt}${r.rankChanged ? ' · new grade!' : ''}</span></div></div><div class="ps-pass">Season tier ${seasonTier(profile.prog.season.xp)} / ${SEASON.tiers.length}</div></div>`);
+    $('results-list').insertAdjacentHTML('beforeend', `<div class="prog-sum"><div class="ps-xp"><b>+${r.xp} XP</b><span>Level ${r.level}${r.levelUp ? ' <i>Level up!</i>' : ''}</span></div><div class="ps-rank">${rankBadge(r.rank, 40)}<div><b>${r.rank.name}</b><span>${r.role === 'killer' ? 'Killer' : 'Survivor'} rank · ${pipTxt}${r.rankChanged ? ' · new grade!' : ''}</span></div></div><div class="ps-pass">${esc(charName0(r.char))} · level ${r.charLevel}${r.charUp ? ` <i>+${r.charUp} level${r.charUp > 1 ? 's' : ''}: stat point${r.charUp > 1 ? 's' : ''} to spend in Loadout</i>` : ''}<br>Season tier ${seasonTier(profile.prog.season.xp)} / ${SEASON.tiers.length}</div></div>`);
   }
   if (me) {
     profile.stats.matches++;
@@ -1338,7 +1392,7 @@ function renderLobby() {
 }
 const playableSurvivor = () => ownsChar(profile.survivor.char) ? profile.survivor.char : 'mara';
 const playableKiller = () => PLAY_K.includes(profile.killer.char) ? profile.killer.char : 'granny';
-function myLoadouts() { return { survivor: { ...profile.survivor, char: playableSurvivor(), skin: skinId(playableSurvivor()), pet: petOf('survivor') }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()), pet: petOf('killer'), ...killerExtras(playableKiller()) } }; }
+function myLoadouts() { return { survivor: { ...profile.survivor, char: playableSurvivor(), skin: skinId(playableSurvivor()), pet: petOf('survivor'), ...extrasOf('survivor', playableSurvivor()) }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()), pet: petOf('killer'), ...killerExtras(playableKiller()), ...extrasOf('killer', playableKiller()) } }; }
 function sendMyLoadout(role) {
   const me = myLobbyPlayer();
   if (!me) return;
@@ -1386,7 +1440,8 @@ $('btn-leave-lobby').addEventListener('click', () => leaveOnline());
 $('btn-lobby-start').addEventListener('click', () => {
   if (!lobby || !lobby.isHost) return;
   const ps = lobby.players;
-  const roster = ps.map(p => ({ id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og } : {}) }));
+  // (stats: each player's own character stats for the character they play; the simulation clamps them)
+  const roster = ps.map(p => { const L = p.loadouts?.[p.role] || {}; return { id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, stats: L.char === p.char ? L.stats : {}, ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og, kid: L.kid === 'child' ? 'child' : '' } : {}) }; });
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
   const cap = lobbyCaps();
   if (!roster.some(r => r.role === 'killer')) {
@@ -1433,23 +1488,37 @@ function leaveOnline(silent) {
 
 // ---------- progress: level, ranks, season pass ----------
 function renderPass() {
-  const P = profile.prog ||= { xp: 0, ranks: { survivor: 0, killer: 0 }, season: { id: SEASON.id, xp: 0, claimed: {} }, badges: {} };
-  if (!P.season || P.season.id !== SEASON.id) P.season = { id: SEASON.id, xp: 0, claimed: {} };
+  const P = progOf(profile);
   const lv = levelOf(P.xp), tier = seasonTier(P.season.xp), left = Math.max(0, Math.ceil((seasonEnds() - Date.now()) / 864e5));
   const rankCard = role => { const r = rankOf(P.ranks[role] || 0); return `<div class="rk-card">${rankBadge(r, 64)}<div><small>${role === 'killer' ? 'Killer' : 'Survivor'} rank</small><b style="color:${r.tier.color}">${r.name}</b><div class="pips">${Array.from({ length: PIPS_PER_GRADE }, (_, i) => `<i class="${i < r.into || r.top ? 'on' : ''}"></i>`).join('')}</div><span>${r.top ? 'Top rank' : `${PIPS_PER_GRADE - r.into} pip${PIPS_PER_GRADE - r.into === 1 ? '' : 's'} to the next grade`}</span></div></div>`; };
-  const tiers = SEASON.tiers.map(t => { const got = tier >= t.t, claimed = !!P.season.claimed[t.t];
-    return `<div class="sp-tier ${got ? 'got' : ''} ${claimed ? 'claimed' : ''} ${t.kind === 'badge' ? 'big' : ''}"><small>Tier ${t.t}</small><b>${t.kind === 'badge' ? icon('gift') : icon('ember')}</b><span>${esc(t.label)}</span>${claimed ? '<em>Claimed</em>' : got ? `<button class="btn primary" data-claim-tier="${t.t}">Claim</button>` : '<em>Locked</em>'}</div>`; }).join('');
+  const cell = (t, track) => {
+    const rw = t[track], got = tier >= t.t && (track === 'free' || P.season.prem), key = (track === 'prem' ? 'p' : '') + t.t, claimed = !!P.season.claimed[key];
+    const ic = rw.kind === 'badge' ? icon('gift') : rw.kind === 'skin' ? icon('gift') : rw.kind === 'token' ? '<span class="tok">+1</span>' : icon('ember');
+    return `<div class="sp-tier ${track} ${got ? 'got' : ''} ${claimed ? 'claimed' : ''} ${rw.kind === 'embers' ? '' : 'big'}"><b>${ic}</b><span>${esc(rw.label)}</span>${claimed ? '<em>Claimed</em>' : got ? `<button class="btn primary" data-claim="${key}">Claim</button>` : `<em>${track === 'prem' && !P.season.prem ? 'Premium' : 'Locked'}</em>`}</div>`;
+  };
+  const cols = SEASON.tiers.map(t => `<div class="sp-col ${tier >= t.t ? 'reached' : ''}"><small>Tier ${t.t}</small>${cell(t, 'free')}${cell(t, 'prem')}</div>`).join('');
   $('pass-body').innerHTML = `
-    <div class="pr-top"><div class="lv-ring"><b>${lv.lvl}</b><small>Level</small></div><div class="lv-info"><b>${esc(settings.name)}</b><div class="bar"><div style="width:${(lv.into / lv.need * 100).toFixed(1)}%"></div></div><span>${lv.into.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.lvl + 1}</span>${Object.keys(P.badges || {}).length ? `<div class="badges">${Object.keys(P.badges).map(b => `<i>${b === 's1-final' ? 'Dawn Survivor' : 'Long Night'}</i>`).join('')}</div>` : ''}</div></div>
+    <div class="pr-top"><div class="lv-ring"><b>${lv.lvl}</b><small>Level</small></div><div class="lv-info"><b>${esc(settings.name)}</b><div class="bar"><div style="width:${(lv.into / lv.need * 100).toFixed(1)}%"></div></div><span>${lv.into.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.lvl + 1}${profile.lvTokens ? ` · ${profile.lvTokens} level token${profile.lvTokens > 1 ? 's' : ''} (use them in Loadout)` : ''}</span>${Object.keys(P.badges || {}).length ? `<div class="badges">${Object.keys(P.badges).map(b => `<i>${/-final$/.test(b) ? 'Season ' + b.replace(/^s|-.*$/g, '') + ' finale' : 'Season ' + b.replace(/^s|-.*$/g, '')}</i>`).join('')}</div>` : ''}</div></div>
     <div class="rk-row">${rankCard('survivor')}${rankCard('killer')}</div>
-    ${awardsHTML()}
-    <p class="hint">Ranks go up with good matches (escaping, a high score, or killing most of the survivors) and down with bad ones. Grades run Ash, Bronze, Silver, Gold and Iridescent, IV to I.</p>
-    <div class="sp-head"><div><b>${esc(SEASON.name)}</b><span>${left} day${left === 1 ? '' : 's'} left · tier ${tier} / ${SEASON.tiers.length}</span></div><div class="bar"><div style="width:${(tier >= SEASON.tiers.length ? 100 : (P.season.xp % SEASON.tierXp) / SEASON.tierXp * 100).toFixed(1)}%"></div></div><span class="hint">Free pass. Every match earns season XP; ${SEASON.tierXp.toLocaleString()} XP per tier.</span></div>
-    <div class="sp-grid">${tiers}</div>`;
-  $('pass-body').querySelectorAll('[data-claim-tier]').forEach(b => b.onclick = () => {
-    const t = SEASON.tiers.find(x => x.t === +b.dataset.claimTier); if (!t || P.season.claimed[t.t]) return;
-    P.season.claimed[t.t] = true; if (t.embers) profile.stats.embers += t.embers; if (t.kind === 'badge') (P.badges ||= {})[t.id] = true;
-    saveProfile(); sound.play('escaped'); toast(`Claimed: ${t.label}`); renderPass(); renderShowcase();
+    <p class="hint">Ranks go up with good matches (escaping, a high score, or killing most of the survivors) and down with bad ones: Ash, Bronze, Silver, Gold and Iridescent, IV to I. When a season ends you get Embers for your ranks, and they drop one tier.</p>
+    <div class="sp-head"><div><b>${esc(SEASON.name)}</b><span>${left} day${left === 1 ? '' : 's'} left · tier ${tier} / ${SEASON.tiers.length}</span></div><div class="bar"><div style="width:${(tier >= SEASON.tiers.length ? 100 : (P.season.xp % SEASON.tierXp) / SEASON.tierXp * 100).toFixed(1)}%"></div></div>
+      <span class="hint">Every match earns season XP; ${SEASON.tierXp.toLocaleString()} XP per tier. The free track is for everyone. The premium track adds bigger Ember rewards, level tokens and two outfits (Gilded Mother for Angeline, The Long Night for Granny).</span>
+      ${P.season.prem ? '<div class="sp-prem own">Premium pass unlocked for this season</div>' : `<div class="sp-prem"><span>Premium pass · ${price(PASS_PRICE)}</span><button class="btn primary" data-buypass>Unlock premium</button></div>`}</div>
+    <div class="sp-tracks"><div class="sp-scroll">${cols}</div></div><p class="hint">Top row: free track. Bottom row: premium track.</p>`;
+  $('pass-body').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
+    const key = b.dataset.claim, prem = key[0] === 'p', t = SEASON.tiers.find(x => x.t === +key.replace('p', '')); if (!t || P.season.claimed[key]) return;
+    if (prem && !P.season.prem) return;
+    const rw = prem ? t.prem : t.free;
+    P.season.claimed[key] = true;
+    if (rw.embers) profile.stats.embers += rw.embers;
+    if (rw.kind === 'badge') P.badges[rw.id] = true;
+    if (rw.kind === 'token') profile.lvTokens = (profile.lvTokens | 0) + (rw.n || 1);
+    if (rw.kind === 'skin') { profile.owned[rw.char + ':' + rw.skin] = true; }
+    saveProfile(); sound.play('escaped'); toast(`Claimed: ${rw.label}`); renderPass(); renderShowcase();
+  });
+  $('pass-body').querySelectorAll('[data-buypass]').forEach(b => b.onclick = () => {
+    if (P.season.prem || !spend(PASS_PRICE, SEASON.name + ' premium pass')) return;
+    P.season.prem = true; saveProfile(); sound.play('escaped'); renderPass();
   });
 }
 

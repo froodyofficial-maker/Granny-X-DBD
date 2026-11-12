@@ -24,7 +24,7 @@ async function bytes(name) {
   throw last;
 }
 // height (m) and which way the raw model faces
-const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI } };
+const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
@@ -389,6 +389,21 @@ export function makeGrannyGlb(sk = {}, lite = false) {
   return grannyReady() ? new GrannyRig(sk, lite) : null;
 }
 // Spider Mom: crawls, sniffs about, screeches
+// The Child of Slendrina (killer sidekick): "DVloper - Slendrina's Child (Official Model)" by danielthesecond
+// (sketchfab.com/danielthesecond), CC BY 4.0, with its own clips (idle, walk, attack, eat, sleep, ...)
+export const loadChild = () => load('slendrina_child');
+export const childReady = () => !!M.slendrina_child;
+export function makeChild(lite = false) {
+  if (!M.slendrina_child) return null;
+  const R = new AnimRig('slendrina_child', {}, lite);
+  R.kind = 'npc';
+  R.play = (name, dt, rate = 1) => {
+    const k = 1 - Math.exp(-dt * 8);
+    for (const n in R.acts) { const t = n === name ? 1 : 0; R.w[n] += (t - R.w[n]) * k; R.acts[n].setEffectiveWeight(R.w[n]); R.acts[n].paused = false; if (n === name) R.acts[n].timeScale = rate; }
+    R.mixer.update(dt);
+  };
+  return R;
+}
 export function makeSpiderMom(lite = false) {
   if (!M.spidermom) return null;
   const R = new AnimRig('spidermom', {}, lite);

@@ -8,11 +8,11 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { initPhoto } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { slappyReady } from './slappyGlb.js';
-import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady } from './grannyGlb.js';
+import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, childReady, makeChild } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 import { MOBILE, touchName, setTouchCtx, mobileText } from './touch.js';
@@ -788,6 +788,7 @@ export class Game {
     this.updateZaps(S, dt);
     if (this.execTrap && !S.players.some(o => o.st === 'exec')) { this.execTrapT = (this.execTrapT || 0) + dt; if (this.execTrapT > 6) { this.scene.remove(this.execTrap); this.execTrap = null; this.execTrapT = 0; } } else this.execTrapT = 0;
     this.updateSpiderMom(dt, S);
+    this.updateKids(dt, S);
     this.updateCreep(S, me);
     this.updateSlime(S);
     this.updateSpears(dt, S);
@@ -1414,7 +1415,24 @@ export class Game {
     // pull in if a wall is in the way
     let dd = dist;
     for (let d = 0.3; d <= dist; d += 0.15) {
-      if (pointBlocked(camL, piv.x + back.x * d, piv.y + back.y * d - floorH, piv.z + back.z * d)) { dd = Math.max(0.35, d - 0.25); break; }
+      // (also a little lower: some walls are drawn taller than their collision box, and the camera ended up inside them)
+      const cx = piv.x + back.x * d, cy = piv.y + back.y * d - floorH, cz = piv.z + back.z * d;
+      // (and the edge of the map counts as a wall: past it there's nothing to bump into but the outside of the yard wall)
+      const edge = (this.M.half || HALF) - 0.5;
+      if (pointBlocked(camL, cx, cy, cz) || pointBlocked(camL, cx, Math.max(0.06, cy - 0.7), cz) || Math.abs(cx) > edge || Math.abs(cz) > edge) { dd = Math.max(0.35, d - 0.25); break; }
+    }
+    // the house model itself (some of it, like the broken gate, has no collision box): a ray from her to the camera,
+    // ~15 times a second
+    if (this.W && this.W.glb) {
+      this.camRayT = (this.camRayT || 0) - dt;
+      if (this.camRayT <= 0) {
+        this.camRayT = 0.066;
+        const rc = this.camRay ||= new THREE.Raycaster(), o = new THREE.Vector3(piv.x, piv.y, piv.z), dv = new THREE.Vector3(back.x, back.y, back.z).normalize();
+        rc.set(o, dv); rc.near = 0.2; rc.far = dist + 0.35;
+        const hit = rc.intersectObject(this.W.glb, true)[0];
+        this.camHit = hit ? hit.distance : null;
+      }
+      if (this.camHit != null) dd = Math.min(dd, Math.max(0.35, this.camHit - 0.35));
     }
     this.camDist = this.camDist === undefined ? dd : (dd < this.camDist ? dd : this.camDist + (dd - this.camDist) * Math.min(1, dt * 4));
     const d = this.camDist;
@@ -1691,6 +1709,28 @@ export class Game {
     if (best && best.el) best.el.classList.add('sel');
   }
   clearCreep() { for (const el of this.creepEls || []) el.remove(); this.creepEls = null; this.creepSel = null; }
+  // ---------------- The Child of Slendrina (killer sidekick) ----------------
+  updateKids(dt, S) {
+    const live = S.kids || [];
+    this.kids ||= new Map();
+    for (const [id, P] of this.kids) if (!live.some(k => k.id === id)) { this.scene.remove(P.R.root); this.kids.delete(id); }
+    for (const k of live) {
+      let P = this.kids.get(k.id);
+      if (!P && childReady()) { const R = makeChild(this.settings.quality === 'potato' || this.settings.quality === 'low'); if (R) { this.scene.add(R.root); P = { R, x: k.x, z: k.z, yaw: k.yaw, tp: k.tp }; this.kids.set(k.id, P); } }
+      if (!P) continue;
+      const R = P.R, kk = 1 - Math.exp(-dt * 10), jump = P.tp !== k.tp || Math.hypot(k.x - P.x, k.z - P.z) > 4;
+      const px = P.x, pz = P.z;
+      if (jump) { P.x = k.x; P.z = k.z; P.tp = k.tp; } else { P.x += (k.x - P.x) * kk; P.z += (k.z - P.z) * kk; }
+      P.yaw += Math.atan2(Math.sin(k.yaw - P.yaw), Math.cos(k.yaw - P.yaw)) * Math.min(1, dt * 8);
+      const y = this.M.stairs ? heightAt(this.M, { x: P.x, z: P.z, fl: k.fl, sp: k.sp }) : 0;
+      R.root.position.set(P.x, y, P.z); R.root.rotation.y = P.yaw;
+      // never in the way of the camera: fades out when it's close to it
+      const cd = this.camera ? this.camera.position.distanceTo(R.root.position) : 9, op = Math.round(Math.max(0, Math.min(1, (cd - 0.9) / 1.2)) * 10) / 10;
+      if (op !== P.op) { P.op = op; R.setOpacity(Math.max(0.001, op)); R.root.visible = op > 0.02; }
+      const sp = jump ? 0 : Math.hypot(P.x - px, P.z - pz) / Math.max(dt, 1e-3);
+      R.play(k.st === 2 ? 'attack' : sp > 0.4 || k.st === 1 ? 'walk' : 'idle', dt, k.st === 1 || sp > 0.4 ? Math.min(2, Math.max(0.8, sp / 2.5)) : 1);
+    }
+  }
   // ---------------- Spider Mom ----------------
   updateSpiderMom(dt, S) {
     const sp = S.spider;
@@ -2111,6 +2151,13 @@ export class Game {
         case 'creep': {
           this.smoke.spawn(e.x, 1, e.z, 16, 0x0a0a0a, 1.1, 2, 0.5, 1); sound.play('fade', e.x, e.z, { on: true });
           if (e.id === this.myId) this.teleFx = 1;
+          break;
+        }
+        case 'kidcry': {
+          sound.play('scream', e.x, e.z, { pitch: 3.1, len: 0.6 });
+          const me3 = this.mine();
+          if (e.id === this.myId) { this.feed("The Child of Slendrina saw you and shrieked! The killer knows where you are.", 'big'); this.shake = 0.2; }
+          else if (me3 && me3.role === 'killer') this.feed('The Child found ' + name(e.id) + '.');
           break;
         }
         case 'spidermom': {

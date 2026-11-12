@@ -1,6 +1,8 @@
 // Player progression: XP and level, a rank per role (survivor / killer) earned through match
 // results, and the season pass. Everything lives in the local profile (localStorage).
 
+import { CHAR_LEVEL, STATS } from './config.js';
+
 // ---------- level ----------
 export const xpToNext = lvl => 500 + lvl * 75;
 export function levelOf(xp) {
@@ -38,28 +40,86 @@ export function pipsFor(S, me) {
   return frac >= 1 ? 2 : frac >= 0.74 ? 1 : frac >= 0.5 ? 0 : -1;
 }
 
-// ---------- season pass ----------
-export const SEASON = {
-  id: 's1', name: 'Season 1: The Long Night', start: Date.UTC(2026, 10, 1), days: 60, tierXp: 1200,
-  // reward per tier (1-based). Embers on most, bigger bundles every 5th, a badge at 15 and 30
-  tiers: Array.from({ length: 30 }, (_, i) => {
-    const t = i + 1;
-    if (t === 15) return { t, kind: 'badge', id: 's1-mid', label: 'Long Night badge' };
-    if (t === 30) return { t, kind: 'badge', id: 's1-final', label: 'Dawn Survivor badge + 5,000 Embers', embers: 5000 };
-    return { t, kind: 'embers', embers: t % 5 === 0 ? 1500 : 300 + Math.floor(t / 3) * 50, label: '' };
-  }),
-};
-SEASON.tiers.forEach(r => { if (r.kind === 'embers') r.label = `${r.embers.toLocaleString()} Embers`; });
+// ---------- seasons and the season pass ----------
+// A new season every six weeks, counted from 1 Nov 2026. Each has 30 tiers (1,000 season XP each). Every tier has a
+// free reward; the premium track (bought with Embers, once per season) adds a bigger one, level tokens and outfits.
+const S_EPOCH = Date.UTC(2026, 10, 1), S_DAYS = 42;
+const S_NAMES = ['The Long Night', 'Cellar Whispers', 'The Old House', 'Lullaby', 'Blood Moon', 'Dawn'];
+export const PASS_PRICE = 8000;
+export function seasonAt(now = Date.now()) {
+  const n = Math.max(0, Math.floor((now - S_EPOCH) / (S_DAYS * 864e5)));
+  const tiers = Array.from({ length: 30 }, (_, i) => {
+    const t = i + 1, big = t % 5 === 0;
+    const free = t === 15 ? { kind: 'badge', id: 's' + (n + 1) + '-mid', label: 'Season badge' }
+      : t === 30 ? { kind: 'badge', id: 's' + (n + 1) + '-final', label: 'Season finale badge + 3,000 Embers', embers: 3000 }
+      : { kind: 'embers', embers: big ? 1000 : 250 + t * 20 };
+    const prem = t === 15 ? { kind: 'skin', char: 'angeline', skin: 'gilded', label: 'Outfit: Gilded Mother (Angeline)' }
+      : t === 30 ? { kind: 'skin', char: 'granny', skin: 'longnight', label: 'Outfit: The Long Night (Granny)' }
+      : big ? { kind: 'token', n: 1, label: 'Level token (+1 level for any character)' }
+      : { kind: 'embers', embers: 500 + t * 40 };
+    for (const r of [free, prem]) if (r.kind === 'embers') r.label = `${r.embers.toLocaleString()} Embers`;
+    return { t, free, prem };
+  });
+  return { n, id: 's' + (n + 1), name: `Season ${n + 1}: ${S_NAMES[n % S_NAMES.length]}`, start: S_EPOCH + n * S_DAYS * 864e5, days: S_DAYS, tierXp: 1000, tiers };
+}
+export const SEASON = seasonAt();
 export const seasonEnds = () => SEASON.start + SEASON.days * 864e5;
 export const seasonTier = xp => Math.min(SEASON.tiers.length, Math.floor(xp / SEASON.tierXp));
+export function progOf(profile) {
+  const P = profile.prog ||= { xp: 0, ranks: { survivor: 0, killer: 0 }, season: { id: SEASON.id, xp: 0, claimed: {}, prem: false }, badges: {} };
+  P.ranks ||= { survivor: 0, killer: 0 }; P.badges ||= {};
+  P.season ||= { id: SEASON.id, xp: 0, claimed: {}, prem: false };
+  P.season.claimed ||= {};
+  return P;
+}
+// a new season: the old one's rank reward (Embers by rank, per role), ranks drop one tier, a fresh pass.
+// Returns a line for the player, or '' when nothing changed.
+export function seasonRoll(profile) {
+  const P = progOf(profile);
+  if (P.season.id === SEASON.id) return '';
+  const first = !P.season.xp && !Object.keys(P.season.claimed).length && !P.ranks.survivor && !P.ranks.killer;
+  let embers = 0;
+  for (const role of ['survivor', 'killer']) {
+    const r = rankOf(P.ranks[role] || 0), ti = TIERS.indexOf(r.tier);
+    embers += P.ranks[role] ? 500 + ti * 1000 + (3 - ROMAN.indexOf(r.grade)) * 250 : 0;
+    P.ranks[role] = Math.max(0, (P.ranks[role] || 0) - 4 * PIPS_PER_GRADE);
+  }
+  P.season = { id: SEASON.id, xp: 0, claimed: {}, prem: false };
+  if (embers) profile.stats.embers += embers;
+  return first ? '' : `${SEASON.name} has begun. Your ranks earned you ${embers.toLocaleString()} Embers, and dropped one tier for the new season.`;
+}
+
+// ---------- character levels ----------
+export function charLv(xp) {
+  let lvl = 1, left = xp || 0;
+  while (lvl < CHAR_LEVEL.max && left >= CHAR_LEVEL.xp(lvl)) { left -= CHAR_LEVEL.xp(lvl); lvl++; }
+  return { lvl, into: lvl >= CHAR_LEVEL.max ? 0 : left, need: lvl >= CHAR_LEVEL.max ? 0 : CHAR_LEVEL.xp(lvl), max: lvl >= CHAR_LEVEL.max };
+}
+export const charOf = (profile, id) => { const C = (profile.chars ||= {})[id] ||= { xp: 0, st: {} }; C.st ||= {}; return C; };
+export const statsSpent = C => Object.values(C.st || {}).reduce((a, v) => a + (v | 0), 0);
+export const freePoints = (profile, id) => charLv(charOf(profile, id).xp).lvl - 1 - statsSpent(charOf(profile, id));
+// what a character brings into a match
+export function matchStats(profile, id, role) {
+  const C = charOf(profile, id), out = {};
+  for (const d of STATS[role] || []) if (C.st[d.id] > 0) out[d.id] = Math.min(d.max, C.st[d.id] | 0);
+  return out;
+}
+// XP to the next level (training with Embers lands exactly on the next level)
+export function trainOne(profile, id) {
+  const C = charOf(profile, id), L = charLv(C.xp);
+  if (L.max) return false;
+  C.xp += L.need - L.into;
+  return true;
+}
 
 // ---------- applying a match ----------
 // returns a summary for the results screen
 export function applyMatch(profile, S, me) {
-  const P = profile.prog ||= { xp: 0, ranks: { survivor: 0, killer: 0 }, season: { id: SEASON.id, xp: 0, claimed: {} }, badges: {} };
-  if (!P.season || P.season.id !== SEASON.id) P.season = { id: SEASON.id, xp: 0, claimed: {} };
+  const P = progOf(profile);
+  if (P.season.id !== SEASON.id) seasonRoll(profile);
   const tot = me.score.a + me.score.b + me.score.c + me.score.d;
-  const win = me.role === 'survivor' ? me.outcome === 'escaped' : S.players.filter(p => p.role === 'survivor' && p.outcome !== 'escaped').length >= 3;
+  const nSurv = S.players.filter(p => p.role === 'survivor').length;
+  const win = me.role === 'survivor' ? me.outcome === 'escaped' : S.players.filter(p => p.role === 'survivor' && p.outcome !== 'escaped').length >= Math.ceil(nSurv * 0.6);
   const xp = Math.round(150 + (me.role === 'killer' ? tot / 40 : tot / 10) + (win ? 200 : 0));
   const before = levelOf(P.xp).lvl, rankBefore = rankOf(P.ranks[me.role] || 0);
   P.xp += xp;
@@ -67,7 +127,9 @@ export function applyMatch(profile, S, me) {
   const dp = pipsFor(S, me);
   P.ranks[me.role] = Math.max(0, Math.min(MAX_PIPS, (P.ranks[me.role] || 0) + dp));
   const after = levelOf(P.xp).lvl, rankAfter = rankOf(P.ranks[me.role]);
-  return { xp, levelUp: after > before ? after : 0, level: after, pips: dp, rank: rankAfter, rankChanged: rankAfter.name !== rankBefore.name, role: me.role };
+  // the character you played levels up too
+  const C = charOf(profile, me.char), cb = charLv(C.xp).lvl; C.xp += xp; const ca = charLv(C.xp).lvl;
+  return { xp, levelUp: after > before ? after : 0, level: after, pips: dp, rank: rankAfter, rankChanged: rankAfter.name !== rankBefore.name, role: me.role, char: me.char, charLevel: ca, charUp: ca > cb ? ca - cb : 0 };
 }
 
 // small SVG rank emblem: a diamond in the tier colour with the grade

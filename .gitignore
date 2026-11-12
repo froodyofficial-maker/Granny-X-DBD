@@ -15,3 +15,4 @@ trailer-capture.html
 
 # signing key: never in the repo (keep it safe yourself)
 tools/android/*.jks
+tools/test/node_modules

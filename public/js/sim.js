@@ -1,5 +1,5 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
-import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS } from './config.js';
+import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS } from './config.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt, levelStep, overlaps, floorUnder } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
@@ -23,7 +23,7 @@ export class Sim {
       bars: M.bars.map(() => 0),
       cages: M.cages.map(() => null), cageBroken: M.cages.map(() => false),
       gates: M.gates.map(() => ({ p: 0, open: false })),
-      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [], bears: [], slend: null, spider: null,
+      spears: [], lanterns: [], lid: 0, dark: 0, chains: [], traps: [], tid: 0, slime: [], saws: [], bears: [], slend: null, spider: null, kids: [],
       chests: (M.chests || []).map(() => ({ open: false, it: null })), zaps: [],
     };
     let si = 0, ki = 0;
@@ -74,6 +74,8 @@ export class Sim {
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
+        // 1.4: character stats (levels) and the killer's sidekick
+        stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : '',
       });
     }
   }
@@ -504,7 +506,7 @@ export class Sim {
       }
       case 'wig': {
         if (p.st !== 'carried') return;
-        p.wig += RULES.wiggleRate * (has(p, 'resolve') ? 1.4 : 1) * (has(this.P(p.carriedBy) || {}, 'irongrip') ? 0.7 : 1);
+        p.wig += RULES.wiggleRate * (has(p, 'resolve') ? 1.4 : 1) * (has(this.P(p.carriedBy) || {}, 'irongrip') ? 0.7 : 1) * (1 + statK(p, 'grit'));
         if (p.wig >= RULES.wiggleNeed) {
           const k = this.P(p.carriedBy);
           if (k) this.releaseCarry(k, true);
@@ -655,6 +657,12 @@ export class Sim {
       if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.flashOn || !at || Math.hypot(p.x - at.x, p.z - at.z) > 0.3 || S.t - at.t > (p.emote === 1 ? 30 : 4)) p.emote = 0;
     }
     for (const p of S.players) {
+      // Focus (killer stats): any power cooldown that was just started is shortened
+      if (p.role === 'killer' && p.stats && p.stats.cd) {
+        const k = statK(p, 'cd'), pc = (this.cdPrev ||= new Map()).get(p.id) || {};
+        for (const f of ['abCd', 'ab2Cd', 'teleCd', 'swapCd']) { const v = p[f] || 0, was = pc[f] || 0; if (v > was + 0.3) p[f] = was + (v - was) / (1 + k); pc[f] = p[f] || 0; }
+        this.cdPrev.set(p.id, pc);
+      }
       p.boost = Math.max(0, p.boost - dt);
       p.reveal = Math.max(0, p.reveal - dt);
       if (p.stun > 0) p.stun = Math.max(0, p.stun - dt);
@@ -710,6 +718,7 @@ export class Sim {
     this.updateGrandpa(dt);
     this.updateSlendrina(dt);
     this.updateAngeline(dt);
+    this.updateKids(dt);
 
     // ---- survivor states ----
     for (const p of S.players) {
@@ -760,6 +769,7 @@ export class Sim {
         for (const p of S.players) if (p.act && p.act.k === 'repair' && p.act.id === i) {
           let r = 1 / RULES.genCharges * (M.indoor ? 1.12 : 1) * (this.mode === 'rush' ? 2 : 1) * (this.mode === 'glass' ? 1.4 : this.mode === 'adrenaline' ? 1.25 : 1) * (p.st === 'ghost' ? 0.9 : 1); // tighter indoor maps favour the killer
           if (has(p, 'shared')) r *= 1 + 0.15 * (g.n - 1);
+          r *= 1 + statK(p, 'rep'); // Mechanic (character stats)
           if (Ks.some(K => has(K, 'dread') && dist(K, p) < terrorRadius(K))) r *= 0.9;
           rate += r;
           p.score.a += dt * 12;
@@ -1153,6 +1163,7 @@ export class Sim {
         if (has(p, 'medic')) rate *= a.k === 'self' ? 0.5 : 1.3;
         if (has(p, 'triage') && t.st === 'down') rate *= 2;
         else if (a.k === 'self') rate *= 0.5;
+        rate *= 1 + statK(p, 'heal'); // Medic (character stats)
         t.healP += rate * dt;
         p.prog = t.healP;
         p.score.b += dt * 15;
@@ -1678,6 +1689,47 @@ export class Sim {
     }
     if (!K.fl) for (const g of M.gens) { const gs = S.gens[g.id]; if (!gs.done && gs.p > 0 && Math.hypot(g.x - K.x, g.z - K.z) < D.slamRadius + 0.8) { gs.p = Math.max(0, gs.p - D.slamGen); gs.reg = true; this.ev({ k: 'kick', id: g.id }); } }
     this.ev({ k: 'slam', id: K.id, x: K.x, z: K.z, hit });
+  }
+  // The Child of Slendrina (sidekick): crawls after its killer; a survivor it sees close by makes it shriek, which
+  // reveals them to the killers. It can't be hurt and never blocks anyone. When it falls behind (a wall, the stairs,
+  // a Haunt or a Creep) it catches up out of sight.
+  updateKids(dt) {
+    const S = this.S, C = SIDEKICKS.child, st = this.kidState ||= new Map();
+    const owners = S.players.filter(p => p.role === 'killer' && p.kid === 'child');
+    if (!owners.length) { if (S.kids.length) S.kids = []; return; }
+    S.kids = S.kids.filter(k => owners.some(K => K.id === k.id));
+    for (const K of owners) {
+      let k = S.kids.find(x => x.id === K.id);
+      // behind and to the left (the third-person camera sits behind and over the right shoulder)
+      const f = fwd(K.yaw), lx = Math.cos(K.yaw), lz = -Math.sin(K.yaw), bx = K.x - f.x * 1.3 + lx * 1.3, bz = K.z - f.z * 1.3 + lz * 1.3;
+      const catchUp = () => { const L = levelOf(this.M, K.fl || 0); const sp = (K.fl || 0) >= 10 ? { x: K.x - f.x * 0.8, z: K.z - f.z * 0.8 } : this.safeSpot(bx, bz, K.x, K.z, K.fl || 0); k.x = +sp.x.toFixed(2); k.z = +sp.z.toFixed(2); k.fl = K.fl || 0; k.sp = K.sp; k.tp = (k.tp || 0) + 1; void L; };
+      if (!k) { k = { id: K.id, x: K.x, z: K.z, fl: K.fl || 0, sp: K.sp, yaw: K.yaw, st: 0, tp: 0 }; S.kids.push(k); catchUp(); }
+      const ks = st.get(K.id) || { seen: {}, cry: 0, stuck: 0 }; st.set(K.id, ks);
+      // following
+      const sameFloor = (k.fl || 0) === (K.fl || 0) && (K.fl || 0) < 10;
+      const d = Math.hypot(bx - k.x, bz - k.z);
+      if (!sameFloor || Math.hypot(K.x - k.x, K.z - k.z) > 14 || K.tele || ks.stuck > 1.5) { if (!sameFloor || ks.stuck > 1.5 || Math.hypot(K.x - k.x, K.z - k.z) > 14) catchUp(); ks.stuck = 0; }
+      else if (d > 0.6 && ks.cry <= 0) {
+        const v = Math.min(d, C.speed * dt), dx = (bx - k.x) / d * v, dz = (bz - k.z) / d * v;
+        const r = moveCircle(levelOf(this.M, k.fl || 0), null, k.x, k.z, dx, dz, 0.25);
+        const moved = Math.hypot(r.x - k.x, r.z - k.z);
+        ks.stuck = moved < v * 0.25 ? ks.stuck + dt : 0;
+        k.x = +r.x.toFixed(2); k.z = +r.z.toFixed(2); k.yaw = +Math.atan2(dx, dz).toFixed(2); k.st = 1;
+      } else { k.st = ks.cry > 0 ? 2 : 0; ks.stuck = 0; }
+      if (ks.cry > 0) { ks.cry -= dt; k.st = 2; if (ks.cry <= 0) k.st = 0; }
+      // shrieking at survivors it can see
+      if ((k.fl || 0) >= 10) continue;
+      for (const s of S.players) {
+        if (s.role !== 'survivor' || s.st !== 'ok' || (s.fl || 0) !== (k.fl || 0)) continue;
+        if (Math.hypot(s.x - k.x, s.z - k.z) > C.range || S.t - (ks.seen[s.id] ?? -99) < C.cooldown) continue;
+        if (losBlocked(levelOf(this.M, k.fl || 0), k.x, k.z, s.x, s.z, 0.9)) continue;
+        ks.seen[s.id] = S.t; ks.cry = 1.3; k.st = 2; k.yaw = +Math.atan2(s.x - k.x, s.z - k.z).toFixed(2);
+        s.reveal = Math.max(s.reveal || 0, C.reveal);
+        K.score.b += 100;
+        this.ev({ k: 'kidcry', id: s.id, by: K.id, x: k.x, z: k.z });
+        break;
+      }
+    }
   }
   // Spider Mom: crawls from generator to generator; anyone she finds repairing one is shown to Granny
   updateSpiderMom(dt, Gs) {

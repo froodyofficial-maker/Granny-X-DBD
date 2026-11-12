@@ -8,7 +8,7 @@ const page0 = `<!doctype html><html><head><meta charset="utf-8"><link rel="style
 const srv = http.createServer(async (q, r) => {
   const u = decodeURIComponent(q.url.split('?')[0]);
   if (u === '/public/__p.html') { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return r.end(page0); }
-  if (u === '/public/__p.js') { r.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); return r.end(await readFile(join(HERE, 'devlog13-page.js'))); }
+  if (u === '/public/__p.js') { r.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); return r.end(await readFile(join(HERE, process.env.PAGE || 'devlog13-page.js'))); }
   try { const b = await readFile(join(ROOT, u)); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.png': 'image/png' }[extname(u)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); }
 }).listen(0);
 const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
@@ -17,5 +17,5 @@ pg.on('pageerror', e => console.log('err', e.message)); pg.on('console', m => { 
 await pg.goto(`http://localhost:${srv.address().port}/public/__p.html`); await pg.waitForFunction(() => window.ready, null, { timeout: 60000 });
 await pg.evaluate(() => window.setup());
 const d = await pg.evaluate(() => window.frame(0));
-await writeFile(join(HERE, 'devlog13.png'), Buffer.from(d.split(',')[1], 'base64'));
+await writeFile(join(HERE, process.env.OUT || 'devlog13.png'), Buffer.from(d.split(',')[1], 'base64'));
 await br.close(); srv.close();

@@ -1,5 +1,5 @@
 // Rules shared by host simulation, client prediction and bots.
-import { SPEED, RULES, KILLERS, HALF, ITEMS } from './config.js';
+import { SPEED, RULES, KILLERS, HALF, ITEMS, statK } from './config.js';
 import { barBox } from './map.js';
 
 export const has = (p, perk) => p.perks && p.perks.includes(perk);
@@ -59,6 +59,7 @@ export function speedOf(p, S, sprint, crouch) {
     if (p.webbed > 0) s *= 0.65; // caught in Spider Mom's web
     if (p.cursed > 0) s *= KILLERS.slendrina.ability2.slow; // looking at Slendrina
     if (p.drowsy > 0) s *= KILLERS.angeline.ability2.slow;  // Angeline's Lullaby
+    s *= 1 + statK(p, 'spd');                                // Agility (character stats)
     return S && modeOf(S) === 'adrenaline' ? s * 1.3 : s;
   }
   const K = KILLERS[p.char];
@@ -67,7 +68,7 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.carry != null) s = SPEED.carry;
   if (S.gatesPowered && has(p, 'fury')) s *= 1.08;
   if (p.haste > 0) s *= 1.12;
-  if (p.atk === 1) s *= RULES.lungeMul;
+  if (p.atk === 1) s *= RULES.lungeMul * (1 + statK(p, 'reach')); // Reach (character stats): a longer lunge
   else if (p.atk === 2) s *= p.atkHit ? 0.22 : 0.5;
   if (p.char === 'butcher' && p.ab === 1) s = 8.6;
   if (p.char === 'wisp') { if (p.ab === 1) s *= 1.15; else if (p.ab === 2 || p.ab === 3) s *= 0.4; }
@@ -81,6 +82,7 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'angeline' && p.aim) s *= KILLERS.angeline.ability.slow; // Yellow Eyes
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
+  s *= 1 + statK(p, 'spd');                                  // Stalker (character stats)
   return S && modeOf(S) === 'adrenaline' ? s * 1.3 : s;
 }
 
@@ -174,16 +176,16 @@ export function findExecute(M, S, p) {
 
 export function actionTime(k, p, S) {
   switch (k) {
-    case 'pickup': return RULES.pickupTime;
+    case 'pickup': return RULES.pickupTime / (1 + statK(p, 'brut'));
     case 'execute': return RULES.execTime;
     case 'snuff': return RULES.snuffTime;
     case 'chest': return RULES.chestTime;
     case 'swap': return RULES.swapTime;
-    case 'cage': return RULES.cageTime;
-    case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1);
-    case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1);
-    case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1);
-    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : modeOf(S) === 'adrenaline' ? 0.75 : 1);
+    case 'cage': return RULES.cageTime / (1 + statK(p, 'brut'));
+    case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1) / (1 + statK(p, 'brut'));
+    case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1) / (1 + statK(p, 'brut'));
+    case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1) / (1 + statK(p, 'grit'));
+    case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : modeOf(S) === 'adrenaline' ? 0.75 : 1) / (1 + statK(p, 'rep'));
     default: return 0;
   }
 }

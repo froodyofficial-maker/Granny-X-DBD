@@ -912,7 +912,9 @@ export class Bots {
     let gi = b.patrolGen;
     if (b.leaveCage && b.leaveCage.t > 0 && gi >= 0 && Math.hypot(M.gens[gi].x - b.leaveCage.x, M.gens[gi].z - b.leaveCage.z) < 20) gi = -1;
     if (gi >= 0 && Math.hypot(M.gens[gi].x - p.x, M.gens[gi].z - p.z) < 3.2) b.genIdle = (b.genIdle || 0) + dt; else b.genIdle = 0;
-    if (gi < 0 || S.gens[gi].done || b.genIdle > 2.5 || (Math.hypot(M.gens[gi].x - p.x, M.gens[gi].z - p.z) < 2.5 && (S.gens[gi].reg || S.gens[gi].p < 0.2))) {
+    // once the gates are powered, generators don't matter any more: guard the gates (below) instead of kicking a leftover one
+    if (S.gatesPowered) { gi = -1; b.patrolGen = -1; }
+    else if (gi < 0 || S.gens[gi].done || b.genIdle > 2.5 || (Math.hypot(M.gens[gi].x - p.x, M.gens[gi].z - p.z) < 2.5 && (S.gens[gi].reg || S.gens[gi].p < 0.2))) {
       b.genIdle = 0;
       let bs = -1e9; gi = -1;
       for (const g of M.gens) {
@@ -944,8 +946,10 @@ export class Bots {
       this.goTo(p, b, g.x, g.z, 'gen' + gi, dt, true, 2);
     } else {
       // all gens done: guard the gates
-      const gt = M.gates[Math.floor(S.t / 25) % M.gates.length];
-      this.goTo(p, b, gt.sx, gt.sz - gt.dir * 3, 'gate' + gt.id, dt, true, 2);
+      // (two killers split the gates; each paces in front of its gate rather than standing still)
+      const kk = killersOf(S).filter(k => k.bot).indexOf(p), gt = M.gates[(Math.floor(S.t / 25) + Math.max(0, kk)) % M.gates.length];
+      const slot = Math.floor(S.t / 4), a = slot * 2.4 + (kk > 0 ? 1.3 : 0);
+      this.goTo(p, b, gt.sx + Math.cos(a) * 3.5, gt.sz - gt.dir * (3 + Math.sin(a) * 1.5), 'gate' + gt.id + ':' + slot, dt, true, 1.2);
     }
   }
 }

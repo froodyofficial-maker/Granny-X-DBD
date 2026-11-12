@@ -12,8 +12,9 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 - **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina and Angeline (1.3).**
 - **Survivors: only Mara, Eli, June and Tomás.**
 - **Maps: Granny's House (`granny`) and Granny's Old House (`granny1`).** No other maps.
-- Removed for good (don't bring back): sidekicks and their store section, ghost traps, all lore,
-  Progress screen, Testing Area, ranks and levelling, the old intro banner / trailer gate.
+- Removed for good (don't bring back): ghost traps, all lore, Testing Area, the old intro banner / trailer gate.
+  (Sidekicks, the Progress screen, ranks and levelling were removed in 1.0 but the owner asked for them back in 1.4:
+  they are in again, in the 1.4 form described below.)
 - Bots must never stall. **Falling off the roof of the house is fine: don't add barriers.**
 - Don't put the owner's real photo/face on any model.
 - Never paste API keys or secrets into chat.
@@ -36,6 +37,13 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
     `showLoading(on, msg, isLite, rendererOf)`; it renders with the game's own renderer; the main loop
     skips the menu/game while it's up; `HostSession.start` is async with a frame yield between steps
     (this fixed the STATUS_ACCESS_VIOLATION freeze when loading into a match).
+  - `progress.js` (1.4) account level, ranks (Ash..Iridescent, IV..I, 4 pips per grade), seasons (`seasonAt`: a new one every
+    42 days from 1 Nov 2026, `SEASON` = the current one, 30 tiers x 1000 XP, free + premium track; premium costs
+    `PASS_PRICE` 8000 Embers once per season; premium tier 15 = Angeline 'gilded' outfit, 30 = Granny 'longnight'
+    (skins with `pass: true, price: -1`, owned only through the pass), every 5th premium tier a level token), `seasonRoll`
+    (new season: Embers for each rank, ranks drop one tier, fresh pass; called at startup), character levels (`charLv`,
+    `charOf` = `profile.chars[id] = { xp, st }`, `freePoints`, `matchStats`, `trainOne`), `applyMatch` (account XP, season XP,
+    rank pips, and the played character's XP). Progress panel = `renderPass()` in main.js (menu button "Progress").
   - `touch.js` phone/tablet controls (joystick left, drag-to-look right, context buttons), `body.touch` CSS.
     Mobile mode (`MOBILE` = touch device or `window.__forceTouch`; `html.mobile`): no keyboard/mouse hint anywhere.
     `touchName(id)` maps keybind ids / 'LMB' / 'RMB' / 'V' to button names (game.js `KL()` / `B()` / `kbd()`),
@@ -50,14 +58,16 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   `lsshot.mjs out.png medium [menu.png]` loading screen (uses `window.__lsSeek`); `mobile.mjs` phone-emulated menu/help/HUD
   check (prints any key names left in the HUD); `lobbytest.mjs` 3 players vs a local relay (`node broker.mjs` first:
   aedes@0.51.3 + aedes-server-factory@0.2.1) for public/private lobbies; `angview.mjs` / `rigview.mjs` character poses;
-  `rawglb.mjs file.glb prefix` plays a GLB's own clips with plain three.js; `render-devlog.mjs` + `devlog13-page.js` the 1.3
-  devlog banner (rendered in-engine, 2560x1440).
+  `rawglb.mjs file.glb prefix` plays a GLB's own clips with plain three.js; `render-devlog.mjs` + `devlog13-page.js` /
+  `devlog14-page.js` the devlog banners (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
+  `match14.mjs` a 2v8 match as Angeline with the Child (`GM=classic K=granny` to change). simtest takes `MODE=duo` and
+  `KID=1`. Playwright resolves through `tools/test/node_modules` -> `$(npm root -g)` (a symlink, not committed: recreate it).
 - `server.js` optional LAN server (`node server.js 8090`), `start-*.bat/.sh/.command` launchers.
 - `README.md` is still Nightbound's old README (outdated; don't trust it for this game).
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 12`, `VERSION = '1.3.0'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.0'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -101,6 +111,26 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 - Granny's House floors (1.3): `grannyfloors.js` = per-floor support maps measured from granny_map.glb; nav cells with no
   floor under them are blocked, and `dropFloor` drops anyone who walks off an edge to the floor below. Gen/teammate
   auras are hidden across floors. Bear traps use granny_bear_trap.glb (jaws close on `bearsnap`).
+- Character levels and stats (1.4, `CHAR_LEVEL` / `STATS` / `cleanStats` / `statK` in config.js): every character has its own
+  level (max 41, XP from matches or `train` with Embers, or a level token from the pass); each level past 1 is a stat point,
+  max 10 per stat. Survivor: Agility (+0.8% speed/pt), Mechanic (+2.5% repair and gates), Medic (+3% healing), Grit (+5%
+  struggle and unhook). Killer: Stalker (+0.6% speed), Focus (+2.5% faster recharge: the sim shortens any cooldown that was
+  just started, `cdPrev`), Brutality (+4% break/kick/pickup/hook), Reach (+1.5% lunge). Players carry `stats` (STATIC in
+  snap.js); hooks are in rules.js `speedOf` / `actionTime`, sim.js gen repair, healing and wiggle. Bots have none.
+  Loadout shows level, XP bar, points (+/−, reset free), Train and level tokens (`levelHTML` / `bindLevel`).
+- Sidekick (1.4): `SIDEKICKS.child` "The Child of Slendrina", killers only, 20,000 Embers in Store > Sidekicks, equipped
+  in the killer Loadout (`profile.pets.child`, `profile.killer.pet === 'child'`, sent as `kid: 'child'`). Sim `updateKids`:
+  `S.kids` [{id = owner, x, z, fl, sp, yaw, st 0 idle / 1 crawl / 2 shriek, tp}], crawls behind-left of its killer
+  (out of the camera's way), catches up out of sight on another floor / far / stuck; a survivor within 11 m in its sight
+  -> shriek: revealed 4 s (14 s per survivor), event `kidcry`. Model slendrina_child.glb ("DVloper - Slendrina's Child
+  (Official Model)" by danielthesecond, CC BY 4.0; own clips idle/walk/attack/eat...), `makeChild` in grannyGlb.js; game.js
+  `updateKids` draws it and fades it near the camera. Bot killers bring it 35% of the time. Portrait: public/img/child.png
+  (tools/test/childshot.mjs).
+- Two Killers / 2 vs 8 (1.4): `MODES.duo` (killers 2, survivors 8, 6 of 7 generators). Bot killers stop patrolling generators
+  once the gates are powered and pace in front of their own gate (`killersOf(S).filter(bot).indexOf(p)`).
+- Third-person camera (1.4): besides the collision boxes it ray-casts the house model (`W.glb`, ~15/s) and a point 0.7 m
+  lower, so it no longer ends up inside walls/the broken gate that have no collision box.
+- HUD perks: four perk diamonds sit top/left/right/bottom (`#perks .diamond:nth-child(4)`).
 - Headless bot-only matches (Sim + Bots, no rendering) run ~10 game minutes per second: useful to find stalls.
 
 ## Build
@@ -160,7 +190,10 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.3.1 (current): Angeline animated in code (see Angeline above); APK versionCode 14 / 1.3.1, Windows app 1.3.1
+1.4 (current): character levels + stats, The Child of Slendrina sidekick, Two Killers (2v8), seasons + ranks + season
+pass with a premium track, perk HUD fix, camera ray-cast. APK versionCode 15 / 1.4.0 (signed with grannyxdbd-1.3.jks),
+Windows app 1.4.0. Devlog banner "LEVEL UP · AND MEET THE CHILD" (tools/test/devlog14-page.js, PAGE=... OUT=... render-devlog.mjs).
+1.3.1: Angeline animated in code (see Angeline above); APK versionCode 14 / 1.3.1, Windows app 1.3.1
 (config.js `VERSION` still says '1.3.0', NET_PROTOCOL 12: 1.3.0 and 1.3.1 play together). Main branch = latest.
 
 ## Where things stand / next steps
