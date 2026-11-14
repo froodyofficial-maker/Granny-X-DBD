@@ -215,7 +215,7 @@ function startBG() {
 }
 // Granny x DBD only needs Granny, Grandpa, Spider Mom, her house and the survivors' items
 loadStatic('beartrap'); loadStatic('taser');
-loadScene('granny_map'); loadScene('granny1_map');
+loadScene('granny_map'); loadScene('granny1_map'); loadScene('forest_map');
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
 loadGrandpa().then(m => { if (m) { forgetArt('grandpa'); if (menu && menu.killerChar === 'grandpa') menu.setKiller('grandpa', menu.killerSkin); } });
 loadSlendrina().then(m => { if (m) { forgetArt('slendrina'); if (menu && menu.killerChar === 'slendrina') menu.setKiller('slendrina', menu.killerSkin); } });
@@ -227,7 +227,7 @@ loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; }); loadChild();
 async function waitForModels(need) {
   if (need && need.spider && !realismReady('spiderman')) { loading(true, 'Spider-Man is swinging in…'); await Promise.race([loadRealism('spiderman'), new Promise(r => setTimeout(r, 25000))]); }
   // the Granny's House scenery (a big model) must be in before any match can use the map
-  if (!sceneReady('granny_map') || !sceneReady('granny1_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all([loadScene('granny_map'), loadScene('granny1_map')]), new Promise(r => setTimeout(r, 25000))]); }
+  if (!sceneReady('granny_map') || !sceneReady('granny1_map') || !sceneReady('forest_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all([loadScene('granny_map'), loadScene('granny1_map'), loadScene('forest_map')]), new Promise(r => setTimeout(r, 25000))]); }
   // Granny and her granddaughter, when she's in the match
   if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk() || !grandpaReady() || !slendrinaReady() || !angelineReady() || !nosferatuReady() || !childReady()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom(), loadSlendrina(), loadAngeline(), loadNosferatu(), loadChild()]), new Promise(r => setTimeout(r, 25000))]); } }
   if (need && need.granny) need = need.chucky;
@@ -896,7 +896,7 @@ $('btn-bots-start').addEventListener('click', () => {
   if (botsCfg.map === 'vote') botVote(gm, roster.filter(r => r.bot).length, go); else go(botsCfg.map);
 });
 // ---------- map select screen (Rivals style): pictures, live tallies, a countdown ----------
-const MAP_IMG = id => (document.querySelector('script[type=importmap]') ? '' : 'public/') + 'img/maps/' + id + '.jpg';
+const MAP_IMG = id => (window.__MAPIMG && window.__MAPIMG[id]) || (document.querySelector('script[type=importmap]') ? '' : 'public/') + 'img/maps/' + id + '.jpg';
 const mapName = c => c === 'random' ? 'Random' : MAP_NAMES[c] || c;
 function voteCands(gm) {
   const pool = MODES[gm] && MODES[gm].bigMap ? Object.keys(BIG_MAPS) : REGULAR_MAPS.slice();

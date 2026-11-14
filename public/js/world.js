@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { HALF } from './config.js';
 import { realistic } from './gfx.js';
 import { cloneScene } from './sceneGlb.js';
+import { buildForest } from './forestworld.js';
 import { rng, barBox } from './map.js';
 import { tex } from './textures.js';
 import { photoGround } from './pbr.js';
@@ -217,7 +218,7 @@ export function buildWorld(M, quality = 'medium') {
   const ft = tex('foliage');
   const needleM = lite ? new THREE.MeshLambertMaterial({ vertexColors: true, map: ft.map }) : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: ft.map, normalMap: ft.normalMap });
   const trees = [...M.trees.map(t => ({ ...t, inner: true }))];
-  for (let i = 0; i < q.outer; i++) {
+  for (let i = 0; i < (M.forest ? 0 : q.outer); i++) { // (the forest draws its own)
     const side = R.int(0, 3), along = R.range(-HF - 30, HF + 30), out = HF + 2.5 + Math.pow(R(), 0.7) * 32;
     const x = side === 0 ? along : side === 1 ? along : side === 2 ? out : -out;
     const z = side === 0 ? out : side === 1 ? -out : along;
@@ -369,6 +370,7 @@ export function buildWorld(M, quality = 'medium') {
   buildThemeExtras(W, M, quality, R);
   // a map with its own scenery model (Granny's House)
   if (M.glbScene) { const o = cloneScene(M.glbScene, lite); if (o) { scene.add(o); W.glb = o; } }
+  if (M.forest) buildForest(W, M, lite);
   addInteractables(W, M);
   // ---------- rolling ground fog: layered planes with scrolling noise ----------
   const nf = quality === 'potato' ? 0 : quality === 'low' ? 1 : 2;

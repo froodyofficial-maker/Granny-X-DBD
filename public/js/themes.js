@@ -190,8 +190,8 @@ const snow = {
 };
 
 export const THEMES = { marsh, carnival, snow };
-export const MAP_NAMES = { granny: "Granny's House", granny1: "Granny's Old House" };
+export const MAP_NAMES = { granny: "Granny's House", granny1: "Granny's Old House", forest: 'Slendrina: The Forest' };
 // Infection maps: twice the area of a regular map (7x7 cells instead of 5x5), built for a dozen
 // players: more generators, long sight lines broken up by loops, and spawns spread around the edges.
 export const BIG_MAPS = {};
-export const REGULAR_MAPS = ['granny', 'granny1'];
+export const REGULAR_MAPS = ['granny', 'granny1', 'forest'];

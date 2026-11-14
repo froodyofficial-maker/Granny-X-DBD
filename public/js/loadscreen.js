@@ -23,6 +23,7 @@ const TIPS = [
   "Angeline's yellow eyes mark you. Step out of the light, sideways, fast.",
   "Heard Angeline humming? You won't be running for a few seconds. Hide instead.",
   'Nosferatu crouches before he leaps. When he drops low, break line of sight.',
+  'In the Forest, the trees are thin: loop the houses, the barn and the shelter, not the trunks.',
   'Bleeding? Nosferatu can smell you from 26 metres. Heal up before you hide.',
   "Granny's Old House is open: there is a generator inside.",
   'Five generators power the exit gates. Work on them together to finish faster.',

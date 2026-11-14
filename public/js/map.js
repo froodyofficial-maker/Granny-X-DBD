@@ -5,6 +5,7 @@ import { buildMeatworks } from './meatworks.js';
 import { buildGrannyHouse } from './grannyhouse.js';
 import { THEMES, BIG_MAPS } from './themes.js';
 import { HOUSE1_BOXES, HOUSE1_FOOT, HOUSE1_GEN } from './granny1grid.js';
+import { FOREST } from './forestdata.js';
 
 export function rng(seed) {
   let a = seed >>> 0;
@@ -95,9 +96,22 @@ export function makeCtx(M, R, cx, cz, rot) {
 
 
 export function buildMap(seed, map) {
-  const M = map === 'granny1' ? buildArena(seed, 'granny1') : buildGrannyHouse(seed);
+  const M = map === 'granny1' || map === 'forest' ? buildArena(seed, map) : buildGrannyHouse(seed);
   addChests(M, seed);
   return M;
+}
+// "Slendrina: The Forest" (1.4.3): the forest from the owner's copy of the game (tools/forest/build_forest.py). Its
+// trees stand where they stood in the game; its buildings are landmark cells (the big house in the middle). The other
+// cells get the woods' set pieces, and any tree in their way is taken out.
+const FORESTMAP = {
+  glb: 'forest_map', theme: 'forest', xs: [-42, -21, 0, 21, 42], zs: [-42, -21, 0, 21, 42],
+  // landmark cells (never a corner: those are the spawns) and where each building stands in its cell
+  marks: { '2,2': ['house', 0, 0], '0,2': ['oldhouse', 2, 0], '2,4': ['stall', 0, 0], '4,1': ['shelter', 0, 0], '1,0': ['car', 0, 0] },
+};
+function groupBounds(g) {
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (const [x, z, hx, hz] of FOREST.groups[g].boxes) { x0 = Math.min(x0, x - hx); x1 = Math.max(x1, x + hx); z0 = Math.min(z0, z - hz); z1 = Math.max(z1, z + hz); }
+  return { x0, x1, z0, z1 };
 }
 // "Granny's Old House": the Granny 1 house stands in the middle of the woods. It is one big solid landmark
 // (played around, not inside); the set pieces of the woods ring it, pushed out so none of them touch it.
@@ -134,15 +148,16 @@ function addChests(M, seed) {
 function buildArena(seed, map) {
   const R = rng(seed);
   const BIG = BIG_MAPS[map] || null; // Infection maps reuse a theme on a bigger grid
-  const H = map === 'granny1' ? HOUSE1 : null; // a house in the middle
+  const FO = map === 'forest' ? FORESTMAP : null;
+  const H = map === 'granny1' ? HOUSE1 : FO; // a house in the middle (the forest: landmark buildings)
   const base = BIG ? BIG.base : H ? 'woods' : map;
   const TH = THEMES[base] || null; // outdoor themes (marsh, carnival, snow); woods when null
   const N = BIG ? BIG.N : 5, half = N * 10 + 6, off = (N - 1) * 10, mid = (N - 1) / 2;
   const M = {
-    seed, map: H ? H.theme : TH ? base : 'woods', mapId: map, half, props: [], pools: [], lights: [], boxes: [], circles: [], windows: [], bars: [], gens: [], cages: [], gates: [],
+    seed, map: H ? H.theme : TH ? base : 'woods', forest: !!FO, mapId: map, half, props: [], pools: [], lights: [], boxes: [], circles: [], windows: [], bars: [], gens: [], cages: [], gates: [],
     visual: [], trees: [], rocks: [], spawns: { survivors: [], killer: null },
   };
-  if (H) {
+  if (H && !FO) {
     // the house: its own model draws it; these boxes are its walls (see granny1grid.js)
     M.glbScene = H.glb; M.isIndoors = H.foot; M.navR = 0.24; // (doorways in the house)
     for (const [x, z, hx, hz] of HOUSE1_BOXES) M.boxes.push({ x, z, hx, hz, h: 4, kind: 'mesh', style: 'none', nocast: true });
@@ -224,10 +239,11 @@ function buildArena(seed, map) {
   // ---------- place cells ----------
   const cells = [];
   const tnames = TH ? TH.names : ['shack', 'lwall', 'jungle', 'stones', 'barn', 'grove', 'open', 'shack', 'lwall', 'jungle', 'stones', 'grove'];
-  const centre = TH ? TH.center : H ? 'house' : 'chapel';
+  const centre = TH ? TH.center : FO ? 'mark' : H ? 'house' : 'chapel';
   templates.house = () => ({ G: null, C: null, trees: [] }); // (the house map's middle: the house itself)
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const cx = H ? H.xs[i] : -off + i * 20, cz = H ? H.zs[j] : -off + j * 20;
+    if (FO && FO.marks[i + ',' + j]) { cells.push({ i, j, cx, cz, t: 'mark', mark: FO.marks[i + ',' + j], rot: 0 }); continue; }
     if (i === mid && j === mid) { cells.push({ i, j, cx, cz, t: centre, rot: R.int(0, 1) * 2 }); continue; }
     cells.push({ i, j, cx: cx + R.range(-1, 1), cz: cz + R.range(-1, 1), t: R.pick(tnames), rot: R.int(0, 3) });
   }
@@ -238,13 +254,41 @@ function buildArena(seed, map) {
   for (const c of cells) if ((c.i === sc[0] && c.j === sc[1]) || (c.i === kc[0] && c.j === kc[1])) c.t = 'open';
 
   const slots = [];
+  // the forest's landmark buildings: solid footprints (their own model draws them); generator and hook spots are
+  // picked once every cell is built (the buildings fill their cells, so the spots go wherever there's room round them)
+  const markCell = c => {
+    const [g, ox, oz] = c.mark, gx = c.cx + ox, gz = c.cz + oz;
+    for (const [x, z, hx, hz] of FOREST.groups[g].boxes) M.boxes.push({ x: gx + x, z: gz + z, hx, hz, h: 4, kind: 'mesh', style: 'none', nocast: true });
+    (M.forestGroups ||= []).push({ g, x: gx, z: gz });
+    c.gx = gx; c.gz = gz;
+    return { G: null, C: null, trees: [] };
+  };
   for (const c of cells) {
     const C = makeCtx(M, R, c.cx, c.cz, c.rot);
-    const res = templates[c.t](C);
+    const res = c.t === 'mark' ? markCell(c) : templates[c.t](C);
+    if (FO) res.trees = []; // (the forest has its own trees)
     c.G = res.G && C.rp(res.G[0], res.G[1]);
     c.C = res.C && C.rp(res.C[0], res.C[1]);
     for (const [x, z] of res.trees) if (R() < 0.85) C.circle(x + R.range(-0.5, 0.5), z + R.range(-0.5, 0.5), R.range(0.32, 0.5), R.range(7, 11), 'tree');
     slots.push(c);
+  }
+  // forest landmarks: a generator spot and a hook spot in the open ground round each building
+  if (FO) for (const c of cells) if (c.t === 'mark') {
+    const b = groupBounds(c.mark[0]), free = (x, z) => Math.abs(x) < half - 5 && Math.abs(z) < half - 5 && !overlaps(M, x, z, 1.6)
+      && M.windows.every(w => Math.hypot(w.x - x, w.z - z) > 2.4) && M.bars.every(w => Math.hypot(w.x - x, w.z - z) > 2.6);
+    const ring = [];
+    for (const d of [2.4, 3.4, 4.6]) for (let k = 0; k < 24; k++) {
+      const a = k / 24 * Math.PI * 2, ux = Math.cos(a), uz = Math.sin(a);
+      // a point just outside the footprint's rectangle in that direction
+      const sx = ux > 0 ? (b.x1 + d) / Math.max(1e-3, ux) : ux < 0 ? (b.x0 - d) / ux : 1e9, sz = uz > 0 ? (b.z1 + d) / Math.max(1e-3, uz) : uz < 0 ? (b.z0 - d) / uz : 1e9;
+      const t = Math.min(sx, sz); ring.push([c.gx + ux * t, c.gz + uz * t]);
+    }
+    // the generator faces the middle of the map; the hook goes round the other side
+    ring.sort((p, q) => Math.hypot(p[0], p[1]) - Math.hypot(q[0], q[1]));
+    const g = ring.find(([x, z]) => free(x, z));
+    if (g) c.G = g;
+    const h = ring.slice().reverse().find(([x, z]) => free(x, z) && (!g || Math.hypot(x - g[0], z - g[1]) > 7));
+    if (h) c.C = h;
   }
 
   // generators: chapel + 6 spread-out cells
@@ -287,12 +331,12 @@ function buildArena(seed, map) {
   const gx1 = Math.round(R.range(-gr, gr)), gx2 = Math.round(R.range(-gr, gr));
   const gateDefs = [{ x: gx1, z: -HALF, dir: -1 }, { x: gx2, z: HALF, dir: 1 }];
   const BW = 0.5, BH = 4.2;
-  const bound = (x1, x2, z) => { if (x2 - x1 > 0.1) M.boxes.push({ x: (x1 + x2) / 2, z, hx: (x2 - x1) / 2, hz: BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : 'stone' }); };
+  const bound = (x1, x2, z) => { if (x2 - x1 > 0.1) M.boxes.push({ x: (x1 + x2) / 2, z, hx: (x2 - x1) / 2, hz: BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : FO ? 'boards' : 'stone' }); };
   bound(-HALF - BW, gx1 - 2.4, -HALF); bound(gx1 + 2.4, HALF + BW, -HALF);
   bound(-HALF - BW, gx2 - 2.4, HALF); bound(gx2 + 2.4, HALF + BW, HALF);
-  M.boxes.push({ x: -HALF, z: 0, hx: BW, hz: HALF + BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : 'stone' });
-  M.boxes.push({ x: HALF, z: 0, hx: BW, hz: HALF + BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : 'stone' });
-  addGates(M, gateDefs, TH ? TH.boundary : 'stone');
+  M.boxes.push({ x: -HALF, z: 0, hx: BW, hz: HALF + BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : FO ? 'boards' : 'stone' });
+  M.boxes.push({ x: HALF, z: 0, hx: BW, hz: HALF + BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : FO ? 'boards' : 'stone' });
+  addGates(M, gateDefs, TH ? TH.boundary : FO ? 'boards' : 'stone');
 
   // ---------- spawns ----------
   const ccx = H ? H.xs[sc[0]] : -off + sc[0] * 20, ccz = H ? H.zs[sc[1]] : -off + sc[1] * 20;
@@ -320,7 +364,24 @@ function buildArena(seed, map) {
     for (const s of [...M.spawns.survivors, M.spawns.killer]) if (Math.hypot(x - s.x, z - s.z) < 4) return true;
     return false;
   };
-  const SC0 = TH ? TH.scatter : { n: 110, tree: 0.8 }, SC = { ...SC0, n: Math.round(SC0.n * N * N / 25) };
+  // the forest: its own trees (and rocks) where they stood in the game, minus any in the way of the set pieces; the
+  // ones beyond the fence are only drawn
+  if (FO) {
+    M.forestTrees = []; M.forestRocks = [];
+    FOREST.trees.forEach((t, i) => {
+      if (Math.abs(t.x) > HALF + 34 || Math.abs(t.z) > HALF + 34) return;
+      if (Math.abs(t.x) < HALF - 0.8 && Math.abs(t.z) < HALF - 0.8) {
+        if (near(t.x, t.z, 0.9)) return;
+        push(M, { x: t.x, z: t.z, r: t.r, h: 10, kind: 'mesh', nocast: true });
+      } else if (M.gates.some(g => Math.hypot(t.x - g.x, t.z - g.z) < 9) || Math.abs(Math.abs(t.x) - HALF) < 1.2 || Math.abs(Math.abs(t.z) - HALF) < 1.2) return;
+      M.forestTrees.push(i);
+    });
+    FOREST.rocks.forEach((r, i) => {
+      if (Math.abs(r.x) > HALF - 2 || Math.abs(r.z) > HALF - 2 || near(r.x, r.z, r.r + 0.6)) return;
+      push(M, { x: r.x, z: r.z, r: r.r, h: 1.6, kind: 'mesh', nocast: true }); M.forestRocks.push(i);
+    });
+  }
+  const SC0 = TH ? TH.scatter : { n: 110, tree: 0.8 }, SC = { ...SC0, n: FO ? 0 : Math.round(SC0.n * N * N / 25) };
   for (let n = 0, placed = 0; n < 900 * N * N / 25 && placed < SC.n; n++) {
     const x = R.range(-HALF + 2, HALF - 2), z = R.range(-HALF + 2, HALF - 2);
     if (near(x, z, 1.6)) continue;

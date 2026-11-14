@@ -3,7 +3,7 @@
 //   cd tools && npm install && cd .. && node tools/build.mjs
 import { build } from './node_modules/esbuild/lib/main.js';
 import { readFile, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,8 +41,11 @@ html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, () => `<sty
 html = html.replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, '');
 const peer = (await readFile(join(pub, 'vendor/peerjs.min.js'), 'utf8')).replace(/<\/script/gi, '<\\/script');
 // the Foreman's rigged model as base64 in an inert tag placed before the game script (read by foremanGlb.js)
-const extraGlb = ['ghosttrap', 'granny_map', 'granny1_map', 'slendrina', 'angeline', 'nosferatu', 'granny', 'granny_anims', 'grandpa', 'spidermom', 'slendrina_child', 'beartrap', 'taser'].map(n => `<script id="nb-${n}-glb" type="application/octet-stream">${readFileSync(join(pub, 'models/' + n + '.glb')).toString('base64')}</script>\n`).join('');
-const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}<script>${peer}</script>\n<script>${js}</script>`);
+const extraGlb = ['ghosttrap', 'granny_map', 'granny1_map', 'slendrina', 'angeline', 'nosferatu', 'forest_map', 'granny', 'granny_anims', 'grandpa', 'spidermom', 'slendrina_child', 'beartrap', 'taser'].map(n => `<script id="nb-${n}-glb" type="application/octet-stream">${readFileSync(join(pub, 'models/' + n + '.glb')).toString('base64')}</script>\n`).join('');
+// the map vote cards' pictures (the exe / apk have no img/ folder next to the page)
+const mapImgs = Object.fromEntries(['granny', 'granny1', 'forest'].filter(n => existsSync(join(pub, 'img/maps/' + n + '.jpg'))).map(n => [n, 'data:image/jpeg;base64,' + readFileSync(join(pub, 'img/maps/' + n + '.jpg')).toString('base64')]));
+const mapImgTag = `<script>window.__MAPIMG=${JSON.stringify(mapImgs)}</script>\n`;
+const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}${mapImgTag}<script>${peer}</script>\n<script>${js}</script>`);
 // the web build stays small: it fetches public/models/foreman.glb instead of embedding it
 const web = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script>${peer}</script>\n<script>${js}</script>`);
 const note = `<title>Granny x DBD</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->\n  <script>window.__NB_BUILT__=${Date.now()}</script>`;
