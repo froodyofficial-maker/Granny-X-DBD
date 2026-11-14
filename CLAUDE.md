@@ -9,7 +9,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   Don't turn on GitHub Pages or upload it anywhere else unless the owner asks. Hand builds to the
   owner directly as files (the .exe zip, the .apk, videos). Built files (GrannyDBD.html, exe, apk)
   are not committed: rebuild them with the commands below.
-- **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina and Angeline (1.3).**
+- **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina, Angeline (1.3) and Nosferatu (1.4.3).**
 - **Survivors: only Mara, Eli, June and Tomás.**
 - **Maps: Granny's House (`granny`) and Granny's Old House (`granny1`).** No other maps.
 - Removed for good (don't bring back): ghost traps, all lore, Testing Area, the old intro banner / trailer gate.
@@ -59,7 +59,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   check (prints any key names left in the HUD); `lobbytest.mjs` 3 players vs a local relay (`node broker.mjs` first:
   aedes@0.51.3 + aedes-server-factory@0.2.1) for public/private lobbies; `angview.mjs` / `rigview.mjs` character poses;
   `rawglb.mjs file.glb prefix` plays a GLB's own clips with plain three.js; `render-devlog.mjs` + `devlog13-page.js` /
-  `devlog14-page.js` the devlog banners (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
+  `devlog14-page.js` / `devlog143-page.js` the devlog banners (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
   `match14.mjs` a 2v8 match as Angeline with the Child (`GM=classic K=granny` to change). simtest takes `MODE=duo` and
   `KID=1`. `offline141.mjs` runs the offline single file (Store picture, Profile panel, save mirror with a fake disk;
   `MOBILE=1` for phone size); `offkid.mjs` checks the Child loads in a match in the offline file. Playwright resolves through `tools/test/node_modules` -> `$(npm root -g)` (a symlink, not committed: recreate it).
@@ -68,7 +68,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 13`, `VERSION = '1.4.2'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 14`, `VERSION = '1.4.3'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -204,7 +204,33 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.4.2 (current): DBD-style skill check (`drawSkill`, HiDPI), second-killer picker for Two Killers bot matches
+1.4.3 (current; APK versionCode 22 so it installs over every earlier APK, incl. the 1.3.3 one (21) built on the other branch;
+NET_PROTOCOL 14: a new killer, so 1.4.2 and 1.4.3 don't share lobbies):
+- **Nosferatu** (`nosferatu`, third person): model public/models/nosferatu.glb ("Nosferatu Trailer version/Slendrina The Forest" by
+  Mr.Prizz, sketchfab.com/Rodolfoisreal1423, CC BY 4.0; credited in How to Play) with its own clips idle/Walk/attack/hurt; its
+  painted ground-shadow mesh (material SlendrinaSkugga2) is hidden on load; SPEC h 1.98, yaw PI. `makeNosferatuGlb` /
+  `animateNosferatu` (grannyGlb.js): crouch + lean while coiling (`s.aim`), attack clip scrubbed mid-leap (`s.leap`), whole
+  attack clip on a strike, hurt when stunned. Powers reuse old Nightbound code: **Night Leap** (RMB) = Chucky's pounce
+  (`'pounce'` act, `updateLeap`, abT coil 0.9 s, 3-11 m, cooldown 8); the landing spot is pulled back along the line to
+  the farthest point `reachableSpot` (walkable + a path back to the take-off point), never off the edge of an upper floor
+  (`floorUnder`), and `leapLanded` puts him back at the take-off point if he still came down somewhere sealed off.
+  **Nightfall** (R) = like the Foreman's Lights Out: `p.ab = 1` for 8 s, `S.dark`, terror radius 0, +8% speed (rules.js),
+  event `nightfall`. **Blood Scent**: injured survivors (hp 1) within 26 m revealed; every hit gives `haste` (feed).
+  Bots: leap when in sight 3.4-10.5 m (`willing`), Nightfall in mid-range chases; survivor bots juke when he crouches.
+  Outfits: The Count (default), Plague Ship 2500, Blood Moon 4000 (tints).
+- Killer bot watchdog (bots.js): stuck twice in a row in a nav region not connected to the killer spawn's region (a gap
+  between two walls of the house model it squeezed through, behind Granny's House at ~(23.5, 23)): it steps out to
+  the nearest connected cell (`nearestIn`).
+- Fixes carried over from the 1.3.x branch (`exe-launch-fix`, built in another session from 8963da3; its 1.3.2/1.3.3
+  features — Freddy codes, profile cards, gifts, graveyard map, touch icons, optimization mode — are NOT in 1.4.x):
+  the Windows exe launch fix (`executableName` in builder.json) + splash window, the loading-screen overlap / match-start
+  freeze / context-loss / lobby-panel fixes (d842a09), and the 1.3.3 phone fixes (emotes, tap-anywhere skill checks with
+  the `.tc-sc` prompt, USE latch, Settings > Edit touch controls) + Angeline's arms out of her dress.
+- `HostSession.pump` returns until `sim` and `bots` exist: the background host pump (Worker timer) used to call step()
+  during the async `start()` and threw "Cannot read properties of undefined (reading 'update')" on every tick.
+- Portable exe: `-c.portable.unpackDirName=GrannyxDBD-1.4.3` on the command line (builder.json no longer sets it).
+- Devlog banner: tools/test/devlog143-page.js (`PAGE=devlog143-page.js OUT=x.png node render-devlog.mjs`).
+1.4.2: DBD-style skill check (`drawSkill`, HiDPI), second-killer picker for Two Killers bot matches
 (`botsCfg.killer2`), Angeline's bone matrices kept rigid (no squashed head: `toBindPose` composes position from K and the
 rotation only), version-aware single instance + versioned unpack dir for the exe, backup button in Settings.
 APK versionCode 17 / 1.4.2, Windows 1.4.2, VERSION '1.4.2'.
