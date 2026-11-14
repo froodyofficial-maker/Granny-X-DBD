@@ -174,6 +174,16 @@ export const KILLERS = {
     feature: { name: 'Slendrina\'s Mother', desc: 'She watches over the house: survivors she has Spotted show up to her on the whole map while it lasts.' },
     color: 0xd8c040,
   },
+  // Granny x DBD 1.4.3: Nosferatu, out of the forest where Slendrina was buried
+  nosferatu: {
+    id: 'nosferatu', name: 'Nosferatu', speed: 4.6, terror: 28, weapon: 'Claws', crossover: 'Slendrina: The Forest (fan-made)', tpv: true,
+    lore: '',
+    exec: { name: 'The Last Feed', desc: 'Pulls the survivor up by the collar, tips their head aside, and drinks.' },
+    ability: { name: 'Night Leap', cooldown: 8, min: 3, max: 11, coil: 0.9, desc: 'Hold RMB to crouch (you still move), release to leap at your prey: the longer you crouch, the farther you fly (3m, up to 11m). He sails over pallets, fences and other low things. Landing on a survivor strikes them. Leaping into a wall stuns you.' },
+    ability2: { name: 'Nightfall', key: 'R', cooldown: 40, duration: 8, haste: 0.08, desc: 'For 8s the night swallows the map: the fog closes in on the survivors, they lose sight of each other, he goes silent (no terror radius) and moves 8% faster.' },
+    feature: { name: 'Blood Scent', scent: 26, feed: 3, feedHaste: 0.1, desc: 'He smells blood: injured survivors within 26m of him are revealed. Every hit feeds him: +10% speed for 3s.' },
+    color: 0x8a9aa8,
+  },
   bateman: {
     id: 'bateman', name: 'Patrick Bateman', speed: 4.7, terror: 28, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
     lore: '',
@@ -385,6 +395,11 @@ export const SKINS = {
     { id: 'pale', name: 'Ghost Mother', price: 0, tint: 0xd8e4f0, tintK: 0.4, glow: 0x8a9a6a, glowK: 0.25, desc: 'Faded, glowing faintly, like the photo on the cellar wall.' },
     { id: 'gilded', name: 'Gilded Mother', price: -1, pass: true, tint: 0xd8b050, tintK: 0.35, glow: 0xffc030, glowK: 0.3, desc: 'Season Pass reward (tier 15). The yellow light got into everything.' },
   ],
+  nosferatu: [
+    { id: 'default', name: 'The Count', price: 0, desc: 'Black coat to the ankles, bald head, long fingers, and teeth.' },
+    { id: 'plague', name: 'Plague Ship', price: 2500, tint: 0x9aa890, tintK: 0.35, glow: 0x3a5a2a, glowK: 0.2, desc: 'Sickly and grey-green, straight off the ship that brought the rats.' },
+    { id: 'blood', name: 'Blood Moon', price: 4000, tint: 0xb04040, tintK: 0.3, glow: 0x801010, glowK: 0.3, desc: 'He has been feeding. It shows.' },
+  ],
   bateman: [
     { id: 'default', name: 'Pierce & Pierce', price: 0, desc: 'Charcoal pinstripe double-breasted suit, crisp white shirt, red silk tie and a cigar. Valentino Couture.' },
     { id: 'raincoat', name: 'Hip to Be Square', price: 2500, rain: true, desc: 'A clear plastic raincoat over the suit, for the mess. Newspaper on the floor optional.' },
@@ -409,14 +424,21 @@ export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) |
 // ---------------- Inbox: version notes & gifts ----------------
 // email updates: the Buttondown newsletter's username (empty: the option stays hidden)
 export const NEWSLETTER = '';
-// Granny x DBD: four killers (Granny, Grandpa, Slendrina, Angeline) and the four original survivors
-export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
+// Granny x DBD: five killers (Granny, Grandpa, Slendrina, Angeline, Nosferatu) and the four original survivors
+export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.4.2';
+export const VERSION = '1.4.3';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd143', version: '1.4.3', date: 'Nov 2026', title: 'Nosferatu', tag: 'Update',
+    body: [
+      'New killer: Nosferatu, out of the forest. Night Leap (crouch, then leap at your prey from up to 11m) and Nightfall (the dark swallows the map and he goes silent). Blood Scent: he smells injured survivors nearby, and every hit feeds him a burst of speed.',
+      'Two Nosferatu outfits in the Store: Plague Ship and Blood Moon.',
+    ],
+  },
   {
     id: 'gdbd142', version: '1.4.2', date: 'Nov 2026', title: 'Skill checks, Two Killers, Angeline', tag: 'Fix',
     body: [

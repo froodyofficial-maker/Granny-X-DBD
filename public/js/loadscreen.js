@@ -4,7 +4,7 @@
 // It is drawn with the game's own renderer (one WebGL context for the whole app: a second one next to a
 // match being built is what crashed the page on some PCs). The game and menu do not draw while this is up.
 import * as THREE from 'three';
-import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline, loadSpiderMom, grannyReady, grandpaReady, slendrinaReady, angelineReady } from './grannyGlb.js';
+import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline, loadNosferatu, loadSpiderMom, grannyReady, grandpaReady, slendrinaReady, angelineReady, nosferatuReady } from './grannyGlb.js';
 import { loadScene, cloneScene, sceneReady } from './sceneGlb.js';
 import { makeKiller, animate } from './models.js';
 import { KILLERS } from './config.js';
@@ -22,6 +22,8 @@ const TIPS = [
   'Slendrina can step through walls. A wall between you is not as safe as it looks.',
   "Angeline's yellow eyes mark you. Step out of the light, sideways, fast.",
   "Heard Angeline humming? You won't be running for a few seconds. Hide instead.",
+  'Nosferatu crouches before he leaps. When he drops low, break line of sight.',
+  'Bleeding? Nosferatu can smell you from 26 metres. Heal up before you hide.',
   "Granny's Old House is open: there is a generator inside.",
   'Five generators power the exit gates. Work on them together to finish faster.',
 ];
@@ -31,6 +33,7 @@ const REEL = [
   { id: 'grandpa', ready: grandpaReady, st: { aim: true } },
   { id: 'slendrina', ready: slendrinaReady, st: { gaze: true } },
   { id: 'angeline', ready: angelineReady, st: {} },
+  { id: 'nosferatu', ready: nosferatuReady, st: { aim: true } },
 ];
 const SHOT = 5.6; // seconds per killer
 
@@ -180,7 +183,7 @@ export function showLoading(on, msg, isLite, rendererOf) {
   if (!on) { clearInterval(tipT); return; }
   tip(); clearInterval(tipT); tipT = setInterval(tip, 6000);
   lite = !!isLite;
-  try { if (!L) { L = build(); loadScene('granny_map'); loadGranny(); loadGrandpa(); loadSlendrina(); loadAngeline(); loadSpiderMom(); } } catch (e) { console.warn('loading scene unavailable', e); return; }
+  try { if (!L) { L = build(); loadScene('granny_map'); loadGranny(); loadGrandpa(); loadSlendrina(); loadAngeline(); loadNosferatu(); loadSpiderMom(); } } catch (e) { console.warn('loading scene unavailable', e); return; }
   L.last = performance.now();
   if (!L.raf) L.raf = requestAnimationFrame(frame);
 }

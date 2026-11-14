@@ -24,13 +24,14 @@ async function bytes(name) {
   throw last;
 }
 // height (m) and which way the raw model faces
-const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI } };
+const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
     const S = SPEC[name];
     if (S.anim) { M[name] = { g }; return M[name]; }
     if (name === 'angeline') { toBindPose(g.scene); } // animated in code from her T-pose (see animateAngeline)
+    if (name === 'nosferatu') g.scene.traverse(o => { if (o.isMesh && /skugga/i.test(o.material && o.material.name || '')) o.visible = false; }); // his file's painted ground shadow
     // measure in the first frame of the idle clip (the rest pose isn't a standing pose)
     const probe = cloneSkinned(g.scene), mx = new THREE.AnimationMixer(probe);
     const idle = name === 'angeline' ? null : g.animations.find(c => /^idle$/i.test(c.name)) || g.animations[0];
@@ -38,7 +39,7 @@ function load(name) {
     probe.updateMatrixWorld(true);
     if (name === 'slendrina') seatHair(probe, g.scene);
     const box = new THREE.Box3();
-    probe.traverse(o => { if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.isSkinnedMesh ? skinnedBox(o) : new THREE.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld)); } });
+    probe.traverse(o => { if (o.isMesh && o.visible) { o.geometry.computeBoundingBox(); box.union(o.isSkinnedMesh ? skinnedBox(o) : new THREE.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld)); } });
     const h = box.max.y - box.min.y, k = S.h / h, c = box.getCenter(new THREE.Vector3());
     M[name] = { g, fit: { s: k, x: -c.x * k, y: -box.min.y * k, z: -c.z * k }, yaw: S.yaw };
     for (const cb of (waiters[name] || []).splice(0)) { try { cb(); } catch (e) { console.error(e); } }
@@ -121,6 +122,46 @@ export const spiderMomReady = () => !!M.spidermom;
 // Slendrina (killer): "Slendrina (Granny 3)" by DVUnit (sketchfab.com/DVUnit), CC BY 4.0, with her own clip
 export const loadSlendrina = () => load('slendrina');
 export const slendrinaReady = () => !!M.slendrina;
+// Nosferatu (killer, 1.4.3): "Nosferatu Trailer version/Slendrina The Forest" by Mr.Prizz (sketchfab.com/Rodolfoisreal1423),
+// CC BY 4.0, with his own clips: idle, Walk, attack, hurt
+export const loadNosferatu = () => load('nosferatu');
+export const nosferatuReady = () => !!M.nosferatu;
+export function makeNosferatuGlb(sk = {}, lite = false) {
+  if (!M.nosferatu) return null;
+  const R = new AnimRig('nosferatu', sk, lite);
+  Object.assign(R, { kind: 'killer', killer: 'nosferatu', glb: true, nosferatu: true });
+  return R;
+}
+// his clips for the game state: crouched while he coils for a leap, claws out in the air, the whole swing on a strike
+export function animateNosferatu(R, s, dt) {
+  R.t += dt;
+  if (s.atk === 1 && R.prevAtk !== 1 && s.leap == null) R.hitT = 0; else if (R.hitT != null) R.hitT += dt * 1.6;
+  if (!s.atk) R.hitT = null;
+  R.prevAtk = s.atk;
+  const A = R.acts, sp = s.speed || 0;
+  let want = 'idle', rate = 1, scrub = null, fast = false, crouch = 0, lean = 0;
+  if (s.exec && s.exec.role === 'killer') { want = 'attack'; scrub = 0.25 + Math.min(1, s.exec.f) * 0.3; fast = true; lean = 0.25; }
+  else if (s.leap != null) { want = 'attack'; scrub = 0.32 + s.leap * 0.25; fast = true; lean = 0.55; }      // claws out, flying
+  else if (s.stun) { want = 'hurt'; rate = 1; fast = true; }
+  else if ((s.atk === 1 || s.atk === 2) && R.hitT != null && R.hitT < 2.47) { want = 'attack'; scrub = R.hitT / 2.47; fast = true; }
+  else if (s.aim) { want = sp > 0.3 ? 'Walk' : 'idle'; rate = Math.max(0.6, sp / 1.4); crouch = 0.32; lean = 0.35; } // coiling: low and leaning in
+  else if (s.act === 'pickup' || s.act === 'cage' || s.act === 'break' || s.act === 'kick') { want = 'attack'; scrub = 0.3; lean = 0.3; }
+  else if (sp > 0.3) { want = 'Walk'; rate = Math.min(2.4, Math.max(0.7, sp / 1.45)); lean = sp > 3 ? 0.12 : 0; }
+  if (!A[want]) want = A.idle ? 'idle' : Object.keys(A)[0];
+  const k = 1 - Math.exp(-dt * (fast ? 20 : 9));
+  for (const n in A) {
+    const a = A[n], target = n === want ? 1 : 0;
+    R.w[n] += (target - R.w[n]) * k;
+    if (R.w[n] < 0.002 && !target) R.w[n] = 0;
+    a.setEffectiveWeight(R.w[n]);
+    if (n === want) { if (scrub != null) { a.paused = true; a.time = scrub * a.getClip().duration; } else { a.paused = false; a.timeScale = rate; } }
+    else if (R.w[n] === 0) a.paused = true;
+  }
+  R.mixer.update(dt);
+  const kk = Math.min(1, dt * 10);
+  R.holder.position.y += (-crouch - R.holder.position.y) * kk;
+  R.holder.rotation.x += (lean - R.holder.rotation.x) * kk;
+}
 // Angeline (killer): "Angeline Unity" by A_Forogotten_Studio (sketchfab.com/A_Forogotten_Studio), CC BY 4.0: idle, Walk, attack
 export const loadAngeline = () => load('angeline');
 export const angelineReady = () => !!M.angeline;
@@ -262,7 +303,7 @@ class AnimRig {
     holder.add(model);
     const mats = new Map(), skinned = [];
     model.traverse(o => {
-      if (!o.isMesh) return;
+      if (!o.isMesh || !o.visible) return;
       o.castShadow = true; o.frustumCulled = false;
       if (/hat_santa/i.test(o.name)) o.visible = !!sk.santa; // her Christmas hat, only for that outfit
       if (!mats.has(o.material)) mats.set(o.material, this.material(o.material, sk, lite));

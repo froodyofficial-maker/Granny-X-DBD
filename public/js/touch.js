@@ -7,7 +7,7 @@ export const isTouch = () => typeof window !== 'undefined' && (window.__forceTou
 // never a key or a mouse button.
 export const MOBILE = isTouch();
 if (MOBILE && typeof document !== 'undefined') document.documentElement.classList.add('mobile');
-const R_BTN = { granny: 'HEAR', grandpa: 'TRAP', slendrina: 'GAZE', angeline: 'LULLABY' };
+const R_BTN = { granny: 'HEAR', grandpa: 'TRAP', slendrina: 'GAZE', angeline: 'LULLABY', nosferatu: 'NIGHTFALL' };
 let ctxRole = 'survivor', ctxChar = 'mara';
 export function setTouchCtx(role, char) { ctxRole = role || ctxRole; ctxChar = char || ctxChar; }
 // an action (keybind id, or 'LMB' / 'RMB' / 'V') -> the name of the on-screen button that does it
@@ -39,7 +39,7 @@ const BTN = {
   // id: [label, kind, what] kind: key (tap) / hold (key held while pressed) / mouse (button held) / toggle
   atk: ['ATTACK', 'mouse', 0], power: ['POWER', 'mouse', 2], light: ['LIGHT', 'mouse', 2],
   use: ['USE', 'hold', 'KeyE'], jump: ['VAULT', 'hold', 'Space'], run: ['RUN', 'toggle', 'ShiftLeft'], crouch: ['CROUCH', 'toggle', 'ControlLeft'],
-  hear: ['HEAR', 'key', 'KeyR'], trap: ['TRAP', 'key', 'KeyR'], gaze: ['GAZE', 'key', 'KeyR'], lull: ['LULLABY', 'key', 'KeyR'], creep: ['CREEP', 'hold', 'KeyG'], swap: ['SWAP', 'hold', 'KeyV'], exec: ['EXECUTE', 'key', 'KeyF'], drop: ['DROP', 'key', 'KeyQ'],
+  hear: ['HEAR', 'key', 'KeyR'], trap: ['TRAP', 'key', 'KeyR'], gaze: ['GAZE', 'key', 'KeyR'], lull: ['LULLABY', 'key', 'KeyR'], night: ['NIGHTFALL', 'key', 'KeyR'], creep: ['CREEP', 'hold', 'KeyG'], swap: ['SWAP', 'hold', 'KeyV'], exec: ['EXECUTE', 'key', 'KeyF'], drop: ['DROP', 'key', 'KeyQ'],
   take: ['TAKE OVER', 'key', 'KeyT'], next: ['NEXT', 'key', 'KeyF'], status: ['STATUS', 'hold', 'Tab'], emote: ['EMOTE', 'key', 'KeyB'],
 };
 const LAYOUT = {
@@ -47,6 +47,7 @@ const LAYOUT = {
   'killer-grandpa': ['atk', 'power', 'use', 'jump', 'trap', 'exec', 'drop'],
   'killer-slendrina': ['atk', 'power', 'use', 'jump', 'gaze', 'exec', 'drop'],
   'killer-angeline': ['atk', 'power', 'use', 'jump', 'lull', 'exec', 'drop'],
+  'killer-nosferatu': ['atk', 'power', 'use', 'jump', 'night', 'exec', 'drop'],
   survivor: ['light', 'use', 'jump', 'run', 'crouch', 'status', 'emote'],
   dead: ['take', 'next', 'status'],
 };

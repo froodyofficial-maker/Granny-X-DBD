@@ -127,7 +127,7 @@ export class Sim {
           if (was && !p.aim) { p.abCd = KILLERS.angeline.ability.cooldown * Math.max(0.35, Math.min(1, p.abT / KILLERS.angeline.ability.max)); this.ev({ k: 'beam', id: p.id, on: false }); }
         }
         if (p.role === 'killer' && p.char === 'slendrina') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.tele && (p.fl || 0) < 10; if (p.aim && !was) p.abT = 0; }
-        if (p.role === 'killer' && p.char === 'chucky') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
+        if (p.role === 'killer' && (p.char === 'chucky' || p.char === 'nosferatu')) { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
         break;
       }
       case 'act': {
@@ -351,12 +351,18 @@ export class Sim {
         break;
       }
       case 'pounce': {
-        // Chucky: leap as far as he coiled for, knife first
-        if (p.role !== 'killer' || p.char !== 'chucky' || !p.aim || p.leap || p.stun > 0 || p.carry != null || p.act) return;
-        const D = KILLERS.chucky.ability, yaw = num(m.yaw, p.yaw), f = fwd(yaw);
+        // Chucky / Nosferatu (Night Leap): leap as far as he coiled for, knife (claws) first
+        if (p.role !== 'killer' || (p.char !== 'chucky' && p.char !== 'nosferatu') || !p.aim || p.leap || p.stun > 0 || p.carry != null || p.act) return;
+        const D = KILLERS[p.char].ability, yaw = num(m.yaw, p.yaw), f = fwd(yaw);
         const mx = p.reach || D.max, dist = D.min + (mx - D.min) * Math.min(1, Math.max(0, p.abT - 0.1) / D.coil);
         p.yaw = yaw; p.aim = false; p.abT = 0;
-        p.leap = { t: 0, d: +(0.35 + dist * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: p.x + f.x * dist, z1: p.z + f.z * dist, h: +(0.7 + dist * 0.06).toFixed(2) };
+        // land only where he could walk back from: never in a fenced-off pocket or past the edge of the map
+        // (he sails over anything low, so the straight line alone can carry him out of play)
+        const L0 = levelOf(this.M, p.fl || 0);
+        let d2 = dist, land = null;
+        for (; d2 > 0.9 && !land; d2 -= 0.8) land = this.reachableSpot(L0, p.x + f.x * d2, p.z + f.z * d2, p);
+        const lx = land ? land.x : p.x + f.x * 0.5, lz = land ? land.z : p.z + f.z * 0.5, ld = Math.hypot(lx - p.x, lz - p.z);
+        p.leap = { t: 0, d: +(0.35 + ld * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: lx, z1: lz, h: +(0.7 + ld * 0.06).toFixed(2) };
         this.ev({ k: 'pounce', id: p.id, x: p.x, z: p.z });
         break;
       }
@@ -489,6 +495,11 @@ export class Sim {
         if (p.role === 'killer' && p.char === 'slimer' && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && p.carry == null && !(p.phase > 0)) {
           p.phase = KILLERS.slimer.ability2.duration; p.ab2Cd = KILLERS.slimer.ability2.cooldown;
           this.ev({ k: 'phase', id: p.id, x: p.x, z: p.z });
+        }
+        if (p.role === 'killer' && p.char === 'nosferatu' && !p.ab && p.ab2Cd <= 0 && !p.act && p.stun <= 0) {
+          // Nightfall: the dark swallows the map; he goes silent and quicker
+          p.ab = 1; p.abT = KILLERS.nosferatu.ability2.duration; S.dark = Math.max(S.dark || 0, p.abT);
+          this.ev({ k: 'nightfall', id: p.id, x: p.x, z: p.z, on: true });
         }
         if (p.role === 'killer' && p.char === 'foreman' && !p.ab && p.ab2Cd <= 0 && !p.act && p.stun <= 0 && !p.tele) {
           p.ab = 1; p.abT = KILLERS.foreman.ability2.duration; S.dark = p.abT;
@@ -1009,7 +1020,16 @@ export class Sim {
       for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok')
         for (const L of S.lanterns) if (Math.hypot(s.x - L.x, s.z - L.z) < RULES.lanternRadius) { s.reveal = Math.max(s.reveal, 0.3); break; }
     }
-    if (K.char === 'chucky' && K.leap) this.updateLeap(K, dt);
+    if (K.char === 'nosferatu') {
+      if (K.ab === 1) {
+        K.abT -= dt; S.dark = Math.max(S.dark || 0, Math.max(0, K.abT));
+        if (K.abT <= 0) { K.ab = 0; K.ab2Cd = KILLERS.nosferatu.ability2.cooldown; S.dark = 0; this.ev({ k: 'nightfall', id: K.id, on: false }); }
+      }
+      // Blood Scent: injured survivors close by give themselves away
+      const F = KILLERS.nosferatu.feature;
+      for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && s.hp === 1 && levelsMeet(K, s) && dist(s, K) < F.scent) s.reveal = Math.max(s.reveal, 0.3);
+    }
+    if ((K.char === 'chucky' || K.char === 'nosferatu') && K.leap) this.updateLeap(K, dt);
     // chase tracking for score
     let chasing = false;
     for (const s of S.players) if (s.role === 'survivor' && s.st === 'ok' && dist(s, K) < 12 && !losBlocked(M, K.x, K.z, s.x, s.z)) { chasing = true; s.score.d += dt * 6; }
@@ -1037,6 +1057,7 @@ export class Sim {
     s.lastHitBy = K.id;
     if (this.mode === 'rush') K.haste = Math.max(K.haste || 0, 2.5);
     if (K.char === 'bateman') K.haste = Math.max(K.haste || 0, 4); // Morning Routine
+    if (K.char === 'nosferatu') K.haste = Math.max(K.haste || 0, KILLERS.nosferatu.feature.feed); // Blood Scent: every hit feeds him
     if (s.hp <= 0) {
       s.hp = 0; s.st = 'down'; s.bleed = RULES.bleedout; s.healP = 0; s.boost = 0;
       if (this.mode === 'infection') s.turn = 3;
@@ -1423,9 +1444,14 @@ export class Sim {
     this.ev({ k: 'unperch', id: p.id, x: p.x, z: p.z });
   }
 
+  // after a leap: if he came down somewhere sealed off (over a low fence into a pocket), put him back where he took off
+  leapLanded(K, L) {
+    const lv = levelOf(this.M, K.fl || 0);
+    if (lv.grid && !this.reachableSpot(lv, K.x, K.z, { x: L.x0, z: L.z0 })) { K.x = L.x0; K.z = L.z0; K.tp++; }
+  }
   // Chucky's pounce: fly along the leap, strike the first survivor in reach, bounce off walls
   updateLeap(K, dt) {
-    const L = K.leap, S = this.S, M = this.M, D = KILLERS.chucky.ability;
+    const L = K.leap, S = this.S, M = this.M, D = KILLERS[K.char].ability;
     L.t += dt;
     const f = Math.min(1, L.t / L.d);
     const tx = L.x0 + (L.x1 - L.x0) * f, tz = L.z0 + (L.z1 - L.z0) * f;
@@ -1439,19 +1465,19 @@ export class Sim {
       if (s.role !== 'survivor' || s.st !== 'ok') continue;
       if (Math.hypot(s.x - K.x, s.z - K.z) < 1.2 && !K.harmless) {
         this.damage(s, K, false); K.score.b += 300;
-        K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * 0.8;
+        this.leapLanded(K, L); K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * 0.8;
         this.ev({ k: 'pounce-hit', id: s.id, by: K.id, x: s.x, z: s.z });
         return;
       }
     }
-    if (blocked && f > 0.15 && has(K, 'stunless')) { K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = false; K.atkT = 0.4; this.ev({ k: 'pounce-land', id: K.id, x: K.x, z: K.z }); return; } // slides off, no stun
+    if (blocked && f > 0.15 && has(K, 'stunless')) { this.leapLanded(K, L); K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = false; K.atkT = 0.4; this.ev({ k: 'pounce-land', id: K.id, x: K.x, z: K.z }); return; } // slides off, no stun
     if (blocked && f > 0.15) {
-      K.leap = null; K.tp++; K.abCd = D.cooldown;
+      this.leapLanded(K, L); K.leap = null; K.tp++; K.abCd = D.cooldown;
       this.stunKiller(K, 1.4, false);
       this.ev({ k: 'pounce-wall', id: K.id, x: K.x, z: K.z });
       return;
     }
-    if (f >= 1) { K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = false; K.atkT = 0.6; this.ev({ k: 'pounce-land', id: K.id, x: K.x, z: K.z }); }
+    if (f >= 1) { this.leapLanded(K, L); K.leap = null; K.tp++; K.abCd = D.cooldown; K.atk = 2; K.atkHit = false; K.atkT = 0.6; this.ev({ k: 'pounce-land', id: K.id, x: K.x, z: K.z }); }
   }
 
   // survivors being reeled in by a chain hook
@@ -1772,7 +1798,7 @@ export class Sim {
 
   updateSaws(dt) {
     const S = this.S, M = this.M;
-    for (const p of S.players) if (p.role === 'killer' && (p.char === 'bateman' || p.char === 'chucky') && p.aim) p.abT += dt;
+    for (const p of S.players) if (p.role === 'killer' && (p.char === 'bateman' || p.char === 'chucky' || p.char === 'nosferatu') && p.aim) p.abT += dt;
     for (let i = S.saws.length - 1; i >= 0; i--) {
       const sw = S.saws[i], K = this.P(sw.by);
       sw.t += dt;

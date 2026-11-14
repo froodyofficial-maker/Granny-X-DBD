@@ -33,12 +33,12 @@ window.run = (map, killer, minutes, diff, seed) => {
       const busy = p.act || p.stun > 0 || p.vault || (p.role === 'survivor' && p.st !== 'ok') || p.tele || p.carry != null && false;
       const w = still.get(p.id) || { x: p.x, z: p.z, t: 0 };
       if (Math.hypot(p.x - w.x, p.z - w.z) > 0.6 || busy) { w.x = p.x; w.z = p.z; w.t = 0; }
-      else { w.t += dt; if (w.t > 6) stallSec += dt; if (w.t > 6 && !w.logged) { w.logged = true; const b = bots.brains.get(p.id) || {}; log.push({ t: +t.toFixed(1), id: p.id, char: p.char, st: p.st, x: +p.x.toFixed(1), z: +p.z.toFixed(1), fl: p.fl || 0, mode: b.mode, goalKey: b.goalKey, path: b.path ? b.path.length : null, pi: b.pi, aim: b.aim, target: b.target, ab: p.ab, gp: S.gatesPowered, carry: p.carry, it: JSON.stringify(findInteraction(M, S, p)), stun: p.stun, gensP: S.gens.map(g => g.done ? 'D' : g.p.toFixed(2)).join(' '), inp: JSON.stringify(sim.inputs.get(p.id)) }); } }
+      else { w.t += dt; if (w.t > 6) stallSec += dt; if (w.t > 6 && !w.logged) { w.logged = true; const b = bots.brains.get(p.id) || {}; log.push({ t: +t.toFixed(1), id: p.id, char: p.char, st: p.st, x: +p.x.toFixed(1), z: +p.z.toFixed(1), fl: p.fl || 0, mode: b.mode, goalKey: b.goalKey, path: b.path ? b.path.length : null, pi: b.pi, aim: b.aim, target: b.target, ab: p.ab, leap: p.leap ? JSON.stringify(p.leap) : null, abCd: p.abCd, paim: p.aim, haste: p.haste, gp: S.gatesPowered, carry: p.carry, it: JSON.stringify(findInteraction(M, S, p)), stun: p.stun, gensP: S.gens.map(g => g.done ? 'D' : g.p.toFixed(2)).join(' '), inp: JSON.stringify(sim.inputs.get(p.id)) }); } }
       if (w.t <= 6) w.logged = false;
       still.set(p.id, w);
     }
   }
-  const res = { t: +t.toFixed(0), phase: S.phase, gens: S.gensDone, need: S.gensNeeded, out: S.players.filter(p => p.role === 'survivor').map(p => p.st + (p.outcome ? ':' + p.outcome : '')), evc: { hit: evc.hit, shot: evc.shot, died: evc.died, escaped: evc.escaped, bearset: evc.bearset, bearsnap: evc.bearsnap, haunt: evc.haunt, hauntfail: evc.hauntfail, gaze: evc.gaze, cursed: evc.cursed, doomed: evc.doomed, bearfail: evc.bearfail, spotted: evc.spotted, lullaby: evc.lullaby, beam: evc.beam, kidcry: evc.kidcry }, stalls: log, stallSec: +stallSec.toFixed(0), insideT: +insideT.toFixed(0), upT: +upT.toFixed(0), falls, houseGen: hg ? (S.gens[hg.id].done ? 'DONE' : S.gens[hg.id].p.toFixed(2)) : 'none' };
+  const res = { t: +t.toFixed(0), phase: S.phase, gens: S.gensDone, need: S.gensNeeded, out: S.players.filter(p => p.role === 'survivor').map(p => p.st + (p.outcome ? ':' + p.outcome : '')), evc, stalls: log, stallSec: +stallSec.toFixed(0), insideT: +insideT.toFixed(0), upT: +upT.toFixed(0), falls, houseGen: hg ? (S.gens[hg.id].done ? 'DONE' : S.gens[hg.id].p.toFixed(2)) : 'none' };
   return res;
 };
 window.ready = true;

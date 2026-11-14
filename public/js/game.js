@@ -12,7 +12,7 @@ import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skin
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { slappyReady } from './slappyGlb.js';
-import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, childReady, makeChild } from './grannyGlb.js';
+import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 import { MOBILE, touchName, setTouchCtx, mobileText } from './touch.js';
@@ -317,11 +317,12 @@ const lookRole = p => p.disguise ? 'survivor' : p.role;
 // killers played over the shoulder: Chucky, and Chucky inside a survivor's body
 // killers drawn from a GLB model: their first-person arms are cut from it
 const GLB_KILLERS = new Set(['granny', 'grandpa', 'foreman', 'slimer']);
-const FP_OPT = { slimer: { region: { sign: -1, from: 0.55, wrist: 0.72 } }, foreman: { skip: /Foreman_14/ }, granny: { pitch: -0.35 }, grandpa: { pitch: -0.35 }, angeline: { pitch: -0.35 } };
+const FP_OPT = { slimer: { region: { sign: -1, from: 0.55, wrist: 0.72 } }, foreman: { skip: /Foreman_14/ }, granny: { pitch: -0.35 }, grandpa: { pitch: -0.35 }, angeline: { pitch: -0.35 }, nosferatu: { pitch: -0.35 } };
 function fpModelReady(id, sk) {
   if (id === 'granny') return sk.grandpa ? grandpaReady() : grannyReady();
   if (id === 'grandpa') return grandpaReady();
   if (id === 'angeline') return angelineReady();
+  if (id === 'nosferatu') return nosferatuReady();
   if (id === 'foreman') return sk.batman ? batmanReady() : foremanReady();
   if (id === 'slimer') return staticReady('slimer');
   return true;
@@ -631,7 +632,7 @@ export class Game {
         if (me.char === 'foreman') {
           if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
-        } else if (me.char === 'chucky') {
+        } else if (me.char === 'chucky' || me.char === 'nosferatu') {
           if (down && me.abCd <= 0 && !me.leap) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'pounce', yaw: me.yaw }); this.sendIn(); }
         } else if (me.char === 'bateman') {
@@ -962,7 +963,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -1040,6 +1041,7 @@ export class Game {
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
         if (p.char === 'slendrina') { st.gaze = p.gaze > 0; st.speed = c.spd; }
+        if (p.char === 'nosferatu') st.speed = c.spd;
         if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
@@ -1108,7 +1110,7 @@ export class Game {
       // Angeline's Yellow Eyes: a cone of yellow light from her eyes while it's on
       if (p.role === 'killer' && p.char === 'angeline') this.updateBeam(c, p, R);
       // your own third-person Angeline fades when a wall pushes the camera up close (her sleeves would fill the view)
-      if (local && p.role === 'killer' && p.char === 'angeline') {
+      if (local && p.role === 'killer' && (p.char === 'angeline' || p.char === 'nosferatu')) {
         const o = Math.round(Math.max(0.22, Math.min(1, ((this.camDist ?? 3) - 1.2) / 1.6)) * 20) / 20;
         if (o !== c.anOp) { c.anOp = o; R.setOpacity(o); }
       }
@@ -2032,6 +2034,11 @@ export class Game {
         case 'chainthrow': sound.play('throw', e.x, e.z); sound.play('kick', e.x, e.z); break;
         case 'chainhit': sound.play('thud', e.x, e.z); this.blood.spawn(e.x, 1.2, e.z, 30, 0x6a0505, 2.4, 1.2, -9, 1.2); if (e.id === this.myId) { this.shake = 0.8; this.feed('Hooked! You are being reeled in.', 'big'); } break;
         case 'chaingrab': sound.play('kick', e.x, e.z); this.sparks.spawn(e.x, 1.25, e.z, 20, 0xffd080, 3, 0.5, -9); break;
+        case 'nightfall': {
+          sound.play(e.on ? 'lightsout' : 'lightson');
+          if (e.on) { sound.play('fade', e.x, e.z, { on: true }); if (me && me.role === 'survivor') this.feed('Night falls. You can no longer hear him coming…', 'big'); else if (e.id === this.myId) this.feed('Nightfall: silent for 8s.'); }
+          break;
+        }
         case 'lightsout': {
           sound.play(e.on ? 'lightsout' : 'lightson');
           if (e.on && me && me.role === 'survivor') this.feed('The lights go out…', 'big');
@@ -2069,7 +2076,7 @@ export class Game {
           break;
         }
         case 'pounce': sound.play('swing', e.x, e.z); sound.play('grunt', e.x, e.z, { pitch: 1.6 }); break;
-        case 'pounce-hit': sound.play('hit', e.x, e.z); this.blood.spawn(e.x, 1.0, e.z, 45, 0x6a0303, 3, 1.2, -9.8, 1.2); if (e.id === this.myId) { this.shake = 0.9; this.flash = 0.5; this.feed('Chucky pounced on you!', 'big'); } break;
+        case 'pounce-hit': sound.play('hit', e.x, e.z); this.blood.spawn(e.x, 1.0, e.z, 45, 0x6a0303, 3, 1.2, -9.8, 1.2); if (e.id === this.myId) { this.shake = 0.9; this.flash = 0.5; this.feed(((this.S.players.find(q => q.id === e.by) || {}).char === 'nosferatu' ? 'Nosferatu leapt on you!' : 'Chucky pounced on you!'), 'big'); } break;
         case 'pounce-wall': sound.play('thud', e.x, e.z); this.sparks.spawn(e.x, 0.6, e.z, 12, 0xffffff, 2, 0.4, -6); if (e.id === this.myId) { this.shake = 0.7; this.feed('You slammed into a wall.'); } break;
         case 'pounce-land': sound.play('thud', e.x, e.z); break;
         case 'bearset': sound.play('click', e.x, e.z); if (e.id === this.myId) this.feed('Bear trap set.'); break;
@@ -2348,6 +2355,11 @@ export class Game {
       pct = me.abCd / def.cooldown;
       sub = me.pull ? 'Reeling…' : me.aim ? 'Aiming…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `${kbd('ability2')} Lights Out ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Lights Out ready';
+    } else if (me.char === 'nosferatu') {
+      const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0, D2 = K.ability2, bleeding = this.S.players.filter(o => o.role === 'survivor' && o.st === 'ok' && o.hp === 1).length;
+      ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
+      sub = me.leap ? 'Leaping!' : me.aim ? `Crouching… ${Math.round(def.min + (def.max - def.min) * coil)}m` : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold ' + B('RMB');
+      extra = (me.ab === 1 ? `<b>Nightfall · ${Math.ceil(me.abT)}s · silent</b>` : me.ab2Cd > 0 ? `${kbd('ability2')} Nightfall ${Math.ceil(me.ab2Cd)}s` : `${kbd('ability2')} Nightfall ready`) + (me.haste > 0 ? ' · Fed: +12% speed' : bleeding ? ` · ${bleeding} bleeding` : '');
     } else if (me.char === 'chucky') {
       const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0;
       ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
@@ -2540,7 +2552,7 @@ export class Game {
         }
       }
     }
-    if (S.dark > 0 && me.role === 'survivor' && !status && me.st === 'ok') status = 'Lights Out<small>Don\'t run. He hunts by sound.</small>';
+    if (S.dark > 0 && me.role === 'survivor' && !status && me.st === 'ok') status = S.players.some(q => q.role === 'killer' && q.char === 'nosferatu' && q.ab === 1) ? 'Nightfall<small>He is silent in the dark. If you are bleeding, he can smell you.</small>' : 'Lights Out<small>Don\'t run. He hunts by sound.</small>';
     this.setText('prompt', prompt.join(''));
     this.setText('status', status);
     this.setText('progress-label', esc(label));

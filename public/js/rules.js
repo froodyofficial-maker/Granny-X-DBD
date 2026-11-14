@@ -33,6 +33,7 @@ export function terrorRadius(p) {
   if (!p || p.role !== 'killer' || p.disguise) return 0;
   if (p.char === 'wisp' && p.ab === 1) return 0;
   if (p.char === 'foreman' && p.ab === 1) return 0;
+  if (p.char === 'nosferatu' && p.ab === 1) return 0; // Nightfall: silent
   let r = KILLERS[p.char].terror;
   if (has(p, 'dread')) r += 8;
   if (has(p, 'stalker')) r -= 14;
@@ -80,6 +81,7 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'grandpa' && p.aim) s *= 0.6;  // the shotgun raised to his shoulder
   if (p.char === 'slendrina' && p.aim) s *= 0.75; // choosing where to Haunt to
   if (p.char === 'angeline' && p.aim) s *= KILLERS.angeline.ability.slow; // Yellow Eyes
+  if (p.char === 'nosferatu' && p.ab === 1) s *= 1 + KILLERS.nosferatu.ability2.haste; // Nightfall
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
   s *= 1 + statK(p, 'spd');                                  // Stalker (character stats)

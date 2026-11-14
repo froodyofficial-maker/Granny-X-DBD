@@ -373,6 +373,8 @@ export class Bots {
       b.juke = false;
       if (K.char === 'grandpa' && K.aim && vis && kd < 32) { const kf = fwd(K.yaw), toMe = ((p.x - K.x) * kf.x + (p.z - K.z) * kf.z) / (kd || 1); if (toMe > 0.93) { threat = true; b.juke = true; } }
       // Angeline's yellow eyes are on us: get out of the beam (it's narrow: a sideways dash does it)
+      // Nosferatu crouching to leap: break sideways
+      if (K.char === 'nosferatu' && K.aim && vis && kd < 12) { threat = true; b.juke = true; }
       if (K.char === 'angeline' && K.aim && vis && kd < 18) { const kf = fwd(K.yaw), toMe = ((p.x - K.x) * kf.x + (p.z - K.z) * kf.z) / (kd || 1); if (toMe > 0.9) { threat = true; b.juke = true; } }
       // Slendrina's eyes are open: don't stand there looking at her
       if (K.char === 'slendrina' && K.gaze > 0 && vis && kd < 26) threat = true;
@@ -766,6 +768,16 @@ export class Bots {
         if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (AM - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+      if (p.char === 'nosferatu') {
+        // Night Leap: crouch just long enough to land on them
+        const A = KILLERS.nosferatu.ability;
+        if (target && los && !b.aim && p.abCd <= 0 && !p.leap && !p.atk && d > 3.4 && d < A.max - 0.5 && this.clearLine(p.x, p.z, tx, tz, p.fl) && this.willing(b, D, dt)) {
+          const lead = Math.min(d + 1.6, A.max);
+          b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (A.max - A.min)) * A.coil + D.react * 0.15; sim.onMsg(p.id, { t: 'in', e: false, aim: true });
+        }
+        // Nightfall: in a chase at mid range (they lose him), or now and then while hunting
+        if (!p.ab && p.ab2Cd <= 0 && !p.act && ((target && los && d > 7 && d < 26) || (!target && Math.random() < dt * 0.04))) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+      }
       if (p.char === 'granny' && !p.tele) {
         // Bat Rush: wind up just long enough to reach them, then charge
         const RB = KILLERS.granny.ability;
@@ -816,13 +828,13 @@ export class Bots {
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = p.char === 'grandpa' || p.char === 'slendrina' || p.char === 'angeline' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'granny' ? 13 : 32);
+        const lead = p.char === 'grandpa' || p.char === 'slendrina' || p.char === 'angeline' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'nosferatu' ? 15 : p.char === 'granny' ? 13 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;
         if (b.aimT <= 0 || !target) {
           b.aim = false;
-          if (target && p.char === 'chucky') {
+          if (target && (p.char === 'chucky' || p.char === 'nosferatu')) {
             sim.onMsg(p.id, { t: 'act', a: 'pounce', yaw: p.yaw });
           } else if (p.char === 'granny' || p.char === 'grandpa') {
             sim.onMsg(p.id, { t: 'act', a: 'rush', yaw: p.yaw });
@@ -840,7 +852,8 @@ export class Bots {
           }
           sim.onMsg(p.id, { t: 'in', e: false, aim: false });
         }
-        this.move(p, b, Math.sin(ang) * (p.char === 'angeline' ? 1 : 0.4), Math.cos(ang) * (p.char === 'angeline' ? 1 : 0.4), dt, true);
+        const full = p.char === 'angeline' || p.char === 'nosferatu'; // (he keeps his pace while he crouches)
+        this.move(p, b, Math.sin(ang) * (full ? 1 : 0.4), Math.cos(ang) * (full ? 1 : 0.4), dt, true);
         b.prevTX = target ? target.x : undefined; b.prevTZ = target ? target.z : undefined;
         return;
       }
