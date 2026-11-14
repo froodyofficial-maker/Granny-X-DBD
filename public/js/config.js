@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 13;
+export const NET_PROTOCOL = 14;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -437,6 +437,13 @@ export const INBOX = [
     body: [
       'New killer: Nosferatu, out of the forest. Night Leap (crouch, then leap at your prey from up to 11m) and Nightfall (the dark swallows the map and he goes silent). Blood Scent: he smells injured survivors nearby, and every hit feeds him a burst of speed.',
       'Two Nosferatu outfits in the Store: Plague Ship and Blood Moon.',
+      'Windows: fixed the .exe not starting for some players, and a new startup splash while it loads.',
+      'Loading screens no longer show the menu through them; fewer freezes going into a match; the game recovers when the graphics driver resets (textures going black or missing).',
+      'Online: the host no longer throws errors while a match starts.',
+      'Phones: emotes work, skill checks take a tap ANYWHERE on the screen (with a clear prompt), USE keeps going when you let go mid-repair, and you can move and resize the buttons (Settings > Edit touch controls).',
+      "Angeline's arms no longer sink into her dress.",
+      'Killer bots no longer get stuck in a gap behind Granny\'s House.',
+      'Online play needs everyone on 1.4.3 (Nosferatu is new).',
     ],
   },
   {

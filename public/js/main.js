@@ -1009,6 +1009,7 @@ class HostSession {
   }
   // advance the simulation to "now"; called every frame and from a background timer
   pump(minGap = 0) {
+    if (!this.sim || !this.bots) return; // (still setting the match up: start() is async)
     const now = performance.now(), el = (now - this.lastSim) / 1000;
     if (el <= minGap) return;
     this.lastSim = now;
