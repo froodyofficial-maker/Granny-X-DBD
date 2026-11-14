@@ -1,5 +1,5 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
-import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS } from './config.js';
+import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS, cleanAddons, addonMods } from './config.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt, levelStep, overlaps, floorUnder } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
@@ -70,12 +70,13 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) : 0, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
+        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
         // 1.4: character stats (levels) and the killer's sidekick
         stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : '',
+        addons: r.role === 'survivor' ? cleanAddons(r.addons) : [],
       });
     }
   }
@@ -254,7 +255,7 @@ export class Sim {
         // Taser: a short-range shot along the aim; the first killer it reaches is electrocuted
         if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.item !== 'taser' || !(p.tasers > 0) || ((this.taserCd ||= new Map()).get(p.id) || 0) > S.t) return;
         p.tasers--; this.taserCd.set(p.id, S.t + 0.8);
-        const yaw = num(m.yaw, p.yaw), f = fwd(yaw), T = ITEMS.taser;
+        const yaw = num(m.yaw, p.yaw), f = fwd(yaw), am = addonMods(p.addons, 'taser'), T = { ...ITEMS.taser, range: ITEMS.taser.range * am.range, stun: ITEMS.taser.stun + am.stun };
         let hit = null, hd = T.range;
         for (const K of S.players) {
           if (K.role !== 'killer' || K.st === 'dead' || K.disguise) continue;
@@ -901,10 +902,10 @@ export class Sim {
     const S = this.S, M = this.M;
     let lit = null;
     for (const s of on) {
-      const dx = K.x - s.x, dz = K.z - s.z, d = Math.hypot(dx, dz);
-      if (d > RULES.flashRange || d < 0.3) continue;
+      const dx = K.x - s.x, dz = K.z - s.z, d = Math.hypot(dx, dz), am = addonMods(s.addons, 'flashlight');
+      if (d > RULES.flashRange * am.range || d < 0.3) continue;
       const f = fwd(s.yaw), kf = fwd(K.yaw);
-      if ((dx * f.x + dz * f.z) / d < 0.95) continue;        // beam on the killer
+      if ((dx * f.x + dz * f.z) / d < Math.cos(Math.acos(0.95) * am.cone)) continue;        // beam on the killer (add-ons: wider / narrower)
       if (-(dx * kf.x + dz * kf.z) / d < 0.3) continue;      // and he is looking into it
       if (losBlocked(M, s.x, s.z, K.x, K.z, 1.2)) continue;
       lit = s;
@@ -913,11 +914,12 @@ export class Sim {
     K.blindImm = Math.max(0, K.blindImm - dt);
     const canBlind = K.blindImm <= 0 && !(K.act && K.act.k === 'execute') && !(K.char === 'wisp' && K.ab === 1);
     if (lit && canBlind) {
-      K.glare = Math.min(1, K.glare + dt / RULES.flashTime);
+      const am = addonMods(lit.addons, 'flashlight');
+      K.glare = Math.min(1, K.glare + dt * am.speed / RULES.flashTime);
       if (K.glare >= 1) {
         const save = K.carry != null || (K.act && K.act.k === 'pickup');
-        K.glare = 0; K.blind = RULES.blindTime; K.blindImm = RULES.blindImmune;
-        this.stunKiller(K, RULES.flashStun, false);
+        K.glare = 0; K.blind = RULES.blindTime * am.blind; K.blindImm = RULES.blindImmune;
+        this.stunKiller(K, RULES.flashStun * am.blind, false);
         lit.score.d += save ? 700 : 350;
         if (has(lit, 'exposure')) { K.exposed = 6; this.ev({ k: 'exposed', id: K.id, by: lit.id }); }
         this.ev({ k: 'blind', id: K.id, by: lit.id, save });
@@ -1277,7 +1279,7 @@ export class Sim {
         const cs = S.chests[a.id]; if (!cs || cs.open) break;
         const r = Math.random();
         cs.open = true;
-        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots } : { k: 'flashlight', n: RULES.flashBattery };
+        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots, fresh: true } : { k: 'flashlight', n: RULES.flashBattery, fresh: true };
         p.score.c += 150;
         this.ev({ k: 'chest', id: a.id, by: p.id, item: cs.it.k });
         break;
@@ -1287,7 +1289,10 @@ export class Sim {
         const cs = S.chests[a.id]; if (!cs || !cs.it) break;
         const mine = { k: p.item, n: p.item === 'trap' ? p.traps : p.item === 'taser' ? p.tasers : p.flash };
         const got = cs.it;
-        p.item = got.k; p.flash = got.k === 'flashlight' ? got.n : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? got.n : 0;
+        // a new item out of the chest gets your add-ons for it (more battery, an extra taser shot)
+        const gm = addonMods(p.addons, got.k), gn = got.fresh ? (got.k === 'flashlight' ? got.n * gm.battery : got.k === 'taser' ? got.n + gm.shots : got.n) : got.n;
+        p.item = got.k; p.flash = got.k === 'flashlight' ? gn : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? gn : 0;
+        if (got.k === 'flashlight') p.flashMax = Math.max(gn, RULES.flashBattery * gm.battery);
         p.flashOn = false;
         cs.it = mine;
         this.ev({ k: 'chestswap', id: a.id, by: p.id, item: got.k, left: mine.k });

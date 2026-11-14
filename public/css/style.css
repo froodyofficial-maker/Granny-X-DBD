@@ -1043,3 +1043,24 @@ html:not(.mobile) .mobile-only { display: none !important; }
 #touch .tc-atk .tc-ic, #touch .tc-light .tc-ic, #tc-editor .tc-atk .tc-ic, #tc-editor .tc-light .tc-ic { width: 48px; height: 48px; }
 #touch .tc-atk .tc-lb, #touch .tc-light .tc-lb, #tc-editor .tc-atk .tc-lb, #tc-editor .tc-light .tc-lb { font-size: 20px; }
 #touch .tc-use.on, #touch .tc-use.latched { box-shadow: 0 0 0 3px rgba(232, 36, 28, .85) inset; }
+
+/* 1.4.3 item add-ons (Store > Add-ons, survivor Loadout) */
+.ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.ad-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid rgba(255,255,255,.1); border-left: 4px solid var(--ad, #8a8a8a); background: rgba(0,0,0,.35); }
+.ad-card .ad-ic { width: 44px; height: 44px; flex: none; color: var(--ad, #ccc); }
+.ad-card .ad-ic svg { width: 100%; height: 100%; }
+.ad-card .ad-b { flex: 1; min-width: 0; }
+.ad-card small { display: block; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--ad, #aaa); }
+.ad-card b { display: block; font-size: 19px; margin: 2px 0 4px; }
+.ad-card p { margin: 0; font-size: 14px; opacity: .85; line-height: 1.35; }
+.ad-credit { display: block; margin-top: 6px; font-size: 12px; color: #c9a8ff; font-style: normal; letter-spacing: .04em; }
+.ad-card .ad-buy { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.common { --ad: #a8a39a; } .uncommon { --ad: #e0b040; } .rare { --ad: #3fa86a; } .veryrare { --ad: #9a5cff; }
+.ad-slots { display: flex; gap: 8px; }
+.ad-slot { display: inline-flex; align-items: center; gap: 6px; min-width: 150px; height: 40px; padding: 0 10px; border: 1px dashed rgba(255,255,255,.25); background: rgba(0,0,0,.3); color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.ad-slot.full { border-style: solid; border-color: var(--ad, #888); }
+.ad-slot svg { width: 22px; height: 22px; color: var(--ad, #ccc); }
+.ad-own { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.ad-chip { padding: 4px 10px; border: 1px solid var(--ad, #888); background: rgba(0,0,0,.3); color: inherit; font: inherit; font-size: 13px; cursor: pointer; opacity: .75; }
+.ad-chip.on { background: var(--ad, #888); color: #000; opacity: 1; }
+.ad-row .lo2-lbl { white-space: nowrap; }

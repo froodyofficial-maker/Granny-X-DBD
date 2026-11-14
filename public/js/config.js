@@ -18,6 +18,32 @@ export const ITEMS = {
   flashlight: { name: 'Flashlight', desc: 'Hold RMB to shine it in the killer\'s eyes.' },
   taser: { name: 'Taser', shots: 3, stun: 3, range: 9, chance: 0.2, desc: 'Click RMB to fire: a killer you hit is electrocuted and frozen for 3s. 3 shots. Only found in chests.' },
 };
+// 1.4.3: item add-ons, Dead by Daylight style (the idea, and the UV Torch, are by Ommm and WolfSpider). Bought once in
+// Store > Add-ons, two slots in the survivor Loadout. Flashlight: range / speed (how fast it blinds) / battery / cone
+// (beam width) / blind (how long the killer stays blinded and stunned), all multipliers; taser: shots / stun (added),
+// range (multiplier). They only work on the item they are made for (a taser found in a chest gets the taser ones).
+export const ADDONS = {
+  uv: { name: 'UV Torch', item: 'flashlight', rarity: 'very rare', price: 6000, range: 1.3, speed: 1.6, battery: 0.45, credit: true, desc: 'An ultraviolet bulb: 30% more range and it blinds 60% faster, but the battery lasts less than half as long.' },
+  battery: { name: 'Long-Life Battery', item: 'flashlight', rarity: 'common', price: 1500, battery: 1.5, desc: 'The battery lasts 50% longer.' },
+  grip: { name: 'Rubber Grip', item: 'flashlight', rarity: 'common', price: 1500, speed: 1.15, desc: 'A steadier hand: blinds 15% faster.' },
+  wide: { name: 'Wide Lens', item: 'flashlight', rarity: 'uncommon', price: 2500, cone: 1.6, range: 0.8, desc: 'A much wider beam that is easier to land in his eyes, but 20% shorter.' },
+  focus: { name: 'Focused Lens', item: 'flashlight', rarity: 'uncommon', price: 2500, range: 1.25, cone: 0.75, desc: '25% more range, in a narrower beam.' },
+  heavy: { name: 'Heavy-Duty Bulb', item: 'flashlight', rarity: 'rare', price: 4000, blind: 1.35, battery: 0.85, desc: 'The killer stays blinded and stunned 35% longer. The battery runs out 15% sooner.' },
+  cell: { name: 'Extra Cell', item: 'taser', rarity: 'rare', price: 3500, shots: 1, desc: 'A taser you find in a chest holds one more shot.' },
+  volt: { name: 'High Voltage', item: 'taser', rarity: 'very rare', price: 5000, stun: 1, range: 0.85, desc: 'Taser: 1s more on the stun, but 15% less reach.' },
+};
+export const ADDON_SLOTS = 2;
+export const cleanAddons = a => Array.isArray(a) ? [...new Set(a.filter(k => ADDONS[k]))].slice(0, ADDON_SLOTS) : [];
+// the combined effect of a list of add-ons on one item
+export function addonMods(list, item) {
+  const m = { range: 1, speed: 1, battery: 1, cone: 1, blind: 1, shots: 0, stun: 0 };
+  for (const k of cleanAddons(list)) {
+    const A = ADDONS[k]; if (A.item !== item) continue;
+    for (const f of ['range', 'speed', 'battery', 'cone', 'blind']) if (A[f] != null) m[f] *= A[f];
+    if (A.shots) m.shots += A.shots; if (A.stun) m.stun += A.stun;
+  }
+  return m;
+}
 export const RULES = {
   genCharges: 66,          // seconds of solo repair per generator
   gensTotal: 7,
@@ -437,6 +463,11 @@ export const INBOX = [
     body: [
       'New killer: Nosferatu, out of the forest. Night Leap (crouch, then leap at your prey from up to 11m) and Nightfall (the dark swallows the map and he goes silent). Blood Scent: he smells injured survivors nearby, and every hit feeds him a burst of speed.',
       'Two Nosferatu outfits in the Store: Plague Ship and Blood Moon.',
+      "NEW MAP: Slendrina: The Forest. The forest from the game itself: its tall black trees, the barn-house, the old house, the stable, the plastic shelter and the old car.",
+      'Item add-ons, like Dead by Daylight (Store > Add-ons, two slots in the survivor Loadout): UV Torch, Long-Life Battery, Rubber Grip, Wide and Focused Lens, Heavy-Duty Bulb, and two for the taser. Idea by Ommm and WolfSpider.',
+      'Grandpa toned down: his shotgun hits lighter (two long shots, three from mid range), cycles slower, and the shotgun bar refills when he stops landing shots. Bear traps hold you 3s.',
+      'Phones: the buttons have their drawings back, and a tap on USE holds it for you.',
+      'Smarter bots.',
       'Windows: fixed the .exe not starting for some players, and a new startup splash while it loads.',
       'Loading screens no longer show the menu through them; fewer freezes going into a match; the game recovers when the graphics driver resets (textures going black or missing).',
       'Online: the host no longer throws errors while a match starts.',

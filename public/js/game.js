@@ -37,6 +37,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 
 // flashlight beam: an open cone fading with distance and toward its edges (additive, cheap)
 const BEAM_GEO = new THREE.CylinderGeometry(1.35, 0.035, 9, 20, 1, true).translate(0, 4.5, 0).rotateX(Math.PI / 2);
+let BEAM_MAT_UV = null;
 const BEAM_MAT = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `varying float vY; varying vec3 vN; varying vec3 vV;
@@ -1571,10 +1572,12 @@ export class Game {
       lens.position.z = 0.101; g.add(lens);
       const proton = !!(SURVIVORS[p.char] && SURVIVORS[p.char].gb);
       if (proton) body.visible = false;
-      const beam = new THREE.Mesh(BEAM_GEO, proton ? PROTON_MAT : BEAM_MAT);
+      const uv = (p.addons || []).includes('uv'); // UV Torch add-on: a violet beam
+      if (uv) lens.material = new THREE.MeshBasicMaterial({ color: 0xc8a0ff, toneMapped: false });
+      const beam = new THREE.Mesh(BEAM_GEO, proton ? PROTON_MAT : uv ? (BEAM_MAT_UV ||= (() => { const m = BEAM_MAT.clone(); m.fragmentShader = BEAM_MAT.fragmentShader.replace('vec4(1.0, 0.95, 0.82, a)', 'vec4(0.62, 0.42, 1.0, a * 1.2)'); return m; })()) : BEAM_MAT);
       if (proton) { beam.scale.set(0.16, 0.16, 1); const core = new THREE.Mesh(BEAM_GEO, PROTON_CORE); core.scale.set(0.06, 0.06, 1); core.position.z = 0.1; core.frustumCulled = false; g.add(core); g.userData.proton = true; }
       beam.position.z = 0.1; beam.frustumCulled = false; g.add(beam);
-      g.userData = { lens, beam };
+      g.userData = { lens, beam, uv };
       this.scene.add(g); c.torch = g;
     }
     const g = c.torch;
@@ -1593,6 +1596,7 @@ export class Game {
     if (!this.torchLight) return;
     const L = this.torchLight, g = this.torchFrom;
     L.intensity = g ? 40 : 0;
+    if (g) L.color.setHex(g.userData.uv ? 0xb08aff : 0xfff0d0);
     if (g) {
       L.position.copy(g.position);
       const f = new THREE.Vector3(0, 0, 9).applyQuaternion(g.quaternion);
@@ -2449,7 +2453,7 @@ export class Game {
     // flashlight battery, and the killer's view whiting out when a torch is in his eyes
     if (me.role === 'survivor') {
       const bar = $('item').querySelector('.itb div');
-      if (bar) bar.style.width = (Math.max(0, me.flash) / RULES.flashBattery * 100).toFixed(1) + '%';
+      if (bar) bar.style.width = (Math.max(0, me.flash) / (me.flashMax || RULES.flashBattery) * 100).toFixed(1) + '%';
       $('item').classList.toggle('active', !!this.flashHeld && me.flash > 0);
       $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.flash <= 0);
       const wn = document.getElementById('webn'); if (wn) wn.textContent = '×' + (me.webs || 0);

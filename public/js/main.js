@@ -27,6 +27,7 @@ import { initTouch, MOBILE, mobileText, openTouchEditor } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
 import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
+import { ADDONS, ADDON_SLOTS, cleanAddons } from './config.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
@@ -123,12 +124,13 @@ profile.killer.perks = (profile.killer.perks || []).filter(k => KILLER_PERKS[k])
 profile.survivor.perks = (profile.survivor.perks || []).filter(k => SURV_PERKS[k]);
 // perks are bought with Embers; defaults are free, and anything already equipped stays owned
 profile.perksOwned ||= {}; profile.pets ||= {};
+profile.addons ||= {}; profile.survivor.addons = cleanAddons(profile.survivor.addons).filter(k => profile.addons[k]); // 1.4.3 item add-ons (owned / equipped)
 const petOf = () => '';
 // 1.4: the killer's sidekick (only one so far: The Child of Slendrina), and what each character brings into a match
 // a new season (every six weeks): rank rewards, ranks drop a tier, a fresh pass
 { const msg = seasonRoll(profile); if (msg) setTimeout(() => toast(msg, 9000), 3000); }
 const kidOf = () => profile.pets.child && profile.killer.pet === 'child' ? 'child' : '';
-const extrasOf = (role, char) => ({ stats: matchStats(profile, char, role), ...(role === 'killer' ? { kid: kidOf() } : {}) });
+const extrasOf = (role, char) => ({ stats: matchStats(profile, char, role), ...(role === 'killer' ? { kid: kidOf() } : { addons: cleanAddons(profile.survivor.addons) }) });
 for (const k of [...profile.survivor.perks, ...profile.killer.perks]) profile.perksOwned[k] = true;
 const perkPrice = k => PERK_PRICES[k] || 0;
 const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
@@ -368,6 +370,19 @@ function bindLevel(container, role, char, rerender) {
   });
   container.querySelectorAll('[data-respec]').forEach(b => b.onclick = () => { C.st = {}; saveProfile(); sound.play('click'); rerender(); });
 }
+// 1.4.3 item add-ons: two slots on the survivor's flashlight (taser ones work if you find a taser in a chest)
+const RAR = { common: 'common', uncommon: 'uncommon', rare: 'rare', 'very rare': 'veryrare' };
+function addonRowHTML() {
+  const eq = cleanAddons(profile.survivor.addons), owned = Object.keys(ADDONS).filter(k => profile.addons[k]);
+  const slot = i => { const k = eq[i]; return `<button class="ad-slot ${k ? 'full ' + RAR[ADDONS[k].rarity] : ''}" ${k ? `data-adoff="${k}"` : 'data-adstore'} title="${k ? esc(ADDONS[k].name + ': ' + ADDONS[k].desc) : 'Empty: get add-ons in the Store'}">${k ? `${icon(ADDONS[k].item === 'taser' ? 'taser' : 'flashlight')}<span>${esc(ADDONS[k].name)}</span>` : '<span>+ add-on</span>'}</button>`; };
+  return `<div class="lo2-row ad-row"><span class="lo2-lbl">Add-ons</span><div class="ad-slots">${slot(0)}${slot(1)}</div></div>
+    ${owned.length ? `<div class="ad-own">${owned.map(k => `<button class="ad-chip ${RAR[ADDONS[k].rarity]} ${eq.includes(k) ? 'on' : ''}" data-adon="${k}" title="${esc(ADDONS[k].desc)}">${esc(ADDONS[k].name)}</button>`).join('')}</div>` : '<div class="ad-own hint">No add-ons yet: Store &gt; Add-ons.</div>'}`;
+}
+function bindAddons(container, rerender) {
+  container.querySelectorAll('[data-adon]').forEach(b => b.onclick = () => { const k = b.dataset.adon, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); rerender(); });
+  container.querySelectorAll('[data-adoff]').forEach(b => b.onclick = () => { profile.survivor.addons = cleanAddons(profile.survivor.addons).filter(k => k !== b.dataset.adoff); saveProfile(); sound.play('click'); rerender(); });
+  container.querySelectorAll('[data-adstore]').forEach(b => b.onclick = () => { sound.play('click'); openStore('addons'); });
+}
 function kidRowHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
   return `<div class="kid-row ${on ? 'on' : ''}"><span class="child-art"></span><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
@@ -414,7 +429,7 @@ function renderLoadout(container, role, compact, onChange) {
       <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
       <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
       ${levelHTML(role, lo.char)}
-      ${role === 'killer' ? kidRowHTML() : ''}
+      ${role === 'killer' ? kidRowHTML() : addonRowHTML()}
       
 
       <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
@@ -429,6 +444,7 @@ function renderLoadout(container, role, compact, onChange) {
       profile.levels[c] = cur + L.step; saveProfile(); sound.play('escaped'); toast(`${L.power} now reaches ${cur + L.step}m`); rerender();
     });
     bindLevel(container, role, lo.char, rerender);
+    if (role === 'survivor') bindAddons(container, rerender);
     container.querySelectorAll('[data-kideq]').forEach(b => b.onclick = () => {
       if (!profile.pets.child) { sound.play('click'); openStore('sidekicks'); return; }
       profile.killer.pet = profile.killer.pet === 'child' ? '' : 'child'; saveProfile(); sound.play('click'); rerender();
@@ -618,6 +634,7 @@ function renderStore() {
   if (storeTab === 'chapters') body.innerHTML = chaptersHTML();
   else if (storeTab === 'collections') body.innerHTML = collectionsHTML();
   else if (storeTab === 'sidekicks') body.innerHTML = sidekicksHTML();
+  else if (storeTab === 'addons') body.innerHTML = addonsHTML();
   else if (storeTab === 'app') body.innerHTML = appHTML();
   else body.innerHTML = charactersHTML();
   bindStore(body);
@@ -663,6 +680,14 @@ function collectionsHTML() {
   }).join('');
   return `<div class="ch-row-title">Outfit collections · every outfit for one character at 25% off</div><div class="co-grid">${cards}</div>`;
 }
+// ---------- item add-ons (1.4.3) ----------
+function addonsHTML() {
+  const card = ([k, A]) => { const own = !!profile.addons[k], on = cleanAddons(profile.survivor.addons).includes(k);
+    return `<div class="ad-card ${RAR[A.rarity]}"><div class="ad-ic">${icon(A.item === 'taser' ? 'taser' : 'flashlight')}</div><div class="ad-b"><small>${esc(A.rarity)} · ${A.item === 'taser' ? 'Taser' : 'Flashlight'} add-on</small><b>${esc(A.name)}</b><p>${esc(A.desc)}</p>${A.credit ? '<em class="ad-credit">Idea by Ommm &amp; WolfSpider</em>' : ''}</div>
+      <div class="ad-buy">${own ? `<button class="btn ${on ? '' : 'primary'}" data-adeq="${k}">${on ? 'Unequip' : 'Equip'}</button>` : `<span class="ch-price">${price(A.price)}</span><button class="btn primary" data-adbuy="${k}">Buy</button>`}</div></div>`; };
+  return `<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
+    <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
+}
 // ---------- sidekicks ----------
 let storePet = 'ted', storePetRole = 'survivor';
 function sidekicksHTML() {
@@ -674,6 +699,8 @@ function sidekicksHTML() {
 }
 
 function bindStore(body) {
+  body.querySelectorAll('[data-adbuy]').forEach(b => b.onclick = () => { const k = b.dataset.adbuy, A = ADDONS[k]; if (profile.addons[k] || !spend(A.price, A.name)) return; profile.addons[k] = true; const L = profile.survivor.addons = cleanAddons(profile.survivor.addons); if (L.length < ADDON_SLOTS) L.push(k); saveProfile(); sound.play('escaped'); renderStore(); });
+  body.querySelectorAll('[data-adeq]').forEach(b => b.onclick = () => { const k = b.dataset.adeq, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-kidbuy]').forEach(b => b.onclick = () => { if (profile.pets.child || !spend(SIDEKICKS.child.price, SIDEKICKS.child.name)) return; profile.pets.child = true; profile.killer.pet = 'child'; saveProfile(); sound.play('escaped'); renderStore(); });
   body.querySelectorAll('[data-kidtoggle]').forEach(b => b.onclick = () => { profile.killer.pet = kidOf() ? '' : 'child'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-pet]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; storePet = el.dataset.pet; sound.play('hover'); renderStore(); });
@@ -812,7 +839,9 @@ function botSurvivor(i, used) {
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
   used.names.push(nm);
   const sk = SKINS[char]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
-  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: '', bot: true };
+  // bots bring an add-on or two now and then (1.4.3)
+  const ak = Object.keys(ADDONS).filter(k => ADDONS[k].item === 'flashlight'), addons = Math.random() < 0.5 ? [ak[Math.floor(Math.random() * ak.length)]] : [];
+  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: '', bot: true, addons };
 }
 function botKiller(char, n = 0, avoid = []) {
   const pool = PLAY_K.filter(k => !avoid.includes(k));
@@ -1502,7 +1531,7 @@ $('btn-lobby-start').addEventListener('click', () => {
   if (!lobby || !lobby.isHost) return;
   const ps = lobby.players;
   // (stats: each player's own character stats for the character they play; the simulation clamps them)
-  const roster = ps.map(p => { const L = p.loadouts?.[p.role] || {}; return { id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, stats: L.char === p.char ? L.stats : {}, ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og, kid: L.kid === 'child' ? 'child' : '' } : {}) }; });
+  const roster = ps.map(p => { const L = p.loadouts?.[p.role] || {}; return { id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, stats: L.char === p.char ? L.stats : {}, addons: p.role === 'survivor' ? cleanAddons(L.addons) : [], ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og, kid: L.kid === 'child' ? 'child' : '' } : {}) }; });
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
   const cap = lobbyCaps();
   if (!roster.some(r => r.role === 'killer')) {
