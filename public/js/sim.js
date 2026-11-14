@@ -360,6 +360,8 @@ export class Sim {
         // (he sails over anything low, so the straight line alone can carry him out of play)
         const L0 = levelOf(this.M, p.fl || 0);
         let d2 = dist, land = null;
+        // upstairs: never carry him off the edge of the floor (he'd drop somewhere he can't walk out of)
+        if ((p.fl || 0) > 0 && (p.fl || 0) < 10 && this.M.stairs) for (let s2 = 0.5; s2 <= d2; s2 += 0.5) if (!floorUnder(this.M, p.fl, p.x + f.x * s2, p.z + f.z * s2)) { d2 = s2 - 0.8; break; }
         for (; d2 > 0.9 && !land; d2 -= 0.8) land = this.reachableSpot(L0, p.x + f.x * d2, p.z + f.z * d2, p);
         const lx = land ? land.x : p.x + f.x * 0.5, lz = land ? land.z : p.z + f.z * 0.5, ld = Math.hypot(lx - p.x, lz - p.z);
         p.leap = { t: 0, d: +(0.35 + ld * 0.035).toFixed(3), x0: p.x, z0: p.z, x1: lx, z1: lz, h: +(0.7 + ld * 0.06).toFixed(2) };

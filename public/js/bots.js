@@ -625,13 +625,23 @@ export class Bots {
     }
     {
       const wd = b.wd ||= { x: p.x, z: p.z, t: 0 };
-      if (b.aim || p.aim || p.tele || p.dash || p.atk || p.ab === 1 || Math.hypot(p.x - wd.x, p.z - wd.z) > 0.5) { wd.x = p.x; wd.z = p.z; wd.t = 0; }
+      if (b.aim || p.aim || p.tele || p.dash || p.atk || p.ab === 1 || Math.hypot(p.x - wd.x, p.z - wd.z) > 0.5) { wd.x = p.x; wd.z = p.z; wd.t = 0; if (Math.hypot(p.x - wd.x0, p.z - wd.z0) > 3 || wd.x0 == null) { wd.x0 = p.x; wd.z0 = p.z; b.wdN = 0; } }
       else wd.t += dt;
       if (wd.t > 3) {
         // stuck chasing someone it can't reach, or patrolling a spot it can't get to: let it go
         const kav = b.kAvoid ||= {};
         if (p.carry != null && b.hookGoal != null) kav['hook:' + b.hookGoal] = S.t + 20;
         if (b.downGoal != null) kav['down:' + b.downGoal] = S.t + 12;
+        // still stuck a second time: if it has wandered into a patch the walking grid doesn't connect to the rest of the
+        // map (a gap between two walls it squeezed through), step back out to the nearest connected ground
+        b.wdN = (b.wdN || 0) + 1;
+        if (b.wdN >= 2 && p.carry == null) {
+          const L = levelOf(M, p.fl || 0), home = (p.fl || 0) === 0 ? M.spawns.killer : null;
+          if (L.grid && home) {
+            const mainR = regionAt(L, home.x, home.z), myR = regionAt(L, p.x, p.z);
+            if (mainR >= 0 && myR !== mainR) { const q = nearestIn(L, mainR, p.x, p.z); if (q && Math.hypot(q.x - p.x, q.z - p.z) < 8) { p.x = q.x; p.z = q.z; p.tp = (p.tp || 0) + 1; b.wdN = 0; } }
+          }
+        }
         wd.t = 0; b.target = null; b.lastSeen = null; b.search = null; b.patrolGen = -1; b.genIdle = 0; b.hookGoal = null; b.downGoal = null;
         if (b.leaveCage) b.leaveCage.t = 0;
         b.path = null; b.repath = 0; b.side = 0.8; b.sideDir = null; b.goalKey = '';

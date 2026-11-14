@@ -40,7 +40,7 @@ await pg.screenshot({ path: PRE + '-emotes.png' });
 await tapEl('#emote-bar [data-emote="2"]'); await pg.waitForTimeout(800);
 console.log('emote after tap', await pg.evaluate(() => { const s = window.__nb.session; return s.sim.S.players.find(p => p.id === s.myId).emote; }));
 // --- skill check: put one up, tap the far left of the screen
-await pg.evaluate(() => { const g = window.__nb.session.game; g.skill = { phase: 'active', t: 0.5, start: 0.4, end: 0.52, great: 0.435, needle: 0.45 }; g.skillCanvas.classList.remove('hidden'); g.updateSkill = () => {}; });
+await pg.evaluate(() => { const g = window.__nb.session.game; g.skill = { phase: 'active', t: 0.5, start: 0.4, end: 0.52, great: 0.435, needle: 0.45 }; g.skillCanvas.classList.remove('hidden'); g.updateSkill = () => {}; try { g.drawSkill(); } catch (e) { console.log('draw', e.message); } });
 await pg.waitForTimeout(400); await pg.screenshot({ path: PRE + '-skill.png' });
 await pg.touchscreen.tap(120, 300); await pg.waitForTimeout(200);
 console.log('skill after left tap', await pg.evaluate(() => { const s = window.__nb.session.game.skill; return s && s.phase + ':' + s.res; }));
