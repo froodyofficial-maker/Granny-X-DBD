@@ -60,5 +60,13 @@ await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{
 for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 200, y: 400 - i * 10, id: 8 }] });
 await pg.waitForTimeout(800); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 console.log('after joystick ->', await act());
+// --- quick tap on USE (1.4.3): it holds USE for you; the repair runs on its own
+await pg.evaluate(() => { const s = window.__nb.session, S = s.sim.S, me = S.players.find(p => p.id === s.myId), g = s.sim.M.gens[0]; me.x = g.x + 1.05; me.z = g.z; me.yaw = Math.atan2(g.x - me.x, g.z - me.z); window.__nb.session.game.camYaw = me.yaw; });
+await pg.waitForTimeout(600);
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: useXY.x, y: useXY.y, id: 9 }] }); await pg.waitForTimeout(120);
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+await pg.waitForTimeout(2500);
+console.log('quick tap USE, 2.5s later ->', await act(), 'latched button:', await pg.evaluate(() => document.querySelector('#touch [data-b=use]').classList.contains('on')));
+await pg.screenshot({ path: PRE + '-icons.png' });
 console.log('errors', errs);
 await br.close(); srv.close();
