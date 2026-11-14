@@ -697,6 +697,8 @@ export class Sim {
       if (p.phase > 0) { p.phase = Math.max(0, p.phase - dt); if (p.phase === 0) this.endPhase(p); }
       if (p.ambush > 0) p.ambush = Math.max(0, p.ambush - dt);
       if (p.haste > 0) p.haste = Math.max(0, p.haste - dt);
+      // Grandpa's shotgun bar refills slowly once he stops landing shots (1.4.3)
+      if (p.role === 'survivor' && p.shp != null && p.shp < 100 && S.t - (p.shpT || 0) > KILLERS.grandpa.shotgun.regen) p.shp = Math.min(100, p.shp + KILLERS.grandpa.shotgun.regenRate * dt);
       if (p.card > 0) { p.card = Math.max(0, p.card - dt); if (p.mv === 2) p.reveal = Math.max(p.reveal, 0.4); }
       if (p.possCd > 0) p.possCd = Math.max(0, p.possCd - dt);
       if (p.exposed > 0) p.exposed = Math.max(0, p.exposed - dt);
@@ -1698,7 +1700,7 @@ export class Sim {
     if (best) {
       const k = Math.max(0, Math.min(1, (bd - G.near) / (G.far - G.near)));
       dmg = Math.round(G.minDmg + (G.maxDmg - G.minDmg) * k);
-      best.shp = Math.max(0, (best.shp ?? 100) - dmg);
+      best.shp = Math.max(0, (best.shp ?? 100) - dmg); best.shpT = S.t;
       best.lastHitBy = K.id; K.score.a += 50 + dmg * 4;
       best.reveal = Math.max(best.reveal, G.reveal);
       if (best.shp <= 0) { best.shp = 100; this.damage(best, K, true); }

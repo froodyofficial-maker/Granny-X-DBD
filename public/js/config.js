@@ -150,9 +150,9 @@ export const KILLERS = {
     lore: '',
     exec: { name: 'Last Round', desc: 'Pins the survivor to the floor with his boot and takes his time reloading.' },
     // survivors carry a second health bar against him (100): the farther the shot, the more it takes
-    shotgun: { name: 'Shotgun', cooldown: 2.0, raise: 0.3, range: 45, minDmg: 34, maxDmg: 75, near: 2, far: 14, reveal: 5, stagger: 0.9, slow: 0.6 },
-    ability: { name: 'Shotgun', cooldown: 2.0, desc: 'Hold RMB to raise the shotgun (slowed), release to fire. Survivors carry a second health bar against him: two shots put anyone down from mid range or farther, three point-blank. Every hit staggers them (slowed for a moment) and reveals them for 5s.' },
-    ability2: { name: 'Bear Trap', key: 'R', cooldown: 5, max: 3, snare: 4, reveal: 6, seen: 5, desc: 'Set a bear trap where you stand (up to 3: setting a 4th removes the oldest). A survivor who steps in is injured, caught for 4s and revealed for 6s. Survivors only spot a trap from 5m away.' },
+    shotgun: { name: 'Shotgun', cooldown: 2.6, raise: 0.45, range: 45, minDmg: 26, maxDmg: 55, near: 2, far: 14, reveal: 4, stagger: 0.8, slow: 0.65, regen: 8, regenRate: 3 }, // (1.4.3: toned down)
+    ability: { name: 'Shotgun', cooldown: 2.6, desc: 'Hold RMB to raise the shotgun (slowed), release to fire. Survivors carry a second health bar against him: two long shots put anyone down, three from mid range, four point-blank. The bar refills slowly after 8s without being shot. Every hit staggers them (slowed for a moment) and reveals them for 4s.' },
+    ability2: { name: 'Bear Trap', key: 'R', cooldown: 6, max: 3, snare: 3, reveal: 4, seen: 6, desc: 'Set a bear trap where you stand (up to 3: setting a 4th removes the oldest). A survivor who steps in is injured, caught for 3s and revealed for 4s. Survivors spot a trap from 6m away.' },
     feature: { name: 'Old Soldier', desc: 'He takes his time, and he never misses twice: his shots hit hardest from far away, and his traps guard the generators he cannot watch.' },
     color: 0x8a7a5a,
   },

@@ -302,8 +302,13 @@ export class Bots {
     if (p.role === 'survivor' && S.bears && S.bears.length && m > 0.05) {
       // (running for their life, they often don't look down)
       // a trap we have spotted gets a wide berth; one we haven't, we may not see in time when running
+      // stuck next to a trap we know about (it sits in the only way through): squeeze past it, 1 m off, for a while
+      const bw = b.bwd ||= { x: p.x, z: p.z, t: 0 };
+      if (Math.hypot(p.x - bw.x, p.z - bw.z) > 1) { bw.x = p.x; bw.z = p.z; bw.t = 0; } else bw.t += dt;
+      if (bw.t > 2.5 && S.bears.some(t => b.traps && b.traps.has(t.id) && Math.hypot(t.x - p.x, t.z - p.z) < 3.2)) { b.brave = S.t + 5; bw.t = 0; }
+      const brave = b.brave > S.t;
       for (const t of S.bears) {
-        const known = b.traps && b.traps.has(t.id), R0 = known ? 2.1 : 1.5;
+        const known = b.traps && b.traps.has(t.id), R0 = known ? (brave ? 1.0 : 2.1) : 1.5;
         if (!known && sprint && ((t.id * 7 + p.id.charCodeAt(p.id.length - 1)) % 10) < 6) continue;
         const dx = p.x - t.x, dz = p.z - t.z, d = Math.hypot(dx, dz);
         if (d < R0 && d > 0.01 && (t.fl || 0) === (p.fl || 0)) { const k = (R0 - d) / R0 * (known ? 2.4 : 1.8); mx += dx / d * k; mz += dz / d * k; }
