@@ -11,7 +11,8 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   are not committed: rebuild them with the commands below.
 - **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina, Angeline (1.3) and Nosferatu (1.4.3).**
 - **Survivors: only Mara, Eli, June and Tomás.**
-- **Maps: Granny's House (`granny`) and Granny's Old House (`granny1`).** No other maps.
+- **Maps: Granny's House (`granny`), Granny's Old House (`granny1`) and Slendrina: The Forest (`forest`, 1.4.3, at the
+  owner's request, from the owner's copy of the game).** No other maps unless the owner asks.
 - Removed for good (don't bring back): ghost traps, all lore, Testing Area, the old intro banner / trailer gate.
   (Sidekicks, the Progress screen, ranks and levelling were removed in 1.0 but the owner asked for them back in 1.4:
   they are in again, in the 1.4 form described below.)
@@ -229,7 +230,30 @@ NET_PROTOCOL 14: a new killer, so 1.4.2 and 1.4.3 don't share lobbies):
 - `HostSession.pump` returns until `sim` and `bots` exist: the background host pump (Worker timer) used to call step()
   during the async `start()` and threw "Cannot read properties of undefined (reading 'update')" on every tick.
 - Portable exe: `-c.portable.unpackDirName=GrannyxDBD-1.4.3` on the command line (builder.json no longer sets it).
-- Devlog banner: tools/test/devlog143-page.js (`PAGE=devlog143-page.js OUT=x.png node render-devlog.mjs`).
+- Devlog banner: tools/test/devlog143-page.js (`PAGE=devlog143-page.js OUT=x.png node render-devlog.mjs`); the banner for the
+  full 1.4.3 update (Nosferatu + the Forest + add-ons, UV beam) is devlog143b-page.js (APK versionCode 23 for that build).
+- **Slendrina: The Forest** (`forest`): tools/forest/build_forest.py (UnityPy) turns the owner's `Slendrina The Forest_Data`
+  (level1 + sharedassets1.assets + .resS, shared on Google Drive; not in the repo) into public/models/forest_map.glb (prototypes
+  proto_Stam/Grenar/RockMesh/Utelykta + landmark groups group_house/stall/oldhouse/shelter/car; Unity mirrored on X, ground
+  lifted 0.79; only cut-out shaders get alpha) and public/js/forestdata.js (every tree's trunk/crown matrix + collision radius,
+  rocks, each group's 0.5 m collision boxes, holes filled). map.js `FORESTMAP`: buildArena on a 5x5 grid (xs/zs ±42/±21),
+  landmark cells `marks` (never a corner); generator / hook spots picked round each building after all cells are built; the
+  woods templates fill the rest (no procedural trees); the real trees inside the fence become invisible 'mesh' circles (any
+  in the way of a set piece, gen, hook, gate or spawn is dropped), the ones outside are drawn only. forestworld.js draws
+  trunks + crowns as InstancedMesh and clones the landmark groups. LOOK.forest (dark mist), wooden 'boards' fence.
+  Map vote pictures are inlined into the offline build (`window.__MAPIMG`, build.mjs) since the exe/apk have no img/ folder.
+- Item add-ons (`ADDONS`, `ADDON_SLOTS` 2, `addonMods(list, item)` in config.js; idea and the UV Torch by Ommm and WolfSpider,
+  credited in How to Play, Store and the inbox): Store > Add-ons (`profile.addons` owned), survivor Loadout row
+  (`profile.survivor.addons`), sent as `addons` (roster / loadouts, STATIC in snap.js). Sim: flashlight battery x battery
+  (`flashMax`), range / beam cone / blind speed / blind+stun time in `flashKiller`; taser range/stun, +shots on a fresh chest
+  taser (`fresh` flag). UV Torch beam is violet (game.js `BEAM_MAT_UV`). Bot survivors bring one half the time.
+- Grandpa balance (1.4.3): shotgun 26-55 dmg (2 long shots, 3 mid, 4 close), cooldown 2.6, raise 0.45, reveal 4; the shotgun bar
+  (`shp`) refills 3/s after 8 s without a hit (`shpT`); traps snare 3 s, reveal 4 s, seen from 6 m.
+- Mobile (owner's Discord feedback): the 1.3.3 button drawings are back (TC_ICONS, `night` moon icon, Nosferatu 'fangs');
+  a quick tap on USE latches it (held until the action ends, USE again, or the joystick moves; 1.2 s grace to start).
+- Smarter survivor bots: `this.intel` (last place anyone saw the killer, shared), generator spreading (bots already heading to a
+  generator count against it), `leadPenalty` (flee spots near teammates repairing/healing score lower), injured bots go to a
+  teammate to be healed (`mend`, wait up to 4 s), `b.brave` squeeze past a known bear trap that blocks the way.
 1.4.2: DBD-style skill check (`drawSkill`, HiDPI), second-killer picker for Two Killers bot matches
 (`botsCfg.killer2`), Angeline's bone matrices kept rigid (no squashed head: `toBindPose` composes position from K and the
 rotation only), version-aware single instance + versioned unpack dir for the exe, backup button in Settings.
