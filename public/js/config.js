@@ -406,11 +406,17 @@ export const SKINS = {
     { id: 'default', name: 'House Dress', price: 0, desc: 'Her grey nightgown, her bloody bat, and the stare. You know the one.' },
     { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
+    // 1.4.4: outfits with their own models (loaded only when worn)
+    { id: 'bloody', name: 'Bloody Granny', price: 6000, glb: 'granny_bloody', desc: 'Soaked from collar to hem. The bat is the cleanest thing on her.' },
+    { id: 'nightmare', name: 'Granny: Nightmare Mode', price: 8000, glb: 'granny_nightmare', desc: 'The Granny from Nightmare Mode: pale as ash, eyes like coals. The house gets darker when she walks in.' },
+    { id: 'santa', name: 'Santa Granny', price: 5000, glb: 'granny_santa', santa: true, desc: 'A Santa hat, a white beard, and a sack she will not let you look inside.' },
+    { id: 'witch', name: 'Witch Granny', price: 6000, glb: 'granny_witch', desc: 'A pointed hat, a crooked nose and her broom. She still prefers the bat.' },
     { id: 'longnight', name: 'The Long Night', price: -1, pass: true, tint: 0x3a2a5a, tintK: 0.45, glow: 0x7a40c0, glowK: 0.3, desc: 'Season Pass reward (tier 30). Dressed for a night that never ends.' },
   ],
   grandpa: [
     { id: 'default', name: 'Night Watch', price: 0, grandpa: true, desc: 'Braces, a dirty vest, his old shotgun and a bad mood.' },
     { id: 'bloodbath', name: 'Hunting Season', price: 0, grandpa: true, tint: 0x8a1010, tintK: 0.3, desc: 'Back from a long night in the woods. Not all of it is deer.' },
+    { id: 'sigma', name: 'Sigma Grandpa', price: 5000, grandpa: true, thug: true, glb: 'grandpa_thug', desc: 'Shades on, no fear, no mercy. He never once smiled in a photo.' },
   ],
   slendrina: [
     { id: 'default', name: 'The Cellar', price: 0, desc: 'Her torn white dress, her long black hair, and those eyes.' },

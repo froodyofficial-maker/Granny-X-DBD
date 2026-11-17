@@ -24,17 +24,23 @@ async function bytes(name) {
   throw last;
 }
 // height (m) and which way the raw model faces
-const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI } };
+const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI },
+  // 1.4.4 outfits (their own meshes on Granny's / Grandpa's rig): bind = how to straighten the file's skeleton first
+  granny_bloody: { bind: 'fit', reskin: true }, granny_nightmare: { bind: 'fit', reskin: true }, granny_witch: { bind: 'fit', reskin: true },
+  granny_santa: { h: 1.82, yaw: 0, bind: 'pure' }, grandpa_thug: { mesh: true }, victim_car: { mesh: true } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
     const S = SPEC[name];
-    if (S.anim) { M[name] = { g }; return M[name]; }
+    if (S.reskin) { toBindPose(g.scene); g.scene.updateMatrixWorld(true); }
+    if (S.anim || S.mesh || S.reskin) { M[name] = { g }; for (const cb of (waiters[name] || []).splice(0)) { try { cb(); } catch (e) { console.error(e); } } return M[name]; }
+    if (S.bind === 'fit') toBindPose(g.scene); else if (S.bind === 'pure') pureBind(g.scene); // (their skeletons are bent out of shape in the files)
+    if (S.rx) { g.scene.rotation.x = S.rx; g.scene.updateMatrixWorld(true); } // (Z-up files)
     if (name === 'angeline') { toBindPose(g.scene); } // animated in code from her T-pose (see animateAngeline)
     if (name === 'nosferatu') g.scene.traverse(o => { if (o.isMesh && /skugga/i.test(o.material && o.material.name || '')) o.visible = false; }); // his file's painted ground shadow
     // measure in the first frame of the idle clip (the rest pose isn't a standing pose)
     const probe = cloneSkinned(g.scene), mx = new THREE.AnimationMixer(probe);
-    const idle = name === 'angeline' ? null : g.animations.find(c => /^idle$/i.test(c.name)) || g.animations[0];
+    const idle = name === 'angeline' || S.bind ? null : g.animations.find(c => /^idle$/i.test(c.name)) || g.animations[0];
     if (idle) { mx.clipAction(idle).play(); mx.update(0); }
     probe.updateMatrixWorld(true);
     if (name === 'slendrina') seatHair(probe, g.scene);
@@ -89,6 +95,22 @@ function toBindPose(scene) {
       if (bind.has(b.parent)) m.copy(bind.get(b.parent)).invert().multiply(bind.get(b));
       else m.copy(b.parent.matrixWorld).invert().multiply(bind.get(b)); // the top bone
       m.decompose(b.position, b.quaternion, b.scale);
+    }
+  });
+  scene.updateMatrixWorld(true);
+}
+// the plain bind pose: every bone exactly where the file's inverse bind matrices say (Santa Granny's file: its joints are
+// right, its rest pose is not)
+function pureBind(scene) {
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => {
+    if (!o.isSkinnedMesh) return;
+    const sk = o.skeleton, bind = new Map(), base = o.parent.matrixWorld;
+    sk.bones.forEach((b, i) => bind.set(b, new THREE.Matrix4().copy(base).multiply(o.bindMatrix).multiply(new THREE.Matrix4().copy(sk.boneInverses[i]).invert())));
+    const m = new THREE.Matrix4();
+    for (const b of sk.bones) {
+      const P = bind.has(b.parent) ? bind.get(b.parent) : b.parent.matrixWorld;
+      m.copy(P).invert().multiply(bind.get(b)); m.decompose(b.position, b.quaternion, b.scale); b.updateMatrixWorld(true);
     }
   });
   scene.updateMatrixWorld(true);
@@ -307,6 +329,7 @@ class AnimRig {
       if (!o.isMesh || !o.visible) return;
       o.castShadow = true; o.frustumCulled = false;
       if (/hat_santa/i.test(o.name)) o.visible = !!sk.santa; // her Christmas hat, only for that outfit
+      if (/EyesLock/i.test(o.name)) o.visible = false;       // (shut eyelids in the outfit files)
       if (!mats.has(o.material)) mats.set(o.material, this.material(o.material, sk, lite));
       o.material = mats.get(o.material);
       this.meshes.push(o);
@@ -319,7 +342,7 @@ class AnimRig {
     }
     this.mixer = new THREE.AnimationMixer(model);
     this.acts = {};
-    for (const clip of name === 'angeline' ? [] : D.g.animations) { const a = this.mixer.clipAction(clip); a.enabled = true; a.setEffectiveWeight(0); a.play(); this.acts[clip.name] = a; }
+    for (const clip of name === 'angeline' || (SPEC[name] && SPEC[name].bind) ? [] : D.g.animations) { const a = this.mixer.clipAction(clip); a.enabled = true; a.setEffectiveWeight(0); a.play(); this.acts[clip.name] = a; }
     this.w = Object.fromEntries(Object.keys(this.acts).map(k => [k, 0]));
     const first = this.acts.idle ? 'idle' : Object.keys(this.acts)[0];
     if (first) { this.w[first] = 1; this.acts[first].setEffectiveWeight(1); }
@@ -330,6 +353,7 @@ class AnimRig {
     const fix = /^(TextureAtlasGrandpa|Shotgun)$/.test(src.name || '');
     const col = fix ? new THREE.Color(0.92, 0.92, 0.92) : src.color;
     let m = lite ? new THREE.MeshLambertMaterial({ color: col, map: src.map || null, side: src.side, transparent: src.transparent, alphaTest: src.alphaTest }) : src.clone();
+    m.name = src.name || '';
     if (fix) { m.color = col.clone(); if (m.emissive) m.emissive.setRGB(0, 0, 0); }
     for (const t of [m.map, m.normalMap]) if (t && t.anisotropy !== GFX.aniso) { t.anisotropy = GFX.aniso; t.needsUpdate = true; }
     if (sk.tint != null) m.color = new THREE.Color(col).lerp(new THREE.Color(sk.tint), sk.tintK ?? 0.5);
@@ -348,8 +372,9 @@ class AnimRig {
 }
 const base = n => n.replace(/_\d+$/, '').replace(/_/g, ' ').trim();
 class GrannyRig extends AnimRig {
-  constructor(sk, lite) {
-    super('granny', sk, lite);
+  constructor(sk, lite, model = 'granny') {
+    super(model, sk, lite);
+    this.skinGlb = model !== 'granny' ? model : '';
     this.kind = 'killer'; this.killer = 'granny'; this.glb = true; this.granny = true;
     // the puppet: Granny (7)'s skeleton playing her clips, never drawn
     const src = M.granny_anims.g.scene.clone(true), sh = new THREE.Group();
@@ -430,9 +455,124 @@ export function makeGrannyGlb(sk = {}, lite = false) {
     // Granny's states -> his clips
     R.clipMap = { idle: 'idle', Walk: 'walk', Hit: 'attack', Shoot: 'shootGun', arrowHit: 'arrowHit', pepperHit: 'peppered', freezeTrap: 'frozen', Look: 'search', lookBed: 'underbed' };
     R.root.traverse(o => { if (o.isMesh && /Glasses|Hat_Santa|RedEyes|Ragdoll/i.test(o.name)) o.visible = false; });
+    if (sk.thug && M.grandpa_thug) { try { reskin(R, 'grandpa_thug', sk, lite, false); R.skinGlb = 'grandpa_thug'; } catch (e) { console.warn('Sigma Grandpa', e); } }
     return R;
   }
-  return grannyReady() ? new GrannyRig(sk, lite) : null;
+  if (!grannyReady()) return null;
+  if (sk.glb && M[sk.glb] && SPEC[sk.glb] && SPEC[sk.glb].reskin) {
+    const R = new GrannyRig(sk, lite);
+    try { reskin(R, sk.glb, sk, lite, true); R.skinGlb = sk.glb; } catch (e) { console.warn(sk.glb, e); }
+    return R;
+  }
+  return sk.glb && M[sk.glb] ? new GrannyRig(sk, lite, sk.glb) : new GrannyRig(sk, lite);
+}
+// 1.4.4 outfits that bring their own model, loaded only when someone wears one
+// Bloody Granny: "Granny Animated Nightmare" by Unit games (sketchfab.com/UnitGames.445); Granny: Nightmare Mode: "Nightmare
+// Granny (4)" by Yandu27; Santa Granny: "Santa Granny - Granny in Christmas Theme" by Arthurzin (sketchfab.com/arthurbat64);
+// Witch Granny: "DVloper - Granny (Official Model, Halloween)" by danielthesecond; Sigma Grandpa: "GRANNY 3 GRANDPA THUG" by
+// Dark Phantom Thunderball (sketchfab.com/dpt); all CC BY 4.0
+export const loadSkinModel = name => load(name);
+export const skinModelReady = name => !!M[name];
+// An outfit model moved onto the game's own rig (Granny's / Grandpa's), so it plays exactly their animations: the outfit is
+// taken as it stands in its own rest pose (Sigma Grandpa's Thug mesh has no skeleton at all; Bloody / Nightmare / Witch
+// Granny's skeletons are straightened by toBindPose), fitted over the rig's body (same height, feet and middle), and every
+// vertex takes the bone weights of the nearest vertex of the rig's body and is moved into its bind space.
+// Worked out once per outfit, shared by everyone wearing it.
+const reskinCache = {};
+function bodyOf(root) { let b = null; root.traverse(o => { if (o.isSkinnedMesh && !/Ragdoll/i.test(o.material && o.material.name || '') && (!b || o.geometry.attributes.position.count > b.geometry.attributes.position.count)) b = o; }); return b; }
+function reskin(R, name, sk, lite, hideAll) {
+  const body = bodyOf(R.holder);
+  if (!body) return;
+  R.root.updateMatrixWorld(true);
+  const key = name + ':' + R.killer;
+  if (!reskinCache[key]) {
+    // the rig's body as it stands now (rest), in world space
+    const P = body.geometry.attributes.position, n = P.count, gw = new Float32Array(n * 3), v = new THREE.Vector3(), box = new THREE.Box3();
+    for (let i = 0; i < n; i++) { v.fromBufferAttribute(P, i); body.applyBoneTransform(i, v); v.applyMatrix4(body.matrixWorld); gw.set([v.x, v.y, v.z], i * 3); box.expandByPoint(v); }
+    // the outfit's meshes where they stand (skinned ones as posed), in its own space
+    const src = M[name].g.scene; src.updateMatrixWorld(true);
+    const parts = [], sb = new THREE.Box3(), srcBody = bodyOf(src);
+    src.traverse(o => {
+      if (!o.isMesh || /EyesLock|Hat_Santa|Ragdoll/i.test(o.name) || /Hat_Santa/i.test(o.material && o.material.name || '')) return;
+      const g = o.geometry, pp = g.attributes.position, wp = new Float32Array(pp.count * 3);
+      for (let i = 0; i < pp.count; i++) { v.fromBufferAttribute(pp, i); if (o.isSkinnedMesh) o.applyBoneTransform(i, v); v.applyMatrix4(o.matrixWorld); wp.set([v.x, v.y, v.z], i * 3); if (!srcBody || o === srcBody) sb.expandByPoint(v); }
+      parts.push({ o, wp });
+    });
+    const k = (box.max.y - box.min.y) / Math.max(1e-6, sb.max.y - sb.min.y), sc = sb.getCenter(new THREE.Vector3()), gc = box.getCenter(new THREE.Vector3());
+    // which way the outfit faces: turn it (in quarter turns about the vertical) so its eyes and its bat sit where the rig's do
+    let turn = 0;
+    {
+      const at = (root, re) => { const c = new THREE.Vector3(); let n2 = 0; root.traverse(o => { if (o.isMesh && re.test(o.material && o.material.name || '')) { c.add(new THREE.Box3().setFromObject(o, true).getCenter(new THREE.Vector3())); n2++; } }); return n2 ? c.divideScalar(n2) : null; };
+      let best = -Infinity;
+      for (let q = 0; q < 4; q++) {
+        const a = q * Math.PI / 2, rot = (p, c) => { const ox = p.x - c.x, oz = p.z - c.z; return [ox * Math.cos(a) + oz * Math.sin(a), -ox * Math.sin(a) + oz * Math.cos(a)]; };
+        let sc2 = 0;
+        for (const re of [/^material$/, /ASHSEN|Blood/]) {
+          const se = at(src, re), te = at(R.holder, re); if (!se || !te) continue;
+          const [rx, rz] = rot(se, sc), tx = te.x - gc.x, tz = te.z - gc.z, L = Math.hypot(rx, rz) * Math.hypot(tx, tz) || 1;
+          sc2 += (rx * tx + rz * tz) / L;
+        }
+        // and the arms (the wide way) along the rig's arms
+        const ex = sb.max.x - sb.min.x, ez = sb.max.z - sb.min.z, wide = (q % 2 ? ez : ex) >= (q % 2 ? ex : ez);
+        sc2 += wide === ((box.max.x - box.min.x) >= (box.max.z - box.min.z)) ? 2 : 0;
+        if (sc2 > best) { best = sc2; turn = a; }
+      }
+    }
+    const ct = Math.cos(turn), st = Math.sin(turn);
+    const SI = body.geometry.attributes.skinIndex, SW = body.geometry.attributes.skinWeight, skel = body.skeleton;
+    const bm = body.bindMatrix, bmi = body.bindMatrixInverse, mw = body.matrixWorld;
+    const boneM = skel.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, skel.boneInverses[i]));
+    // nearest vertex of the rig's body (a few thousand of them: a straight search is quick enough, once per outfit)
+    // the 4 nearest (blended by distance: seams between the arms and the dress bend smoothly)
+    const nq = [0, 0, 0, 0], nd = [0, 0, 0, 0];
+    const nearest4 = (x, y, z) => {
+      nd.fill(Infinity);
+      for (let q = 0; q < n; q++) {
+        const dx = gw[q * 3] - x, dy = gw[q * 3 + 1] - y, dz = gw[q * 3 + 2] - z, d = dx * dx + dy * dy + dz * dz;
+        if (d < nd[3]) { let k2 = 3; while (k2 > 0 && nd[k2 - 1] > d) { nd[k2] = nd[k2 - 1]; nq[k2] = nq[k2 - 1]; k2--; } nd[k2] = d; nq[k2] = q; }
+      }
+      const acc = new Map();
+      for (let c = 0; c < 4; c++) { const wv = 1 / (Math.sqrt(nd[c]) + 1e-3); for (let e = 0; e < 4; e++) { const bi = SI.getComponent(nq[c], e), bw = SW.getComponent(nq[c], e); if (bw > 0) acc.set(bi, (acc.get(bi) || 0) + bw * wv); } }
+      const top = [...acc].sort((a, b) => b[1] - a[1]).slice(0, 4), sum = top.reduce((a, t) => a + t[1], 0) || 1;
+      return top.map(([bi, bw]) => [bi, bw / sum]);
+    };
+    reskinCache[key] = parts.map(({ o, wp }) => {
+      const g = new THREE.BufferGeometry();
+      for (const a of ['normal', 'uv']) if (o.geometry.attributes[a]) g.setAttribute(a, o.geometry.attributes[a].clone());
+      if (o.geometry.index) g.setIndex(o.geometry.index.clone());
+      const cnt = wp.length / 3, pos = new Float32Array(cnt * 3), si = new Uint16Array(cnt * 4), sw = new Float32Array(cnt * 4);
+      const A = new THREE.Matrix4(), S = new THREE.Matrix4(), w = new THREE.Vector3(), nrm = new THREE.Vector3(), N3 = new THREE.Matrix3(), nn = g.attributes.normal;
+      // the outfit's normals are in its own mesh space: carry them to world first
+      const nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld);
+      // separate pieces (bat, hat, broom, hair, eyes, legs) ride rigidly on the bone they hang from in their own file
+      let rigid = -1;
+      if (!o.isSkinnedMesh) {
+        const norm = nm2 => nm2.replace(/[_ ]\d+$/, '').replace(/[_ ]+/g, ' ').trim().toLowerCase();
+        let a = o.parent; while (a && !a.isBone) a = a.parent;
+        if (a) rigid = skel.bones.findIndex(b => norm(b.name) === norm(a.name));
+      }
+      for (let i = 0; i < cnt; i++) {
+        { const ox = wp[i * 3] - sc.x, oz = wp[i * 3 + 2] - sc.z; w.set((ox * ct + oz * st) * k + gc.x, (wp[i * 3 + 1] - sb.min.y) * k + box.min.y, (-ox * st + oz * ct) * k + gc.z); }
+        const ws = rigid >= 0 ? [[rigid, 1]] : nearest4(w.x, w.y, w.z);
+        S.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        for (let c = 0; c < 4; c++) { const bi = ws[c] ? ws[c][0] : 0, bw = ws[c] ? ws[c][1] : 0; si[i * 4 + c] = bi; sw[i * 4 + c] = bw; if (bw > 0) for (let e = 0; e < 16; e++) S.elements[e] += boneM[bi].elements[e] * bw; }
+        A.copy(mw).multiply(bmi).multiply(S).multiply(bm).invert();
+        w.applyMatrix4(A); pos.set([w.x, w.y, w.z], i * 3);
+        if (nn) { N3.setFromMatrix4(A); nrm.fromBufferAttribute(nn, i).applyMatrix3(nm); nrm.set(nrm.x * ct + nrm.z * st, nrm.y, -nrm.x * st + nrm.z * ct).applyMatrix3(N3).normalize(); nn.setXYZ(i, nrm.x, nrm.y, nrm.z); }
+      }
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+      g.computeBoundingSphere();
+      return { g, mat: o.material };
+    });
+  }
+  if (hideAll) R.holder.traverse(o => { if (o.isMesh && !R.aura.includes(o)) o.visible = false; }); else body.visible = false;
+  R.meshes = R.meshes.filter(m => m.visible);
+  for (const part of reskinCache[key]) {
+    const m = new THREE.SkinnedMesh(part.g, R.material(part.mat, sk, lite));
+    m.bind(body.skeleton, body.bindMatrix); m.position.copy(body.position); m.quaternion.copy(body.quaternion); m.scale.copy(body.scale);
+    m.castShadow = true; m.frustumCulled = false; body.parent.add(m); R.meshes.push(m);
+  }
 }
 // Spider Mom: crawls, sniffs about, screeches
 // The Child of Slendrina (killer sidekick): "DVloper - Slendrina's Child (Official Model)" by danielthesecond

@@ -16,7 +16,7 @@ import { loadRealism, realismReady } from './realism.js';
 import { loadSlappy, slappyReady } from './slappyGlb.js';
 import { loadStatic } from './glbModels.js';
 import { loadScene, sceneReady } from './sceneGlb.js';
-import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadNosferatu, nosferatuReady, loadChild, childReady } from './grannyGlb.js';
+import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadNosferatu, nosferatuReady, loadChild, childReady, loadSkinModel, skinModelReady } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
@@ -218,6 +218,12 @@ function startBG() {
 // Granny x DBD only needs Granny, Grandpa, Spider Mom, her house and the survivors' items
 loadStatic('beartrap'); loadStatic('taser');
 loadScene('granny_map'); loadScene('granny1_map'); loadScene('forest_map');
+// an outfit's own model finished loading: redraw anything showing that character
+addEventListener('gdbd-skin', e => {
+  const c = e.detail.char; forgetArt(c);
+  if (menu && menu.killerChar === c) menu.setKiller(c, menu.killerSkin);
+  if (menu && menu.showRig && menu.showFor && menu.showFor.startsWith(c + ':')) { menu.showFor = null; try { if (!$('store').classList.contains('hidden')) renderStore(); } catch {} }
+});
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
 loadGrandpa().then(m => { if (m) { forgetArt('grandpa'); if (menu && menu.killerChar === 'grandpa') menu.setKiller('grandpa', menu.killerSkin); } });
 loadSlendrina().then(m => { if (m) { forgetArt('slendrina'); if (menu && menu.killerChar === 'slendrina') menu.setKiller('slendrina', menu.killerSkin); } });
@@ -227,6 +233,9 @@ loadNosferatu().then(m => { if (m) { forgetArt('nosferatu'); if (menu && menu.ki
 const spiderOk = () => !!window.__nbSpiderLoaded;
 loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; }); loadChild();
 async function waitForModels(need) {
+  // killers wearing an outfit with its own model (1.4.4)
+  const glbs = (need && need.glbs || []).filter(n => !skinModelReady(n));
+  if (glbs.length) { loading(true, 'Granny is getting changed…'); await Promise.race([Promise.all(glbs.map(loadSkinModel)), new Promise(r => setTimeout(r, 25000))]); }
   if (need && need.spider && !realismReady('spiderman')) { loading(true, 'Spider-Man is swinging in…'); await Promise.race([loadRealism('spiderman'), new Promise(r => setTimeout(r, 25000))]); }
   // the Granny's House scenery (a big model) must be in before any match can use the map
   if (!sceneReady('granny_map') || !sceneReady('granny1_map') || !sceneReady('forest_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all([loadScene('granny_map'), loadScene('granny1_map'), loadScene('forest_map')]), new Promise(r => setTimeout(r, 25000))]); }
@@ -1143,7 +1152,7 @@ async function startHostMatch(roster, opts) {
   loading(true, 'Entering the fog…');
   await nextFrame();
   // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
-  await waitForModels({ spider: roster.some(r => r.char === 'spiderman'), granny: true, chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
+  await waitForModels({ spider: roster.some(r => r.char === 'spiderman'), glbs: roster.map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), granny: true, chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1430,7 +1439,7 @@ setInterval(() => {
 async function startClientMatch(m) {
   loading(true, 'Entering the fog…');
   await nextFrame();
-  await waitForModels({ spider: (m.roster || []).some(r => r.char === 'spiderman'), granny: true, chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
+  await waitForModels({ spider: (m.roster || []).some(r => r.char === 'spiderman'), glbs: (m.roster || []).map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), granny: true, chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');

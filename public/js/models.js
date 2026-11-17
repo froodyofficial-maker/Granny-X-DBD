@@ -5,7 +5,7 @@ import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeSlappy, animateSlappy } from './slappyGlb.js';
-import { makeGrannyGlb, animateGranny, makeSlendrinaGlb, animateSlendrina, makeAngelineGlb, animateAngeline, makeNosferatuGlb, animateNosferatu } from './grannyGlb.js';
+import { makeGrannyGlb, animateGranny, makeSlendrinaGlb, animateSlendrina, makeAngelineGlb, animateAngeline, makeNosferatuGlb, animateNosferatu, loadSkinModel, skinModelReady } from './grannyGlb.js';
 import { makeRealism } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
@@ -300,6 +300,9 @@ export function makeKiller(id, sk = {}) {
   }
   if (id === 'bateman') return makeBateman(sk);
   if (id === 'chucky') return (sk.slappy && makeSlappy(sk, DETAIL.lite)) || makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
+  // an outfit with its own model (1.4.4): fetched on first use; until then the plain look stands in, and everyone who
+  // shows characters (menu, portraits, the match) hears 'gdbd-skin' when it's ready
+  if (sk.glb && !skinModelReady(sk.glb)) loadSkinModel(sk.glb).then(m => { if (m) dispatchEvent(new CustomEvent('gdbd-skin', { detail: { glb: sk.glb, char: id } })); });
   if (id === 'granny') { const g = makeGrannyGlb(sk, DETAIL.lite); if (g) return g; }
   if (id === 'grandpa') { const g = makeGrannyGlb({ ...sk, grandpa: true }, DETAIL.lite); if (g) return g; id = 'granny'; } // (until his model is in: Granny's stand-in)
   if (id === 'slendrina') { const g = makeSlendrinaGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
