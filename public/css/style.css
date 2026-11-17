@@ -1064,3 +1064,28 @@ html:not(.mobile) .mobile-only { display: none !important; }
 .ad-chip { padding: 4px 10px; border: 1px solid var(--ad, #888); background: rgba(0,0,0,.3); color: inherit; font: inherit; font-size: 13px; cursor: pointer; opacity: .75; }
 .ad-chip.on { background: var(--ad, #888); color: #000; opacity: 1; }
 .ad-row .lo2-lbl { white-space: nowrap; }
+/* ---------- 1.3.2: codes + secret outfits ---------- */
+.of.secret { --rc: #d4a020; } .cs-detail.secret { --rc: #ffcc40; }
+.cd-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; padding: 8px 4px; }
+.cd-card { padding: 18px 20px; border: 1px solid var(--line); background: rgba(0,0,0,.45); border-radius: 6px; }
+.cd-card h3 { margin: 0 0 6px; font-family: var(--display); font-size: 30px; letter-spacing: .04em; color: var(--bone); font-weight: 400; }
+.cd-card p { color: var(--dim); margin: 0 0 12px; }
+.cd-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cd-row input { flex: 1; min-width: 180px; font-family: monospace; font-size: 20px; letter-spacing: .12em; text-transform: uppercase; padding: 8px 10px; }
+.cd-row select { flex: 1; min-width: 140px; background: #0d0a0a; color: var(--bone); border: 1px solid var(--line); padding: 8px 10px; font-family: var(--cond); font-size: 16px; border-radius: 3px; }
+.cd-msg { min-height: 1.4em; margin: 10px 0 0 !important; } .cd-msg.ok { color: #7ee08a !important; } .cd-msg.bad { color: #ff7a6a !important; }
+.cd-gift { display: flex; gap: 14px; align-items: center; margin-top: 12px; }
+.cd-gift img { width: 96px; height: 96px; border-radius: 6px; background: #0a0606; }
+.cd-gift b { display: block; font-family: var(--cond); font-size: 22px; color: var(--bone); } .cd-gift small { color: var(--dim); }
+.cd-buy { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.cd-list { margin-top: 16px; display: grid; gap: 6px; } .cd-list > small { color: var(--dim); letter-spacing: .15em; text-transform: uppercase; font-size: 11px; }
+.cd-code { display: flex; gap: 10px; align-items: center; padding: 6px 8px; background: rgba(255,255,255,.04); border-radius: 4px; }
+.cd-code code { font-size: 16px; letter-spacing: .1em; color: #ffd890; } .cd-code span { flex: 1; color: var(--dim); font-size: 13px; }
+/* 1.4.4: Redeem Code gets its own main-menu button and a big, plain redeem box at the top of Store > Codes */
+.mainnav button[data-act="codes"] span { color: #ffd890; }
+.cd-hero { grid-column: 1 / -1; border-color: rgba(255, 210, 140, .45); background: linear-gradient(180deg, rgba(60, 40, 10, .5), rgba(0, 0, 0, .5)); }
+.cd-hero h3 { font-size: 38px !important; }
+.cd-hero .cd-row input { font-size: 28px; padding: 12px 14px; }
+.cd-hero .cd-row .btn { font-size: 22px; padding: 0 28px; }
+.cd-kinds { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; color: var(--dim); font-size: 14px; }
+.cd-kinds b { color: var(--bone); }

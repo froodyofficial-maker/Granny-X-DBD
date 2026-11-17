@@ -11,6 +11,7 @@ import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
+import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
@@ -334,7 +335,7 @@ function killerViewParts(id, sk) {
   if (!R) return {};
   const out = {};
   if (R.glb || R.staticGlb) {
-    if (!GLB_KILLERS.has(id)) return {};
+    if (!GLB_KILLERS.has(id) || sk.glb === 'freddy') return {}; // (Freddy: plain fur arms, made in makeViewModel)
     const o = FP_OPT[id] || {};
     try { out.R = bakeArm(R.root, 'R', o); out.L = bakeArm(R.root, 'L', { ...o, noRigid: true, pitch: 0 }); } catch (e) { console.warn('first-person arms:', e); }
     if (!out.R) delete out.R; if (!out.L) delete out.L;
@@ -964,7 +965,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb === 'freddy' && !c.rig.freddy && realismReady('freddy')) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);

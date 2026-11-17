@@ -328,6 +328,16 @@ export const LORE = {};
 
 
 // ---------------- Store: skins (bought with embers) ----------------
+// ---------- codes (back in 1.4.4, from 1.3.2): secret Discord codes and gift codes ----------
+// secret codes: only their salted SHA-256 (codes.js); each one unlocks Granny's legendary Freddy Fazbear outfit
+export const SECRET_CODES = ["a6fb993d580ca12455d500af871be912e902f2ed21e22e270ca4c5833b09439d", "acf3b8fe9a31f8d8625419ab93a1681e3811330d23e013bcf2965c2ec657aaae", "52517749c1e9d61e4b1c580b718f8e9082446bd4d0bce3755cbc6918d6c755dc", "bd5977e481fdafa95fc238758c7ac53c030a5d241a3cb27b1d42d2aa01d5adcd", "11eea88346def0fb7e43a7b450776842f99f3307859d9b6282a31961bae1dc25", "56f719f05edae38085c1073e6b2c3de395ae0107b3644f984d83a9d5f8a2190f", "7bff9130dc1416c1a7d925add43aa660daf01a1dc2f1a0d839ef6d796523cc0a", "aa0ec1e4854f2e5df076d40da49aa8e735aa7c8ad61e99201a792271145282b4", "617dde538cb62f8050b88286870607fc05f40b6be75e3998f9f1f0095a1a8849", "445358acb7fba3b30c076874c6e309a63be51647781d474abc3316376d947ee7"];
+// gift codes carry a character and an outfit by position in these lists: 1.3.x's order first (codes made in 1.3.2 / 1.3.3
+// still work), new outfits only ever appended
+export const GIFT_CHARS = ['mara', 'eli', 'june', 'tomas', 'granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu'];
+export const GIFT_SKINS = {
+  mara: ['default', 'nightshift', 'crimson', 'medic'], eli: ['default', 'overalls', 'hazard', 'midnight'], june: ['default', 'autumn', 'ghost', 'reporter'], tomas: ['default', 'camo', 'firewatch', 'searchlight'],
+  granny: ['default', 'bloodbath', 'ghost', 'freddy', 'bloody', 'nightmare', 'santa', 'witch'], grandpa: ['default', 'bloodbath', 'sigma'], slendrina: ['default', 'pale'], angeline: ['default', 'pale'], nosferatu: ['default', 'plague', 'blood'],
+};
 export const SKINS = {
   mara: [
     { id: 'default', name: 'Field Jacket', price: 0 },
@@ -411,6 +421,7 @@ export const SKINS = {
     { id: 'nightmare', name: 'Granny: Nightmare Mode', price: 8000, glb: 'granny_nightmare', desc: 'The Granny from Nightmare Mode: pale as ash, eyes like coals. The house gets darker when she walks in.' },
     { id: 'santa', name: 'Santa Granny', price: 5000, glb: 'granny_santa', santa: true, desc: 'A Santa hat, a white beard, and a sack she will not let you look inside.' },
     { id: 'witch', name: 'Witch Granny', price: 6000, glb: 'granny_witch', desc: 'A pointed hat, a crooked nose and her broom. She still prefers the bat.' },
+    { id: 'freddy', name: 'Freddy Fazbear', price: 9000, secret: true, glb: 'freddy', desc: 'Legendary. The pizzeria\'s star performer, still running after closing time, with her bat in his paw. Unlocked with a secret code. (Model: "FNaF 1 Freddy Fazbear Rigged" by ShadowSupreme, Sketchfab.)' },
     { id: 'longnight', name: 'The Long Night', price: -1, pass: true, tint: 0x3a2a5a, tintK: 0.45, glow: 0x7a40c0, glowK: 0.3, desc: 'Season Pass reward (tier 30). Dressed for a night that never ends.' },
   ],
   grandpa: [

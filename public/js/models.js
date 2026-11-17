@@ -6,7 +6,7 @@ import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeSlappy, animateSlappy } from './slappyGlb.js';
 import { makeGrannyGlb, animateGranny, makeSlendrinaGlb, animateSlendrina, makeAngelineGlb, animateAngeline, makeNosferatuGlb, animateNosferatu, loadSkinModel, skinModelReady } from './grannyGlb.js';
-import { makeRealism } from './realism.js';
+import { makeRealism, loadRealism, realismReady } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
 import { GFX, realistic, surface } from './gfx.js';
@@ -302,7 +302,8 @@ export function makeKiller(id, sk = {}) {
   if (id === 'chucky') return (sk.slappy && makeSlappy(sk, DETAIL.lite)) || makeChuckyGlb(sk, DETAIL.lite) || makeDoll(sk);
   // an outfit with its own model (1.4.4): fetched on first use; until then the plain look stands in, and everyone who
   // shows characters (menu, portraits, the match) hears 'gdbd-skin' when it's ready
-  if (sk.glb && !skinModelReady(sk.glb)) loadSkinModel(sk.glb).then(m => { if (m) dispatchEvent(new CustomEvent('gdbd-skin', { detail: { glb: sk.glb, char: id } })); });
+  if (sk.glb && sk.glb !== 'freddy' && !skinModelReady(sk.glb)) loadSkinModel(sk.glb).then(m => { if (m) dispatchEvent(new CustomEvent('gdbd-skin', { detail: { glb: sk.glb, char: id } })); });
+  if (sk.glb === 'freddy' && !realismReady('freddy')) loadRealism('freddy').then(m => { if (m) dispatchEvent(new CustomEvent('gdbd-skin', { detail: { glb: 'freddy', char: id } })); });
   if (id === 'granny') { const g = makeGrannyGlb(sk, DETAIL.lite); if (g) return g; }
   if (id === 'grandpa') { const g = makeGrannyGlb({ ...sk, grandpa: true }, DETAIL.lite); if (g) return g; id = 'granny'; } // (until his model is in: Granny's stand-in)
   if (id === 'slendrina') { const g = makeSlendrinaGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
@@ -806,7 +807,7 @@ export function makeViewModel(id, vsk = {}, real = {}) {
   const g = new THREE.Group();
   const arm = new THREE.Group(); g.add(arm);          // right arm + weapon, animated as a whole
   const add = (parent, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.scale.set(sx, sy, sz); parent.add(me); return me; };
-  const skin = { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
+  const skin = vsk.glb === 'freddy' ? 0x6a4628 : { butcher: 0x9a7a68, wisp: 0xc9d6da, harrower: 0x3a2c20, lamplighter: 0x1a1d1a, foreman: 0xb89990, slimer: 0x7aff4a, bateman: 0xe9c6a8, granny: 0x9a8a80 }[id];
   const bk = id === 'butcher' ? 1.5 : id === 'harrower' ? 1.25 : id === 'wisp' ? 0.85 : 1;
   // (Batman: black armoured sleeves and gauntlets)
   const armParts = [], leftParts = [];
@@ -838,6 +839,9 @@ export function makeViewModel(id, vsk = {}, real = {}) {
       add(arm, G.box(0.03, 0.2, 0.15), mat(0xb8bcc0, { map: 'metal', metal: 0.85, rough: 0.25 }), 0, 0.09, -0.56);
     }
     tip.position.set(0, 0.18, -0.6); base.position.set(0, 0.02, -0.3);
+  } else if (id === 'granny' && vsk.glb === 'freddy') {
+    // Freddy Fazbear (1.3.3): no bat, a swipe of the paw
+    tip.position.set(0, 0.02, -0.14); base.position.set(0, 0, 0.05);
   } else if (id === 'granny') {
     // her bloody baseball bat: one piece, gripped at the handle, tip raised a little
     const bat = new THREE.Group(); bat.position.set(0, 0.0, -0.02); bat.rotation.x = 0.28; arm.add(bat);

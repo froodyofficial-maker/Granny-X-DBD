@@ -11,11 +11,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { auraSkinMat } from './foremanGlb.js';
 import { GFX } from './gfx.js';
+import { b64buf, heavy } from './heavy.js';
+import { freddyOver } from './realism.js';
 
 const M = {}, loading = {}, waiters = {};
 async function bytes(name) {
   const el = document.getElementById('nb-' + name + '-glb');
-  if (el && el.textContent.trim()) { const s = atob(el.textContent.trim()), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; }
+  if (el && el.textContent.trim()) { return b64buf(el.textContent.trim()); }
   const dev = !!document.querySelector('script[type=importmap]');
   let last;
   for (const url of dev ? [`models/${name}.glb`, `public/models/${name}.glb`] : [`public/models/${name}.glb`, `models/${name}.glb`]) {
@@ -30,7 +32,7 @@ const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandp
   granny_santa: { h: 1.82, yaw: 0, bind: 'pure' }, grandpa_thug: { mesh: true }, victim_car: { mesh: true } };
 function load(name) {
   if (loading[name]) return loading[name];
-  loading[name] = bytes(name).then(buf => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then(g => {
+  loading[name] = bytes(name).then(buf => heavy(() => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej)))).then(g => {
     const S = SPEC[name];
     if (S.reskin) { toBindPose(g.scene); g.scene.updateMatrixWorld(true); }
     if (S.anim || S.mesh || S.reskin) { M[name] = { g }; for (const cb of (waiters[name] || []).splice(0)) { try { cb(); } catch (e) { console.error(e); } } return M[name]; }
@@ -464,6 +466,7 @@ export function makeGrannyGlb(sk = {}, lite = false) {
     try { reskin(R, sk.glb, sk, lite, true); R.skinGlb = sk.glb; } catch (e) { console.warn(sk.glb, e); }
     return R;
   }
+  if (sk.glb === 'freddy') { const R = new GrannyRig(sk, lite); freddyOver(R); return R; } // (legendary outfit from a Discord code; plain Granny until his model has loaded)
   return sk.glb && M[sk.glb] ? new GrannyRig(sk, lite, sk.glb) : new GrannyRig(sk, lite);
 }
 // 1.4.4 outfits that bring their own model, loaded only when someone wears one

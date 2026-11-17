@@ -27,7 +27,8 @@ import { initTouch, MOBILE, mobileText, openTouchEditor } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
 import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
-import { ADDONS, ADDON_SLOTS, cleanAddons } from './config.js';
+import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS } from './config.js';
+import { readCode, makeGift } from './codes.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
@@ -222,8 +223,16 @@ loadScene('granny_map'); loadScene('granny1_map'); loadScene('forest_map');
 addEventListener('gdbd-skin', e => {
   const c = e.detail.char; forgetArt(c);
   if (menu && menu.killerChar === c) menu.setKiller(c, menu.killerSkin);
-  if (menu && menu.showRig && menu.showFor && menu.showFor.startsWith(c + ':')) { menu.showFor = null; try { if (!$('store').classList.contains('hidden')) renderStore(); } catch {} }
+  if (menu && menu.showRig && menu.showFor && menu.showFor.startsWith(c + ':')) menu.showFor = null;
+  clearTimeout(window.__skinRedraw); window.__skinRedraw = setTimeout(() => { try { if (!$('store').classList.contains('hidden')) renderStore(); } catch {} }, 150);
 });
+// the Freddy Fazbear outfit (1.3.2, from a secret Discord code): a 5 MB model, loaded only for players who own it or meet
+// someone wearing it
+const ownsFreddy = () => !!profile.owned['granny:freddy'];
+function loadFreddy() {
+  return loadRealism('freddy').then(m => { if (!m) return; forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); try { if (!$('store').classList.contains('hidden')) { if (menu) menu.showFor = null; renderStore(); } } catch {} });
+}
+if (ownsFreddy()) setTimeout(loadFreddy, 1500);
 loadGranny().then(m => { if (m) { forgetArt('granny'); if (menu && menu.killerChar === 'granny') menu.setKiller('granny', menu.killerSkin); } });
 loadGrandpa().then(m => { if (m) { forgetArt('grandpa'); if (menu && menu.killerChar === 'grandpa') menu.setKiller('grandpa', menu.killerSkin); } });
 loadSlendrina().then(m => { if (m) { forgetArt('slendrina'); if (menu && menu.killerChar === 'slendrina') menu.setKiller('slendrina', menu.killerSkin); } });
@@ -234,7 +243,8 @@ const spiderOk = () => !!window.__nbSpiderLoaded;
 loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; }); loadChild();
 async function waitForModels(need) {
   // killers wearing an outfit with its own model (1.4.4)
-  const glbs = (need && need.glbs || []).filter(n => !skinModelReady(n));
+  if (need && need.glbs && need.glbs.includes('freddy') && !realismReady('freddy')) { loading(true, 'Someone brought a friend from the pizzeria…'); await Promise.race([loadRealism('freddy'), new Promise(r => setTimeout(r, 25000))]); }
+  const glbs = (need && need.glbs || []).filter(n => n !== 'freddy' && !skinModelReady(n));
   if (glbs.length) { loading(true, 'Granny is getting changed…'); await Promise.race([Promise.all(glbs.map(loadSkinModel)), new Promise(r => setTimeout(r, 25000))]); }
   if (need && need.spider && !realismReady('spiderman')) { loading(true, 'Spider-Man is swinging in…'); await Promise.race([loadRealism('spiderman'), new Promise(r => setTimeout(r, 25000))]); }
   // the Granny's House scenery (a big model) must be in before any match can use the map
@@ -317,6 +327,7 @@ const navActions = {
   settings: () => openPanel('p-settings', 'Settings'),
   help: () => openPanel('p-help', 'How to Play', true),
   store: () => openStore(),
+  codes: () => { openStore('codes'); setTimeout(() => { const i = $('cd-in'); if (i && !MOBILE) i.focus(); }, 80); },
   pass: () => openPanel('p-pass', 'Progress', true),
   test: () => { renderTest(); openPanel('p-test', 'Testing Area', true); },
 };
@@ -644,6 +655,7 @@ function renderStore() {
   else if (storeTab === 'collections') body.innerHTML = collectionsHTML();
   else if (storeTab === 'sidekicks') body.innerHTML = sidekicksHTML();
   else if (storeTab === 'addons') body.innerHTML = addonsHTML();
+  else if (storeTab === 'codes') body.innerHTML = codesHTML();
   else if (storeTab === 'app') body.innerHTML = appHTML();
   else body.innerHTML = charactersHTML();
   bindStore(body);
@@ -654,7 +666,7 @@ function chaptersHTML() { return ''; }
 function charactersHTML() {
   const chars = (storeRole === 'killer' ? Object.keys(KILLERS) : Object.keys(SURVIVORS)).filter(shownChar);
   if (!storeChar || !chars.includes(storeChar)) storeChar = profile[storeRole].char;
-  const list = SKINS[storeChar] || [];
+  const list = (SKINS[storeChar] || []).filter(sk => !sk.secret || ownsSkin(storeChar, sk)); // secret outfits only show once unlocked
   const sel = list.find(x => x.id === (storePreview || skinId(storeChar))) || list[0];
   const grid = chars.map(c => `<button class="cs-por ${c === storeChar ? 'on' : ''}" data-c="${c}"><img alt="" src="${art('portrait', c, skinId(c), 224, 224)}">${ownsChar(c) ? '' : `<i class="lock">${LIMITED(c) ? 'LIMITED' : 'DLC'}</i>`}<span>${esc(charName(c).replace(/^The /, ''))}</span></button>`).join('');
   const outfits = list.map(sk => {
@@ -678,7 +690,7 @@ function charactersHTML() {
     <div class="cs-sub"><b>${esc(charName(storeChar))}</b><span>Outfits</span></div>
     <div class="cs-outfits">${outfits}</div></div>${detail}`;
 }
-const bundleOf = c => { const items = (SKINS[c] || []).filter(sk => sk.price > 0); const left = items.filter(sk => !ownsSkin(c, sk)); const full = left.reduce((a, sk) => a + sk.price, 0); return { items, left, full, price: Math.round(full * 0.75 / 50) * 50 }; };
+const bundleOf = c => { const items = (SKINS[c] || []).filter(sk => sk.price > 0 && !sk.secret); const left = items.filter(sk => !ownsSkin(c, sk)); const full = left.reduce((a, sk) => a + sk.price, 0); return { items, left, full, price: Math.round(full * 0.75 / 50) * 50 }; };
 function collectionsHTML() {
   const cards = [...Object.keys(KILLERS), ...Object.keys(SURVIVORS)].filter(shownChar).map(c => {
     const b = bundleOf(c), done = !b.left.length, locked = !ownsChar(c);
@@ -697,6 +709,75 @@ function addonsHTML() {
   return `<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
     <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
 }
+// ---------- codes (1.3.2, back in 1.4.4 with its own main-menu button): secret codes, gift codes, backup codes ----------
+let giftChar = 'granny', giftSkin = '', codeMsg = null, codeTyped = ''; // kept across store redraws
+const giftable = c => (SKINS[c] || []).filter(sk => sk.price > 0 && !sk.secret);
+function codesHTML() {
+  const chars = GIFT_CHARS.filter(c => playable(c) && giftable(c).length);
+  if (!chars.includes(giftChar)) giftChar = chars[0];
+  const skins = giftable(giftChar); if (!skins.some(k => k.id === giftSkin)) giftSkin = skins[0] ? skins[0].id : '';
+  const sk = skins.find(k => k.id === giftSkin);
+  const mine = (profile.gifts || []).slice(-8).reverse();
+  return `<div class="cd-wrap">
+    <div class="cd-card cd-hero"><h3>Redeem a code</h3><p>Type or paste your code here and press Redeem.</p>
+      <div class="cd-row"><input id="cd-in" maxlength="4000" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" value="${esc(codeTyped)}"><button class="btn primary" id="cd-go">Redeem</button></div><p class="cd-msg ${codeMsg ? (codeMsg.ok ? 'ok' : 'bad') : ''}" id="cd-msg">${codeMsg ? esc(codeMsg.t) : ''}</p></div>
+    <div class="cd-card"><h3>Gift an outfit</h3><p>Buy an outfit for someone else: you get a code to send them, and whoever types it in gets the outfit.</p>
+      <div class="cd-row"><select id="cd-char">${chars.map(c => `<option value="${c}" ${c === giftChar ? 'selected' : ''}>${esc(charName(c))}</option>`).join('')}</select>
+      <select id="cd-skin">${skins.map(k => `<option value="${k.id}" ${k.id === giftSkin ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></div>
+      ${sk ? `<div class="cd-gift"><img alt="" src="${art('portrait', giftChar, sk.id, 160, 160)}"><div><b>${esc(sk.name)}</b><small>${esc(charName(giftChar))}</small><div class="cd-buy"><span class="ch-price">${price(sk.price)}</span><button class="btn primary" id="cd-buy">Buy as a gift</button></div></div></div>` : ''}
+      ${mine.length ? `<div class="cd-list"><small>Your gift codes</small>${mine.map(g => `<div class="cd-code"><code>${esc(g.code)}</code><span>${esc(g.name)} · ${esc(charName(g.char))}</span><button class="btn" data-copy="${esc(g.code)}">Copy</button></div>`).join('')}</div>` : ''}</div>
+  </div>`;
+}
+function copyText(t) {
+  const done = () => toast('Copied ' + t);
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done, () => fallback()); return; } } catch {}
+  fallback();
+  function fallback() { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch { toast(t); } a.remove(); }
+}
+function redeem(input) {
+  // a backup code (GDBD1:...) pasted here: restore the save it holds, after asking
+  if (/^\s*GDBD1:/i.test(input || '')) {
+    const o = readBackup(input);
+    if (!o) { toast("That isn't a Granny x DBD backup code."); return; }
+    if (!confirm(`Restore this backup? (${(o.p.stats.embers | 0).toLocaleString()} Embers, ${o.p.stats.matches | 0} matches.) It replaces the progress on this device.`)) return;
+    for (const k of Object.keys(profile)) delete profile[k];
+    Object.assign(profile, o.p); if (o.n) { settings.name = String(o.n).slice(0, 16); saveSettings(); }
+    saveProfile(); toast('Backup restored.'); setTimeout(() => location.reload(), 600); return;
+  }
+  const msg = $('cd-msg'), c = readCode(input);
+  const say = (t, ok) => { codeMsg = { t, ok }; if (ok) codeTyped = ''; if (msg) { msg.textContent = t; msg.className = 'cd-msg ' + (ok ? 'ok' : 'bad'); } };
+  if (!c) { say("That code doesn't work. Check it and try again."); sound.play('click'); return; }
+  profile.redeemed ||= {};
+  if (profile.redeemed[c.id]) { say('This code was already used on this device.'); return; }
+  if (c.kind === 'secret') {
+    if (profile.owned['granny:freddy']) { say('You already have the Freddy Fazbear outfit.'); return; }
+    profile.owned['granny:freddy'] = true;
+    profile.redeemed[c.id] = true; saveProfile(); sound.play('escaped');
+    say('Legendary outfit unlocked: Freddy Fazbear for Granny! Find it in Characters > Killers > Granny.', true);
+    toast('Secret outfit unlocked: Freddy Fazbear');
+    loadFreddy();
+    return;
+  }
+  if (profile.owned[c.char + ':' + c.skin]) { say(`You already own ${c.name} for ${charName(c.char)}. Pass the code on to someone else!`); return; }
+  profile.owned[c.char + ':' + c.skin] = true; profile.redeemed[c.id] = true; saveProfile(); sound.play('escaped');
+  say(`Gift unlocked: ${c.name} for ${charName(c.char)}!`, true); toast('Gift unlocked: ' + c.name);
+}
+function bindCodes(body) {
+  const inp = body.querySelector('#cd-in'); if (!inp) return;
+  inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') redeem(inp.value); };
+  inp.oninput = () => { codeTyped = inp.value; };
+  body.querySelector('#cd-go').onclick = () => redeem(inp.value);
+  const cs = body.querySelector('#cd-char'); if (cs) cs.onchange = () => { giftChar = cs.value; giftSkin = ''; renderStore(); };
+  const ss = body.querySelector('#cd-skin'); if (ss) ss.onchange = () => { giftSkin = ss.value; renderStore(); };
+  const buy = body.querySelector('#cd-buy'); if (buy) buy.onclick = () => {
+    const sk = giftable(giftChar).find(k => k.id === giftSkin); if (!sk) return;
+    const code = makeGift(giftChar, sk.id); if (!code) return;
+    if (!spend(sk.price, sk.name + ' (gift)')) return;
+    (profile.gifts ||= []).push({ code, char: giftChar, skin: sk.id, name: sk.name, at: Date.now() }); saveProfile();
+    renderStore(); copyText(code);
+  };
+  body.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyText(b.dataset.copy));
+}
 // ---------- sidekicks ----------
 let storePet = 'ted', storePetRole = 'survivor';
 function sidekicksHTML() {
@@ -708,6 +789,7 @@ function sidekicksHTML() {
 }
 
 function bindStore(body) {
+  bindCodes(body);
   body.querySelectorAll('[data-adbuy]').forEach(b => b.onclick = () => { const k = b.dataset.adbuy, A = ADDONS[k]; if (profile.addons[k] || !spend(A.price, A.name)) return; profile.addons[k] = true; const L = profile.survivor.addons = cleanAddons(profile.survivor.addons); if (L.length < ADDON_SLOTS) L.push(k); saveProfile(); sound.play('escaped'); renderStore(); });
   body.querySelectorAll('[data-adeq]').forEach(b => b.onclick = () => { const k = b.dataset.adeq, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-kidbuy]').forEach(b => b.onclick = () => { if (profile.pets.child || !spend(SIDEKICKS.child.price, SIDEKICKS.child.name)) return; profile.pets.child = true; profile.killer.pet = 'child'; saveProfile(); sound.play('escaped'); renderStore(); });
@@ -847,7 +929,7 @@ function botSurvivor(i, used) {
   const pool = BOT_NAMES.filter(n => !used.names.includes(n));
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
   used.names.push(nm);
-  const sk = SKINS[char]; const skin = Math.random() < 0.5 ? 'default' : sk[1 + Math.floor(Math.random() * (sk.length - 1))].id;
+  const sk = SKINS[char].slice(1).filter(k => !k.secret && !k.pass); const skin = Math.random() < 0.5 || !sk.length ? 'default' : sk[Math.floor(Math.random() * sk.length)].id; // (never a secret outfit)
   // bots bring an add-on or two now and then (1.4.3)
   const ak = Object.keys(ADDONS).filter(k => ADDONS[k].item === 'flashlight'), addons = Math.random() < 0.5 ? [ak[Math.floor(Math.random() * ak.length)]] : [];
   return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: '', bot: true, addons };
@@ -857,7 +939,7 @@ function botKiller(char, n = 0, avoid = []) {
   const c = PLAY_K.includes(char) ? char : (pool.length ? pool : PLAY_K)[Math.floor(Math.random() * (pool.length || PLAY_K.length))];
   // a killer you picked keeps their usual look; random bots may wear an outfit, but never a god-tier one
   // (Grandpa is a whole different character)
-  const picked = char && char !== 'random' && c === char, outfits = SKINS[c].slice(1).filter(k => !k.god);
+  const picked = char && char !== 'random' && c === char, outfits = SKINS[c].slice(1).filter(k => !k.god && !k.secret);
   const skin = picked || !outfits.length || Math.random() < 0.5 ? 'default' : outfits[Math.floor(Math.random() * outfits.length)].id;
   if (window.__killerSkin) return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin: window.__killerSkin, perks: randomPerks(KILLER_PERKS), bot: true }; // trailer capture
   return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true, kid: Math.random() < 0.35 ? 'child' : '' };
