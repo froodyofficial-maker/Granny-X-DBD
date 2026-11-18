@@ -29,7 +29,8 @@ async function bytes(name) {
 const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI },
   // 1.4.4 outfits (their own meshes on Granny's / Grandpa's rig): bind = how to straighten the file's skeleton first
   granny_bloody: { bind: 'fit', reskin: true }, granny_nightmare: { bind: 'fit', reskin: true }, granny_witch: { bind: 'fit', reskin: true },
-  granny_santa: { h: 1.82, yaw: 0, bind: 'pure' }, grandpa_thug: { mesh: true }, victim_car: { mesh: true } };
+  granny_santa: { h: 1.82, yaw: 0, bind: 'pure' }, grandpa_thug: { mesh: true }, victim_car: { mesh: true },
+  slenderman: { mesh: true }, teddy: { mesh: true } };
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => heavy(() => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej)))).then(g => {
@@ -474,6 +475,164 @@ export function makeGrannyGlb(sk = {}, lite = false) {
 // Granny (4)" by Yandu27; Santa Granny: "Santa Granny - Granny in Christmas Theme" by Arthurzin (sketchfab.com/arthurbat64);
 // Witch Granny: "DVloper - Granny (Official Model, Halloween)" by danielthesecond; Sigma Grandpa: "GRANNY 3 GRANDPA THUG" by
 // Dark Phantom Thunderball (sketchfab.com/dpt); all CC BY 4.0
+// ---------------- Slendrina's Father (Season 2) ----------------
+// "SlenderMan" by Voidircel (sketchfab.com/teethisyum), CC BY 4.0: one static mesh, arms held out. It gets a small rig
+// made here: a root and, per arm, an upper arm and a forearm (weights from how far along the arm each vertex is), so
+// he can let his arms hang, swing them, reach for a survivor and throw them up when stunned. Black tendrils grow
+// out of his back while he winds up his Tendril Lash.
+export const loadFather = () => load('slenderman');
+export const fatherReady = () => !!M.slenderman;
+let fatherProto = null;
+function fatherGeo() {
+  if (fatherProto) return fatherProto;
+  const scene = M.slenderman.g.scene; scene.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(scene), H = 2.62, k = H / (box.max.y - box.min.y);
+  const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+  const toM = v => new THREE.Vector3((v.x - cx) * k, (v.y - box.min.y) * k, (v.z - cz) * k);
+  // arms (model units, measured): shoulder -> hand
+  const arms = [-1, 1].map(sd => { const S = toM(new THREE.Vector3(sd * 3.3, 3.6, 0)), Hd = toM(new THREE.Vector3(sd * 16.4, -15.6, -0.7)); return { sd, S, Hd, E: S.clone().lerp(Hd, 0.5), u: Hd.clone().sub(S).normalize(), len: Hd.distanceTo(S) }; });
+  const parts = [];
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+    const P = g.attributes.position, n = P.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4), v = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(P, i); const m = toM(v); P.setXYZ(i, m.x, m.y, m.z);
+      const A = arms[m.x < 0 ? 0 : 1], rel = m.clone().sub(A.S), t = rel.dot(A.u) / A.len, perp = rel.clone().sub(A.u.clone().multiplyScalar(t * A.len)).length();
+      const sm = (a, b, x) => { const q = Math.max(0, Math.min(1, (x - a) / (b - a))); return q * q * (3 - 2 * q); };
+      const wa = Math.abs(m.x) > 0.12 && perp < 0.16 ? sm(-0.02, 0.09, t) : 0, wf = sm(0.42, 0.56, t);
+      const up = 1 + (A.sd < 0 ? 0 : 2), fo = up + 1;
+      si[i * 4] = 0; si[i * 4 + 1] = up; si[i * 4 + 2] = fo;
+      sw[i * 4] = 1 - wa; sw[i * 4 + 1] = wa * (1 - wf); sw[i * 4 + 2] = wa * wf;
+    }
+    P.needsUpdate = true; g.computeVertexNormals();
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    parts.push({ g, mat: o.material });
+  });
+  return (fatherProto = { parts, arms });
+}
+class FatherRig {
+  constructor(sk = {}, lite = false) {
+    const F = fatherGeo();
+    this.root = new THREE.Group(); this.aura = []; this.meshes = []; this.t = Math.random() * 10; this.tend = 0;
+    Object.assign(this, { kind: 'killer', killer: 'father', glb: true, father: true });
+    const root = new THREE.Bone(), bones = [root];
+    this.arm = F.arms.map(A => {
+      const up = new THREE.Bone(), fo = new THREE.Bone();
+      up.position.copy(A.S); fo.position.copy(A.E.clone().sub(A.S)); root.add(up); up.add(fo); bones.push(up, fo);
+      return { up, fo, u: A.u, sd: A.sd };
+    });
+    const holder = new THREE.Group(); this.root.add(holder); this.holder = holder;
+    holder.add(root); root.updateMatrixWorld(true);
+    const skel = new THREE.Skeleton(bones);
+    const mats = new Map();
+    for (const P of F.parts) {
+      if (!mats.has(P.mat)) mats.set(P.mat, AnimRig.prototype.material.call(this, P.mat, sk, lite));
+      const m = new THREE.SkinnedMesh(P.g, mats.get(P.mat)); m.bind(skel); m.castShadow = true; m.frustumCulled = false; holder.add(m); this.meshes.push(m);
+      const a = new THREE.SkinnedMesh(P.g, auraSkinMat(0xffffff)); a.bind(skel); a.visible = false; a.renderOrder = 10; a.frustumCulled = false; holder.add(a); this.aura.push(a);
+    }
+    // tendrils: chains of tapering segments from his shoulder blades
+    const tm = new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.5, metalness: 0.1 });
+    this.tendrils = [];
+    for (let i = 0; i < 6; i++) {
+      const base = new THREE.Group(), side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
+      base.position.set(side * 0.1, 1.95 - row * 0.12, -0.12); base.rotation.set(-0.6 - row * 0.2, side * (0.6 + row * 0.35), side * 0.4);
+      holder.add(base);
+      let parent = base; const segs = [];
+      for (let j = 0; j < 8; j++) {
+        const r = 0.035 * (1 - j / 9) + 0.006, L = 0.22;
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, L, 6).translate(0, L / 2, 0), tm);
+        const pivot = new THREE.Group(); pivot.add(seg); parent.add(pivot); if (j) pivot.position.y = L;
+        segs.push(pivot); parent = pivot;
+      }
+      base.visible = false; this.tendrils.push({ base, segs, ph: i * 1.3 });
+    }
+  }
+  setAura(color) { AnimRig.prototype.setAura.call(this, color); }
+  setOpacity(o) { AnimRig.prototype.setOpacity.call(this, o); }
+}
+export function makeFatherGlb(sk = {}, lite = false) { return M.slenderman ? new FatherRig(sk, lite) : null; }
+const _fq = new THREE.Quaternion(), _fq2 = new THREE.Quaternion(), _fd = new THREE.Vector3(), _fd2 = new THREE.Vector3();
+export function animateFather(R, s, dt) {
+  R.t += dt; const t = R.t, sp = s.speed || 0;
+  if (s.atk === 1 && R.prevAtk !== 1) R.hitT = 0; else if (R.hitT != null) R.hitT += dt;
+  if (!s.atk) R.hitT = null; R.prevAtk = s.atk;
+  R.ph = (R.ph || 0) + dt * (1.2 + sp * 1.1);
+  const swing = Math.min(1, sp / 3) * Math.sin(R.ph);
+  for (const A of R.arm) {
+    const sd = A.sd, lead = sd > 0; // (his right arm strikes)
+    let d1 = [sd * 0.13, -1, 0.06 + swing * sd * 0.45], d2 = [sd * 0.08, -1, 0.2 + swing * sd * 0.5];
+    if (s.stun) { d1 = [sd * 0.5, 0.7, 0.55]; d2 = [-sd * 0.5, 0.55, 0.3]; }
+    else if (s.exec) { d1 = [sd * 0.25, 0.1, 1]; d2 = [-sd * 0.3, -0.2, 1]; }
+    else if (s.aim) { d1 = [sd * 1, 0.15, 0.35]; d2 = [sd * 0.7, 0.45, 0.6]; }
+    else if (R.hitT != null && R.hitT < 0.7 && lead) { const f = Math.min(1, R.hitT / 0.18); d1 = [0.2 * f + sd * 0.13 * (1 - f), -1 + 1.0 * f, 1.2 * f]; d2 = [0.05, -0.1 * f - (1 - f), 1.3 * f + 0.2]; }
+    else if (s.act) { d1 = [sd * 0.2, -0.5, 0.9]; d2 = [sd * 0.1, -0.7, 0.8]; }
+    _fd.set(...d1).normalize(); _fd2.set(...d2).normalize();
+    _fq.setFromUnitVectors(A.u, _fd); _fq2.setFromUnitVectors(A.u, _fd2);
+    const k = 1 - Math.exp(-dt * (s.stun || R.hitT != null ? 18 : 8));
+    A.up.quaternion.slerp(_fq, k);
+    // the forearm's turn in the upper arm's frame
+    const want = A.up.quaternion.clone().invert().multiply(_fq2);
+    A.fo.quaternion.slerp(want, k);
+  }
+  // glide: barely any bob, a slow sway; leaning in while he lashes or strikes
+  const lean = s.aim ? 0.12 : R.hitT != null && R.hitT < 0.6 ? 0.2 : sp > 3 ? 0.08 : 0;
+  R.holder.rotation.x += (lean - R.holder.rotation.x) * Math.min(1, dt * 8);
+  R.holder.rotation.z = Math.sin(t * 0.7) * 0.02;
+  R.holder.position.y = Math.sin(R.ph * 2) * 0.012 * Math.min(1, sp / 2);
+  // tendrils
+  R.tend += ((s.aim || s.exec ? 1 : 0) - R.tend) * Math.min(1, dt * (s.aim ? 6 : 3));
+  for (const T of R.tendrils) {
+    T.base.visible = R.tend > 0.03; if (!T.base.visible) continue;
+    T.base.scale.setScalar(Math.max(0.05, R.tend) * 1.25);
+    T.segs.forEach((g, j) => { g.rotation.x = Math.sin(t * 3 + T.ph + j * 0.7) * 0.32 + (s.aim ? 0.1 : 0); g.rotation.z = Math.cos(t * 2.3 + T.ph * 1.7 + j * 0.5) * 0.28; });
+  }
+}
+
+// Season 2: the Teddy ("Teddy" by iskaa!, sketchfab.com/iskaalovely, CC BY 4.0), 0.36 m tall, feet at 0, facing +z
+let teddyProto = null;
+export const loadTeddy = () => load('teddy');
+export function makeTeddy() {
+  if (!M.teddy) return null;
+  if (!teddyProto) {
+    const src = M.teddy.g.scene.clone(true), g = new THREE.Group(); src.rotation.y = -Math.PI / 2; g.add(src); g.updateMatrixWorld(true); // (the file's bear faces +x)
+    let b = new THREE.Box3().setFromObject(g); const k = 0.36 / (b.max.y - b.min.y); src.scale.multiplyScalar(k); g.updateMatrixWorld(true);
+    b = new THREE.Box3().setFromObject(g); const c = b.getCenter(new THREE.Vector3()); src.position.sub(new THREE.Vector3(c.x, b.min.y, c.z));
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    teddyProto = g;
+  }
+  return teddyProto.clone(true);
+}
+// City Mode: the Victim's Car ("DVloper - Granny's Car (Official Model)"), 4.4 m long, wheels on the ground, its
+// bonnet toward +z, centred; every car is a clone of one prepared copy (shared meshes and textures)
+let carProto = null;
+export const loadVictimCar = () => load('victim_car');
+export function makeVictimCar() {
+  if (!M.victim_car) return null;
+  if (!carProto) {
+    const src = M.victim_car.g.scene.clone(true), inner = new THREE.Group();
+    inner.add(src); src.updateMatrixWorld(true);
+    let box = new THREE.Box3().setFromObject(src);
+    const size = box.getSize(new THREE.Vector3()), c0 = box.getCenter(new THREE.Vector3());
+    // long axis -> z; which end is the front: where the bonnet is
+    const longX = size.x > size.z;
+    let hood = null; src.traverse(o => { if (!hood && /motorhuv/i.test(o.name) && o.isMesh) hood = o; }); // (Swedish: the bonnet)
+    const hc = hood ? new THREE.Box3().setFromObject(hood).getCenter(new THREE.Vector3()) : c0.clone().add(new THREE.Vector3(longX ? 1 : 0, 0, longX ? 0 : 1));
+    const ahead = longX ? Math.sign(hc.x - c0.x) || 1 : Math.sign(hc.z - c0.z) || 1;
+    inner.rotation.y = longX ? (ahead > 0 ? -Math.PI / 2 : Math.PI / 2) : (ahead > 0 ? 0 : Math.PI); // (a turn of +90deg about y takes -x to +z)
+    inner.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(inner);
+    const L = box.max.z - box.min.z, k = 4.4 / L;
+    const outer = new THREE.Group(); outer.add(inner); inner.scale.setScalar(k);
+    inner.updateMatrixWorld(true); outer.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(outer);
+    const c = box.getCenter(new THREE.Vector3());
+    inner.position.set(-c.x, -box.min.y, -c.z);
+    outer.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = true; } });
+    carProto = outer;
+  }
+  return carProto.clone(true);
+}
 export const loadSkinModel = name => load(name);
 export const skinModelReady = name => !!M[name];
 // An outfit model moved onto the game's own rig (Granny's / Grandpa's), so it plays exactly their animations: the outfit is

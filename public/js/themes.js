@@ -1,3 +1,4 @@
+import { cityTheme } from './citymap.js';
 // Outdoor map themes. Each one reuses the 5x5 cell layout of the woods (so the loops, generators,
 // cages and exits play the same) but brings its own set pieces, centrepiece, scatter and extras.
 // Templates work in a local frame (about +-8m); C.rp() turns local points into world points.
@@ -189,8 +190,8 @@ const snow = {
   },
 };
 
-export const THEMES = { marsh, carnival, snow };
-export const MAP_NAMES = { granny: "Granny's House", granny1: "Granny's Old House", forest: 'Slendrina: The Forest' };
+export const THEMES = { marsh, carnival, snow, city: cityTheme };
+export const MAP_NAMES = { granny: "Granny's House", granny1: "Granny's Old House", forest: 'Slendrina: The Forest', city: 'Midnight City' };
 // Infection maps: twice the area of a regular map (7x7 cells instead of 5x5), built for a dozen
 // players: more generators, long sight lines broken up by loops, and spawns spread around the edges.
 export const BIG_MAPS = {};

@@ -41,26 +41,36 @@ export function pipsFor(S, me) {
 }
 
 // ---------- seasons and the season pass ----------
-// A new season every six weeks, counted from 1 Nov 2026. Each has 30 tiers (1,000 season XP each). Every tier has a
-// free reward; the premium track (bought with Embers, once per season) adds a bigger one, level tokens and outfits.
-const S_EPOCH = Date.UTC(2026, 10, 1), S_DAYS = 42;
-const S_NAMES = ['The Long Night', 'Cellar Whispers', 'The Old House', 'Lullaby', 'Blood Moon', 'Dawn'];
+// Season 1 ran from 1 Nov 2026 to 1 Dec 2026 (City Mode was its headline). Season 2 starts on 1 Dec 2026 by itself
+// (Slendrina's Father, the Teddy, The Pages and Chaos Shuffle), and from then on a new season every six weeks. Each has
+// 30 tiers (1,000 season XP each). Every tier has a free reward; the premium track (bought with Embers, once per season)
+// adds a bigger one, level tokens and outfits.
+const S1_START = Date.UTC(2026, 10, 1), S2_START = Date.UTC(2026, 11, 1), S_DAYS = 42;
+const S_NAMES = ['The Long Night', 'The Faceless Father', 'Cellar Whispers', 'The Old House', 'Lullaby', 'Blood Moon', 'Dawn'];
+// each season's premium outfits (tier 15, tier 30)
+const S_SKINS = [
+  [{ char: 'angeline', skin: 'gilded', label: 'Outfit: Gilded Mother (Angeline)' }, { char: 'granny', skin: 'longnight', label: 'Outfit: The Long Night (Granny)' }],
+  [{ char: 'slendrina', skin: 'snow', label: "Outfit: Daddy's Girl (Slendrina)" }, { char: 'father', skin: 'frost', label: "Outfit: Winter Suit (Slendrina's Father)" }],
+];
 export const PASS_PRICE = 8000;
-export function seasonAt(now = Date.now()) {
-  const n = Math.max(0, Math.floor((now - S_EPOCH) / (S_DAYS * 864e5)));
+const now0 = () => (typeof window !== 'undefined' && window.__now) || Date.now();
+export function seasonAt(now = now0()) {
+  const n = now < S2_START ? 0 : 1 + Math.floor((now - S2_START) / (S_DAYS * 864e5));
+  const start = n === 0 ? S1_START : S2_START + (n - 1) * S_DAYS * 864e5, days = n === 0 ? 30 : S_DAYS;
+  const SK = S_SKINS[n] || S_SKINS[0];
   const tiers = Array.from({ length: 30 }, (_, i) => {
     const t = i + 1, big = t % 5 === 0;
     const free = t === 15 ? { kind: 'badge', id: 's' + (n + 1) + '-mid', label: 'Season badge' }
       : t === 30 ? { kind: 'badge', id: 's' + (n + 1) + '-final', label: 'Season finale badge + 3,000 Embers', embers: 3000 }
       : { kind: 'embers', embers: big ? 1000 : 250 + t * 20 };
-    const prem = t === 15 ? { kind: 'skin', char: 'angeline', skin: 'gilded', label: 'Outfit: Gilded Mother (Angeline)' }
-      : t === 30 ? { kind: 'skin', char: 'granny', skin: 'longnight', label: 'Outfit: The Long Night (Granny)' }
+    const prem = t === 15 ? { kind: 'skin', ...SK[0] }
+      : t === 30 ? { kind: 'skin', ...SK[1] }
       : big ? { kind: 'token', n: 1, label: 'Level token (+1 level for any character)' }
       : { kind: 'embers', embers: 500 + t * 40 };
     for (const r of [free, prem]) if (r.kind === 'embers') r.label = `${r.embers.toLocaleString()} Embers`;
     return { t, free, prem };
   });
-  return { n, id: 's' + (n + 1), name: `Season ${n + 1}: ${S_NAMES[n % S_NAMES.length]}`, start: S_EPOCH + n * S_DAYS * 864e5, days: S_DAYS, tierXp: 1000, tiers };
+  return { n, id: 's' + (n + 1), name: `Season ${n + 1}: ${S_NAMES[n % S_NAMES.length]}`, start, days, tierXp: 1000, tiers };
 }
 export const SEASON = seasonAt();
 export const seasonEnds = () => SEASON.start + SEASON.days * 864e5;

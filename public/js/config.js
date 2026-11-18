@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 14;
+export const NET_PROTOCOL = 15;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -16,6 +16,9 @@ export const SPEED = {
 // The Taser only comes out of chests (20% of them): 3 shots, each one locks the killer up for 3s.
 export const ITEMS = {
   flashlight: { name: 'Flashlight', desc: 'Hold RMB to shine it in the killer\'s eyes.' },
+  // Season 2: the Teddy. Bought for one season (it's gone when the season ends). Hold it up (RMB): every killer who
+  // sees you holding it is pacified (stunned) for 10s; it works once more, for 5s, then it's spent.
+  teddy: { name: 'Teddy', price: 6000, uses: [10, 5], range: 24, cone: 0.62, hold: 1.4, cooldown: 3, desc: "Hold RMB to hold the Teddy up. Every killer who sees you holding it is pacified (stunned) for 10s. It works a second time, for 5s, then it's spent. Only for the season you buy it in." },
   taser: { name: 'Taser', shots: 3, stun: 3, range: 9, chance: 0.2, desc: 'Click RMB to fire: a killer you hit is electrocuted and frozen for 3s. 3 shots. Only found in chests.' },
 };
 // 1.4.3: item add-ons, Dead by Daylight style (the idea, and the UV Torch, are by Ommm and WolfSpider). Bought once in
@@ -83,8 +86,16 @@ export const MODES = {
   rush: { name: 'Survivor Rush', short: '5 min', time: 300, desc: 'Five-minute matches. Generators and gates go twice as fast, and the killer gets a burst of speed after every hit. When the clock runs out, the gates power up and the night collapses fast.' },
   glass: { name: 'Glass Bones', short: 'One hit', desc: 'Every hit puts a survivor straight down. To make up for it, generators repair 40% faster. One mistake and you are on the floor.' },
   adrenaline: { name: 'Adrenaline', short: 'Fast', desc: 'Everyone moves 30% faster, generators and exit gates go 25% faster, and killer powers recharge 40% faster. Chases are frantic.' },
+  // Season 1 event (until 1 Dec 2026): its own map, hiding spots, cars and pedestrians (city.js)
+  city: { name: 'City Mode', short: 'Event', map: 'city', event: true, until: Date.UTC(2026, 11, 1), desc: "Midnight City. Hide in dumpsters, trash cans and portable toilets (the killer can search them), drive the Victim's Cars that stand all over town, and mind the pedestrians: killers get Embers for every one they catch, and anyone gets Embers for running them over. Pull a driving pedestrian out to take their car. Season 1 event: ends 1 December." },
+  // Season 2 (1 Dec 2026 - 12 Jan 2027): its headline mode and Chaos Shuffle
+  pages: { name: 'The Pages', short: 'Season 2', event: true, season: 'Season 2', from: Date.UTC(2026, 11, 1), until: Date.UTC(2027, 0, 12), desc: "No generators tonight: pages are nailed up round the map, and the survivors collect every one of them to power the gates. Pages take seconds, but the killer can't kick them back. Every page they take, he gets a little faster and the fog comes in a little closer, and for 6s after each one he is silent." },
+  shuffle: { name: 'Chaos Shuffle', short: 'Season 2', event: true, season: 'Season 2', from: Date.UTC(2026, 11, 1), until: Date.UTC(2027, 0, 12), desc: 'A normal match, until it isn\'t: every minute or so the killer and one survivor swap bodies. You could be hunting one second and running the next. Your Embers stay yours.' },
   bloodmoon: { name: 'Blood Moon', short: 'Tasers', desc: 'A red moon over the map. Every 45 seconds the killer sees every survivor for 4 seconds, but every survivor starts with a 2-shot Taser instead of their item.' },
 };
+// event modes (City Mode, the Season 2 modes) are only on between their dates. window.__now (ms) fakes the clock for tests
+export const nowMs = () => (typeof window !== 'undefined' && window.__now) || Date.now();
+export const modeOpen = (id, now = nowMs()) => { const m = MODES[id]; return !!m && !(m.until && now >= m.until) && !(m.from && now < m.from); };
 // killers an infected survivor can turn into
 export const INFECT_POOL = ['butcher', 'wisp', 'harrower', 'lamplighter', 'slimer', 'bateman', 'chucky'];
 
@@ -210,6 +221,16 @@ export const KILLERS = {
     feature: { name: 'Blood Scent', scent: 26, feed: 3, feedHaste: 0.1, desc: 'He smells blood: injured survivors within 26m of him are revealed. Every hit feeds him: +10% speed for 3s.' },
     color: 0x8a9aa8,
   },
+  // Season 2 (from 1 Dec 2026): Slendrina's Father
+  father: {
+    id: 'father', name: "Slendrina's Father", speed: 4.5, terror: 26, weapon: 'Long Fingers', crossover: 'Slendrina (fan-made)', tpv: true, from: Date.UTC(2026, 11, 1),
+    lore: '',
+    exec: { name: 'Into the Trees', desc: 'Lifts the survivor off their feet with his tendrils and holds them up to where his face should be.' },
+    ability: { name: 'Tendril Lash', cooldown: 7, wind: 0.45, range: 8, width: 0.8, slow: 0.7, desc: 'Hold RMB: black tendrils grow out of his back (he slows down). Release after half a second to lash them 8m ahead: the first survivor in the way is hit. Walls stop them.' },
+    ability2: { name: 'Faceless Step', key: 'R', cooldown: 28, range: 36, cone: 0.42, delay: 1.0, behind: 3.2, desc: "Look at a survivor up to 36m away and press R: he fades out, and a second later he is standing right behind them." },
+    feature: { name: 'Static', radius: 16, need: 2.5, reveal: 4, desc: 'Survivors who look at him from within 16m get static on their screens. Look for 2.5s and you are revealed for 4s.' },
+    color: 0x2a2a34,
+  },
   bateman: {
     id: 'bateman', name: 'Patrick Bateman', speed: 4.7, terror: 28, weapon: 'Axe', crossover: 'American Psycho (fan-made)',
     lore: '',
@@ -333,10 +354,10 @@ export const LORE = {};
 export const SECRET_CODES = ["a6fb993d580ca12455d500af871be912e902f2ed21e22e270ca4c5833b09439d", "acf3b8fe9a31f8d8625419ab93a1681e3811330d23e013bcf2965c2ec657aaae", "52517749c1e9d61e4b1c580b718f8e9082446bd4d0bce3755cbc6918d6c755dc", "bd5977e481fdafa95fc238758c7ac53c030a5d241a3cb27b1d42d2aa01d5adcd", "11eea88346def0fb7e43a7b450776842f99f3307859d9b6282a31961bae1dc25", "56f719f05edae38085c1073e6b2c3de395ae0107b3644f984d83a9d5f8a2190f", "7bff9130dc1416c1a7d925add43aa660daf01a1dc2f1a0d839ef6d796523cc0a", "aa0ec1e4854f2e5df076d40da49aa8e735aa7c8ad61e99201a792271145282b4", "617dde538cb62f8050b88286870607fc05f40b6be75e3998f9f1f0095a1a8849", "445358acb7fba3b30c076874c6e309a63be51647781d474abc3316376d947ee7"];
 // gift codes carry a character and an outfit by position in these lists: 1.3.x's order first (codes made in 1.3.2 / 1.3.3
 // still work), new outfits only ever appended
-export const GIFT_CHARS = ['mara', 'eli', 'june', 'tomas', 'granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu'];
+export const GIFT_CHARS = ['mara', 'eli', 'june', 'tomas', 'granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'];
 export const GIFT_SKINS = {
   mara: ['default', 'nightshift', 'crimson', 'medic'], eli: ['default', 'overalls', 'hazard', 'midnight'], june: ['default', 'autumn', 'ghost', 'reporter'], tomas: ['default', 'camo', 'firewatch', 'searchlight'],
-  granny: ['default', 'bloodbath', 'ghost', 'freddy', 'bloody', 'nightmare', 'santa', 'witch'], grandpa: ['default', 'bloodbath', 'sigma'], slendrina: ['default', 'pale'], angeline: ['default', 'pale'], nosferatu: ['default', 'plague', 'blood'],
+  granny: ['default', 'bloodbath', 'ghost', 'freddy', 'bloody', 'nightmare', 'santa', 'witch'], grandpa: ['default', 'bloodbath', 'sigma'], slendrina: ['default', 'pale'], angeline: ['default', 'pale'], nosferatu: ['default', 'plague', 'blood'], father: ['default', 'static'],
 };
 export const SKINS = {
   mara: [
@@ -432,11 +453,17 @@ export const SKINS = {
   slendrina: [
     { id: 'default', name: 'The Cellar', price: 0, desc: 'Her torn white dress, her long black hair, and those eyes.' },
     { id: 'pale', name: 'Pale Lady', price: 0, tint: 0xd8e4f0, tintK: 0.45, glow: 0x6a8aa8, glowK: 0.3, desc: 'Even paler, glowing faintly in the dark.' },
+    { id: 'snow', name: "Daddy's Girl", price: -1, pass: true, tint: 0xe8f0ff, tintK: 0.45, glow: 0x9ac0ff, glowK: 0.4, desc: 'Season 2 Pass reward (tier 15). Snow in her hair, and her father\'s cold.' },
   ],
   angeline: [
     { id: 'default', name: 'Mother', price: 0, desc: 'Her black dress, her long hair, and the yellow light in her eyes.' },
     { id: 'pale', name: 'Ghost Mother', price: 0, tint: 0xd8e4f0, tintK: 0.4, glow: 0x8a9a6a, glowK: 0.25, desc: 'Faded, glowing faintly, like the photo on the cellar wall.' },
     { id: 'gilded', name: 'Gilded Mother', price: -1, pass: true, tint: 0xd8b050, tintK: 0.35, glow: 0xffc030, glowK: 0.3, desc: 'Season Pass reward (tier 15). The yellow light got into everything.' },
+  ],
+  father: [
+    { id: 'default', name: 'The Tall Man', price: 0, desc: 'Black suit, white shirt, black tie. No face.' },
+    { id: 'static', name: 'Static', price: 3500, tint: 0xb8bcc8, tintK: 0.4, glow: 0x6a7080, glowK: 0.25, desc: 'Grey as an old television left on all night.' },
+    { id: 'frost', name: 'Winter Suit', price: -1, pass: true, tint: 0x9ab8e0, tintK: 0.4, glow: 0x5a8ac0, glowK: 0.35, desc: 'Season 2 Pass reward (tier 30). He came in from the snow.' },
   ],
   nosferatu: [
     { id: 'default', name: 'The Count', price: 0, desc: 'Black coat to the ankles, bald head, long fingers, and teeth.' },
@@ -468,13 +495,35 @@ export const skinOf = (char, id) => (SKINS[char] || []).find(s => s.id === id) |
 // email updates: the Buttondown newsletter's username (empty: the option stays hidden)
 export const NEWSLETTER = '';
 // Granny x DBD: five killers (Granny, Grandpa, Slendrina, Angeline, Nosferatu) and the four original survivors
-export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu'], PLAY_S = ['mara', 'eli', 'june', 'tomas'];
+// (Slendrina's Father joins with Season 2, on 1 Dec 2026)
+export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.4.3';
+export const VERSION = '1.5.0';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd-s2', version: '1.5.0', date: '1 Dec 2026', title: "Season 2: The Faceless Father", tag: 'New Season', from: Date.UTC(2026, 11, 1),
+    body: [
+      "Season 2 has begun. Slendrina's Father is here: hold RMB to grow his tendrils and lash them 8m ahead, press R while looking at a survivor to step out of nowhere right behind them, and if you stare at him for too long, he knows where you are.",
+      'The Teddy: buy it in Store > Add-ons and pick it as your item in the survivor Loadout. Hold it up (RMB) and every killer who sees it is pacified for 10s; it works once more for 5s. It is yours until the season ends.',
+      'The Pages: the season\'s main mode. No generators: pages are nailed up round the map; take every one to power the gates. He gets faster with every page, and goes silent for a moment.',
+      'Chaos Shuffle: every minute or so the killer and one survivor swap bodies.',
+      "New Season Pass: Daddy's Girl (Slendrina) at tier 15, Winter Suit (Slendrina's Father) at tier 30. City Mode has ended.",
+    ],
+  },
+  {
+    id: 'gdbd150', version: '1.5.0', date: 'Nov 2026', title: 'City Mode', tag: 'Season 1 Event',
+    body: [
+      "City Mode, the big event of Season 1 (on until 1 December): Midnight City, a whole city at night. Hide in dumpsters, trash cans, portable toilets and piles of boxes (the killer can search them). Drive the Victim's Cars parked all over town: ram the killer to stun them, but a strike on your car pulls you out. Pedestrians walk the streets: killers earn Embers for every one they catch, and anyone earns Embers for running them over. Pull a driving pedestrian out to take the car. Find it at the top of the main menu.",
+      'New outfits with their own models: Bloody Granny, Granny: Nightmare Mode, Santa Granny, Witch Granny and Sigma Grandpa.',
+      'Redeem Code now has its own button on the main menu (Discord codes, gift codes and backup codes).',
+      "Season 2 starts by itself on 1 December: Slendrina's Father (a new killer: Tendril Lash, Faceless Step, and static if you look at him), the Teddy (a new item, this season only: hold it up and every killer who sees it is pacified for 10s, then once more for 5s), The Pages (no generators: collect the pages) and Chaos Shuffle (the killer and a survivor keep swapping bodies).",
+      'Loading screens no longer stutter while the match is being built, and only the map you are playing is waited for.',
+      'Fixed: starting a match could fail after the outfit update.',
+    ],
+  },
   {
     id: 'gdbd143', version: '1.4.3', date: 'Nov 2026', title: 'Nosferatu', tag: 'Update',
     body: [

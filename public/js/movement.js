@@ -22,6 +22,7 @@ export function stepMover(M, S, p, intent, dt) {
     return;
   }
   if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') { p.mv = 0; return; }
+  if (p.hide >= 0 || p.car >= 0) { p.mv = 0; return; } // City Mode: hiding / driving (the car moves itself)
   // Chucky's jump: half a second in the air, clearing anything low
   let low = 0;
   if (p.hop) { p.hop.t += dt; low = 1.25; if (p.hop.t >= p.hop.d) p.hop = null; }
@@ -33,7 +34,7 @@ export function stepMover(M, S, p, intent, dt) {
   const r = p.role === 'killer' ? 0.45 : 0.36;
   const dx = mx * sp * dt, dz = mz * sp * dt;
   // Slimer's Ghost Phase: float straight through walls (still kept inside the map)
-  const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(levelOf(M, p.fl), p.fl ? null : S, p.x, p.z, dx, dz, r, low);
+  const res = p.phase > 0 ? { x: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.x + dx * 1.1)), z: Math.max(-(M.half || HALF) + 0.6, Math.min((M.half || HALF) - 0.6, p.z + dz * 1.1)) } : moveCircle(levelOf(M, p.fl), p.fl ? null : S, p.x, p.z, dx, dz, r, low, !!p.bot); // (bots walk through City Mode cars: they aren't on the walking grid)
   // soft body-blocking between characters
   for (const o of S.players) {
     if (o === p || o.vault || p.st === 'ghost' || o.st === 'ghost' || (o.fl || 0) !== (p.fl || 0)) continue;

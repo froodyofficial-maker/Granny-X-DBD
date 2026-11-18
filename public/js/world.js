@@ -4,6 +4,7 @@ import { HALF } from './config.js';
 import { realistic } from './gfx.js';
 import { cloneScene } from './sceneGlb.js';
 import { buildForest } from './forestworld.js';
+import { buildCity } from './cityworld.js';
 import { rng, barBox } from './map.js';
 import { tex } from './textures.js';
 import { photoGround } from './pbr.js';
@@ -156,6 +157,8 @@ export function buildWorld(M, quality = 'medium') {
     canvas: () => mat(0xffffff, { map: 'canvas', rough: 0.95 }), booth: () => mat(0x5a8a8a, { map: 'wood', rough: 0.85, tint: 0.65 }), fence: () => mat(0x8a8a88, { map: 'metal', photo: 'paint', metal: 0.5, rough: 0.5, tint: 0.15 }),
     trailer: () => mat(0xd8d0c0, { map: 'metal', photo: 'paint', metal: 0.3, rough: 0.6, tint: 0.3 }), truck: () => mat(0x7a1e14, { map: 'metal', metal: 0.4, rough: 0.55, tint: 0.75 }), logs: () => mat(0xc0a080, { map: 'logs', rough: 0.95, tint: 0 }),
     snowcap: () => mat(0xf0f4ff, { map: 'snow', rough: 0.8, tint: 0 }),
+    // City Mode
+    concrete: () => mat(0x9a968e, { map: 'stone', rough: 0.92, uvm: 1.4, tint: 0 }), shop: () => mat(0x8a7a68, { map: 'tiles', rough: 0.8, tint: 0.2 }), hedge: () => mat(0x2c4a24, { map: 'foliage', rough: 1, tint: 0.4 }),
   };
   const addBox = (key, b, y0, y1, hx = b.hx, hz = b.hz, tile = 2) => {
     const h = y1 - y0;
@@ -164,7 +167,7 @@ export function buildWorld(M, quality = 'medium') {
   };
   const tileOf = st => st === 'stone' ? 1.15 : st === 'brick' ? 1.6 : 2;
   for (const b of M.boxes) {
-    if (b.kind === 'gen' || b.kind === 'switch' || b.kind === 'logpile' || b.kind === 'mesh') continue; // ('mesh': drawn by the map's own model)
+    if (b.kind === 'gen' || b.kind === 'switch' || b.kind === 'logpile' || b.kind === 'mesh' || b.kind === 'bldg' || b.kind === 'hide') continue; // (city buildings and hiding spots: cityworld.js) // ('mesh': drawn by the map's own model)
     if (b.kind === 'log') {
       const along = b.hx > b.hz;
       const geo = new THREE.CylinderGeometry(0.45, 0.5, (along ? b.hx : b.hz) * 2, 10);
@@ -218,7 +221,7 @@ export function buildWorld(M, quality = 'medium') {
   const ft = tex('foliage');
   const needleM = lite ? new THREE.MeshLambertMaterial({ vertexColors: true, map: ft.map }) : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: ft.map, normalMap: ft.normalMap });
   const trees = [...M.trees.map(t => ({ ...t, inner: true }))];
-  for (let i = 0; i < (M.forest ? 0 : q.outer); i++) { // (the forest draws its own)
+  for (let i = 0; i < (M.forest || M.city ? 0 : q.outer); i++) { // (the forest draws its own; the city has a skyline)
     const side = R.int(0, 3), along = R.range(-HF - 30, HF + 30), out = HF + 2.5 + Math.pow(R(), 0.7) * 32;
     const x = side === 0 ? along : side === 1 ? along : side === 2 ? out : -out;
     const z = side === 0 ? out : side === 1 ? -out : along;
@@ -371,6 +374,7 @@ export function buildWorld(M, quality = 'medium') {
   // a map with its own scenery model (Granny's House)
   if (M.glbScene) { const o = cloneScene(M.glbScene, lite); if (o) { scene.add(o); W.glb = o; } }
   if (M.forest) buildForest(W, M, lite);
+  if (M.city) buildCity(W, M, quality);
   addInteractables(W, M);
   // ---------- rolling ground fog: layered planes with scrolling noise ----------
   const nf = quality === 'potato' ? 0 : quality === 'low' ? 1 : 2;
@@ -433,7 +437,7 @@ export function updateWorld(W, M, S, t, dt, follow) {
   const dk = W.darkK || 0;
   if (!W.indoor) for (const L of W.lamps) {
     const fl = (Math.sin(t * 13 + L.ph) > 0.97 ? 0.3 : 1) * (1 - dk);
-    L.bulbM.emissiveIntensity = 3 * fl; L.pool.material.opacity = 0.13 * fl; L.glow.material.opacity = 0.55 * fl;
+    L.bulbM.emissiveIntensity = 3 * fl; L.pool.material.opacity = (L.op || 0.13) * fl; L.glow.material.opacity = 0.55 * fl;
     if (L.light) L.light.intensity = 7 * fl;
   }
   if (!S) return;

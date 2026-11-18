@@ -4,7 +4,8 @@
 // It is drawn with the game's own renderer (one WebGL context for the whole app: a second one next to a
 // match being built is what crashed the page on some PCs). The game and menu do not draw while this is up.
 import * as THREE from 'three';
-import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline, loadNosferatu, loadSpiderMom, grannyReady, grandpaReady, slendrinaReady, angelineReady, nosferatuReady } from './grannyGlb.js';
+import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline, loadNosferatu, loadSpiderMom, grannyReady, grandpaReady, slendrinaReady, angelineReady, nosferatuReady, fatherReady } from './grannyGlb.js';
+import { PLAY_K } from './config.js';
 import { loadScene, cloneScene, sceneReady } from './sceneGlb.js';
 import { makeKiller, animate } from './models.js';
 import { KILLERS } from './config.js';
@@ -35,6 +36,7 @@ const REEL = [
   { id: 'slendrina', ready: slendrinaReady, st: { gaze: true } },
   { id: 'angeline', ready: angelineReady, st: {} },
   { id: 'nosferatu', ready: nosferatuReady, st: { aim: true } },
+  ...(PLAY_K.includes('father') ? [{ id: 'father', ready: fatherReady, st: { aim: true } }] : []), // (Season 2)
 ];
 const SHOT = 5.6; // seconds per killer
 
@@ -45,7 +47,7 @@ function ui() {
   const el = $('loading');
   if (el.dataset.built) return el;
   el.dataset.built = '1';
-  el.innerHTML = `<div class="ls-3d" id="ls-3d"></div><div class="ls-vig"></div><div class="ls-grain"></div>
+  el.innerHTML = `<div class="ls-3d" id="ls-3d"></div><div class="ls-still" id="ls-still"><canvas></canvas><i class="ls-flick"></i></div><div class="ls-vig"></div><div class="ls-grain"></div>
     <div class="ls-top"><div class="ls-logo"><span class="ls-granny"></span><i>×</i><b>DBD</b></div></div>
     <div class="ls-card" id="ls-card"><div class="ls-kname" id="ls-kname"></div><div class="ls-kpow" id="ls-kpow"></div></div>
     <div class="ls-hud"><div class="ls-msg" id="ls-msg"></div><div class="ls-bar"><i></i></div><div class="ls-tip" id="ls-tip"></div></div>`;
@@ -126,6 +128,8 @@ function card(k) {
 
 function frame(now) {
   if (!L || !want) { if (L) L.raf = 0; return; }
+  // held (the match is being built on this thread): the reel stops on a still that the compositor keeps moving
+  if (L.held) { L.raf = 0; return; }
   const dt = Math.min(0.05, (now - L.last) / 1000); L.last = now; L.t += dt;
   dress();
   const t = L.t, cam = L.cam;
@@ -166,6 +170,11 @@ function frame(now) {
     const exp = r.toneMappingExposure, ac = r.autoClear, sh = r.shadowMap.enabled;
     r.setRenderTarget(null); r.autoClear = true; r.toneMappingExposure = 1.55; r.shadowMap.enabled = !lite;
     try { r.render(L.sc, cam); } catch (e) { console.warn(e); }
+    if (L.holdReq) {
+      // copy this frame (same task as the render, so no preserveDrawingBuffer needed) and freeze on it
+      L.holdReq = false;
+      try { const c = $('ls-still').querySelector('canvas'), src = r.domElement; c.width = Math.max(2, src.width >> 1); c.height = Math.max(2, src.height >> 1); c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); $('loading').classList.add('held'); L.held = true; } catch (e) { console.warn(e); }
+    }
     r.toneMappingExposure = exp; r.autoClear = ac; r.shadowMap.enabled = sh;
     if (!L.drawn) { L.drawn = true; $('ls-3d').classList.add('drawn'); }
   }
@@ -185,7 +194,7 @@ export function showLoading(on, msg, isLite, rendererOf) {
   el.classList.toggle('hidden', !on);
   // the loading screen is see-through over the 3D canvas it draws on: hide the menu / HUD in between
   document.documentElement.classList.toggle('ls-up', on);
-  if (!on) { clearInterval(tipT); return; }
+  if (!on) { clearInterval(tipT); holdLoading(false); return; }
   tip(); clearInterval(tipT); tipT = setInterval(tip, 6000);
   lite = !!isLite;
   try { if (!L) { L = build(); loadScene('granny_map'); loadGranny(); loadGrandpa(); loadSlendrina(); loadAngeline(); loadNosferatu(); loadSpiderMom(); } } catch (e) { console.warn('loading scene unavailable', e); return; }
@@ -193,6 +202,15 @@ export function showLoading(on, msg, isLite, rendererOf) {
   if (!L.raf) L.raf = requestAnimationFrame(frame);
 }
 
+// 1.4.4: the heavy part of starting a match (building the map, the first frame's shaders and textures) runs on the
+// same thread as this 3D reel, which made it stutter. Hold it: one last frame becomes a still that slowly drifts and
+// flickers by CSS alone (the compositor animates it even while the page is busy), until the loading screen goes.
+export function holdLoading(on) {
+  if (!L) return;
+  if (on) { if (!L.held) L.holdReq = true; return; }
+  L.holdReq = false; L.held = false; $('loading').classList.remove('held');
+  if (want && !L.raf) { L.last = performance.now(); L.raf = requestAnimationFrame(frame); }
+}
 export const loadingUp = () => want;
 window.__lsSeek = s => { if (L) L.t = s; return L && Object.keys(L.rigs).join(); }; // for screenshots: jump the reel to s seconds
 export const sceneShownAt = () => shownAt;

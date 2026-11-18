@@ -1,5 +1,6 @@
 // Rules shared by host simulation, client prediction and bots.
 import { SPEED, RULES, KILLERS, HALF, ITEMS, statK } from './config.js';
+import { cityInteraction, CITY_TIMES } from './city.js';
 import { barBox } from './map.js';
 
 export const has = (p, perk) => p.perks && p.perks.includes(perk);
@@ -32,6 +33,7 @@ export function playerById(S, id) { return S.players.find(p => p.id === id); }
 export function terrorRadius(p) {
   if (!p || p.role !== 'killer' || p.disguise) return 0;
   if (p.char === 'wisp' && p.ab === 1) return 0;
+  if (p.silentT > 0) return 0; // (The Pages: silent for a moment after every page)
   if (p.char === 'foreman' && p.ab === 1) return 0;
   if (p.char === 'nosferatu' && p.ab === 1) return 0; // Nightfall: silent
   let r = KILLERS[p.char].terror;
@@ -82,6 +84,8 @@ export function speedOf(p, S, sprint, crouch) {
   if (p.char === 'slendrina' && p.aim) s *= 0.75; // choosing where to Haunt to
   if (p.char === 'angeline' && p.aim) s *= KILLERS.angeline.ability.slow; // Yellow Eyes
   if (p.char === 'nosferatu' && p.ab === 1) s *= 1 + KILLERS.nosferatu.ability2.haste; // Nightfall
+  if (p.char === 'father' && p.aim) s *= KILLERS.father.ability.slow; // (winding up his Tendril Lash)
+  if (S && S.mode === 'pages' && p.role === 'killer') s *= 1 + (S.gensDone || 0) * 0.04; // The Pages: a little faster for every page taken
   if ((p.char === 'harrower' || p.char === 'foreman' || p.char === 'bateman') && p.aim) s *= p.char === 'foreman' ? 0.75 : p.char === 'bateman' ? 0.6 : SPEED.aimSlow;
   if (p.diffMul) s *= p.diffMul;
   s *= 1 + statK(p, 'spd');                                  // Stalker (character stats)
@@ -90,15 +94,23 @@ export function speedOf(p, S, sprint, crouch) {
 
 // What can this player interact with (hold E)?
 // what a survivor's item has left: battery seconds, traps, taser shots
-export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : (p.flash || 0); }
+export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : p.item === 'teddy' ? (p.teddy || 0) : (p.flash || 0); }
 export function itemLabel(k, n) {
   const name = (ITEMS[k] || ITEMS.flashlight).name;
   if (n != null && n <= 0.05) return name + ' (empty)';
   if (k === 'trap') return name + ' ×' + n;
   if (k === 'taser') return name + ' (' + n + ' shot' + (n === 1 ? '' : 's') + ')';
+  if (k === 'teddy') return name + ' (' + n + ' use' + (n === 1 ? '' : 's') + ' left)';
   return name;
 }
+// City Mode: getting out of a car / a hiding spot is all you can do there; otherwise the city's own things (cars,
+// hiding spots) come after the usual ones
 export function findInteraction(M, S, p) {
+  if (!S.cars) return baseInteraction(M, S, p);
+  if (p.car >= 0 || p.hide >= 0) return cityInteraction(M, S, p);
+  return baseInteraction(M, S, p) || cityInteraction(M, S, p);
+}
+function baseInteraction(M, S, p) {
   if (p.role === 'survivor' && p.st === 'ghost') return null; // a possessed survivor's ghost is frozen until Chucky lets go
   if (p.role === 'survivor' && p.st === 'ghost') {
     // (unused)
@@ -129,14 +141,14 @@ export function findInteraction(M, S, p) {
     for (const g of M.gens) {
       const gs = S.gens[g.id];
       const d = dist(p, g);
-      if (!gs.done && d < 1.75) consider('repair', g.id, 'Repair generator', 3, d);
+      if (!gs.done && d < 1.75) consider('repair', g.id, S.mode === 'pages' ? 'Take the page' : 'Repair generator', 3, d);
     }
     for (const L of S.lanterns || []) { const d = Math.hypot(p.x - L.x, p.z - L.z); if (d < 1.5) consider('snuff', L.id, 'Snuff the lantern', 1, d); }
     for (const c of M.chests || []) {
       const cs = S.chests && S.chests[c.id], d = dist(p, c);
       if (!cs || d > 1.5) continue;
       if (!cs.open) consider('chest', c.id, 'Search the chest', 1, d);
-      else if (cs.it) consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
+      else if (cs.it && p.item !== 'teddy') consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
     }
     if (!best && p.hp === 1 && has(p, 'medic')) return { k: 'self', id: p.id, label: 'Heal yourself' };
     return best;
@@ -155,7 +167,7 @@ export function findInteraction(M, S, p) {
   if (best) return best;
   for (const b of M.bars) if (S.bars[b.id] === 1) { const bb = barBox(b); const d = Math.hypot(Math.max(0, Math.abs(p.x - bb.x) - bb.hx), Math.max(0, Math.abs(p.z - bb.z) - bb.hz)); if (d < 1.2 && d < bd) { bd = d; best = { k: 'break', id: b.id, label: 'Break barricade' }; } }
   if (best) return best;
-  for (const g of M.gens) { const gs = S.gens[g.id]; const d = dist(p, g); if (!gs.done && !gs.reg && gs.p > 0 && d < 1.9 && d < bd) { bd = d; best = { k: 'kick', id: g.id, label: 'Damage generator' }; } }
+  if (modeOf(S) !== 'pages') for (const g of M.gens) { const gs = S.gens[g.id]; const d = dist(p, g); if (!gs.done && !gs.reg && gs.p > 0 && d < 1.9 && d < bd) { bd = d; best = { k: 'kick', id: g.id, label: 'Damage generator' }; } }
   return best;
 }
 
@@ -188,7 +200,7 @@ export function actionTime(k, p, S) {
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1) / (1 + statK(p, 'brut'));
     case 'rescue': return RULES.rescueTime * (has(p, 'lockpick') ? 0.5 : 1) * (S && anyKillerHas(S, 'rust') ? 2 : 1) / (1 + statK(p, 'grit'));
     case 'gate': return RULES.gateTime * (has(p, 'lockpick') ? 0.7 : 1) * (has(p, 'pathfinder') ? 0.6 : 1) * (modeOf(S) === 'rush' ? 0.5 : modeOf(S) === 'adrenaline' ? 0.75 : 1) / (1 + statK(p, 'rep'));
-    default: return 0;
+    default: return CITY_TIMES[k] || 0;
   }
 }
 

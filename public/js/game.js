@@ -13,7 +13,7 @@ import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
-import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady } from './grannyGlb.js';
+import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady, fatherReady, makeTeddy } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
 import { MOBILE, touchName, setTouchCtx, mobileText } from './touch.js';
@@ -30,6 +30,9 @@ import { stepMover, startVault } from './movement.js';
 import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked, heightAt, levelOf, levelsMeet } from './map.js';
 import { sound } from './audio.js';
+import { updateCity, cityHideFx } from './cityworld.js';
+import { driveCar } from './city.js';
+import { HIDE_KINDS } from './citymap.js';
 import { tex } from './textures.js';
 import { icon, STATE_ICON, POWER_ICON } from './icons.js';
 
@@ -325,6 +328,7 @@ function fpModelReady(id, sk) {
   if (id === 'grandpa') return grandpaReady();
   if (id === 'angeline') return angelineReady();
   if (id === 'nosferatu') return nosferatuReady();
+  if (id === 'father') return fatherReady();
   if (id === 'foreman') return sk.batman ? batmanReady() : foremanReady();
   if (id === 'slimer') return staticReady('slimer');
   return true;
@@ -634,6 +638,10 @@ export class Game {
         if (me.char === 'foreman') {
           if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'chain', yaw: me.yaw, pitch: me.pitch }); this.sendIn(); }
+        } else if (me.char === 'father') {
+          // Tendril Lash: hold to grow them, let go to lash (the host lashes where he is facing)
+          if (down && me.abCd <= 0) { this.aimHeld = true; this.sendIn(); }
+          else if (!down && this.aimHeld) { this.aimHeld = false; this.sendIn(); }
         } else if (me.char === 'chucky' || me.char === 'nosferatu') {
           if (down && me.abCd <= 0 && !me.leap) { this.aimHeld = true; this.sendIn(); }
           else if (!down && this.aimHeld) { this.aimHeld = false; this.send({ t: 'act', a: 'pounce', yaw: me.yaw }); this.sendIn(); }
@@ -658,6 +666,9 @@ export class Game {
           this.send({ t: 'act', a: 'ability' });
         }
       }
+    } else if (e.button === 2 && me.item === 'teddy') {
+      // the Teddy: hold it up (killers who see it are pacified)
+      if (down && me.st === 'ok' && !me.act) { if (me.teddy > 0 && !(me.tedT > 0) && !(me.tedCd > 0)) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'teddy' }); } else if (!(me.teddy > 0)) this.feed('Your Teddy is spent.'); }
     } else if (e.button === 2 && me.item === 'taser') {
       // survivor taser: click to fire where you're looking
       if (down && me.st === 'ok' && !me.act && me.tasers > 0) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'taser', yaw: this.camYaw }); }
@@ -792,6 +803,9 @@ export class Game {
     if (this.execTrap && !S.players.some(o => o.st === 'exec')) { this.execTrapT = (this.execTrapT || 0) + dt; if (this.execTrapT > 6) { this.scene.remove(this.execTrap); this.execTrap = null; this.execTrapT = 0; } } else this.execTrapT = 0;
     this.updateSpiderMom(dt, S);
     this.updateKids(dt, S);
+    if (S.cars) updateCity(this, S, dt, me);
+    this.updateFatherFx(dt, S, me);
+    if (S.mode === 'pages') this.updatePages(S, dt);
     this.updateCreep(S, me);
     this.updateSlime(S);
     this.updateSpears(dt, S);
@@ -829,7 +843,12 @@ export class Game {
     // mouse look
     const sens = (this.settings.sens || 1) * 0.0022;
     const inv = this.settings.invert ? -1 : 1;
-    if (me.role === 'killer') {
+    if (me.car >= 0 || me.hide >= 0) {
+      // City Mode: driving / hiding, the mouse looks round the car (it swings back behind after a moment)
+      if (this.mdx || this.mdy) this.mouseT = this.t;
+      this.carOrbit = Math.max(-2.8, Math.min(2.8, (this.carOrbit || 0) - this.mdx * sens));
+      this.carPitch = Math.max(-0.4, Math.min(0.7, (this.carPitch ?? 0.22) + this.mdy * sens * inv));
+    } else if (me.role === 'killer') {
       let dyaw = Math.max(-0.6, Math.min(0.6, -this.mdx * sens));
       if (me.char === 'butcher' && me.ab === 1) dyaw = Math.max(-1.3 * dt, Math.min(1.3 * dt, dyaw));
       if (me.stun > 0) dyaw = 0;
@@ -845,6 +864,18 @@ export class Game {
     const eHeld = this.keys.has('KeyE') && !this.paused;
     if (eHeld !== this.eHeld) { this.eHeld = eHeld; this.sendIn(); }
 
+    // City Mode: at the wheel (the car is driven here, on my own machine, and its position sent like walking)
+    if (me.car >= 0 && S.cars && S.phase === 'play') {
+      const sc = S.cars[me.car];
+      if (!this.drive || this.drive.id !== me.car) { this.drive = { id: me.car, x: sc ? sc.x : me.x, z: sc ? sc.z : me.z, y: sc ? sc.y : me.yaw, v: 0 }; this.carOrbit = 0; }
+      const mi = this.paused ? { f: 0, r: 0 } : this.moveInput(), D = this.drive;
+      const crash = driveCar(this.M, S, D, { f: mi.f, r: mi.r }, dt);
+      if (crash > 5) { this.shake = Math.min(1, crash / 12); sound.play('thud', D.x, D.z); }
+      me.x = D.x; me.z = D.z; me.yaw = D.y; me.mv = 0;
+      if (sc) { sc.x = D.x; sc.z = D.z; sc.y = D.y; sc.v = D.v; }
+    } else if (this.drive) { this.drive = null; this.carOrbit = 0; }
+    if (me.hide < 0 && this.wasHiding) { this.wasHiding = false; this.carOrbit = 0; }
+    if (me.hide >= 0) this.wasHiding = true;
     // movement
     const free = me.role === 'killer' || me.st === 'ok' || me.st === 'down';
     if (free && !this.paused && S.phase === 'play') {
@@ -877,7 +908,7 @@ export class Game {
       if (this.posTimer <= 0) {
         // 30/s on a steady cadence; ct (my clock) lets the host order and smooth the updates
         this.posTimer = Math.max(0, this.posTimer + 1 / 30);
-        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, h: me.hop ? +(me.hop.t / me.hop.d).toFixed(2) : 0, fl: me.fl || 0, sp: me.sp != null ? +me.sp.toFixed(1) : undefined, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
+        this.send({ t: 'pos', x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), mv: me.mv, cr: me.cr, v: me.vault ? 1 : 0, h: me.hop ? +(me.hop.t / me.hop.d).toFixed(2) : 0, fl: me.fl || 0, sp: me.sp != null ? +me.sp.toFixed(1) : undefined, cy: this.drive ? +this.drive.y.toFixed(3) : undefined, cv: this.drive ? +this.drive.v.toFixed(2) : undefined, tp: this.myTp, ct: +(performance.now() / 1000).toFixed(3) });
       }
     }
     // skill checks
@@ -887,7 +918,7 @@ export class Game {
   // ---------------- skill checks ----------------
   updateSkill(dt, me) {
     const struggling = me.role === 'survivor' && me.st === 'caged' && me.stage >= 2; // fighting the Entity on the hook
-    const working = struggling || (me.act && (me.act.k === 'repair' || me.act.k === 'heal' || me.act.k === 'self') && me.role === 'survivor');
+    const working = struggling || (me.act && ((me.act.k === 'repair' && this.S.mode !== 'pages') || me.act.k === 'heal' || me.act.k === 'self') && me.role === 'survivor'); // (no skill checks on a page)
     if (!working) { if (this.skill) { this.skill = null; this.skillCanvas.classList.add('hidden'); } this.skillCooldown = Math.max(this.skillCooldown, 1.2); return; }
     if (!this.skill) {
       this.skillCooldown -= dt;
@@ -965,7 +996,7 @@ export class Game {
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb === 'freddy' && !c.rig.freddy && realismReady('freddy')) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (p.char === 'father' && lookRole(p) === 'killer' && !c.rig.father && fatherReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb === 'freddy' && !c.rig.freddy && realismReady('freddy')) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -975,7 +1006,7 @@ export class Game {
       const R = c.rig, local = p.id === this.myId;
       const execing = p.role === 'killer' && p.act && p.act.k === 'execute';
       const hidden = p.st === 'dead' || p.st === 'out' || (p.st === 'ghost' && !local) || (local && p.role === 'killer' && !execing && !isTpv(p));
-      R.root.visible = !hidden;
+      R.root.visible = !hidden && !(p.car >= 0 || p.hide >= 0); // (City Mode: in a car / a hiding spot)
       // smoothing. Other players are already interpolated between network updates (clients:
       // snapshots; host: the remote player's own position stream), so only a light filter is
       // added there; heavy smoothing would draw them behind where hits are actually checked.
@@ -1043,7 +1074,7 @@ export class Game {
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
         if (p.char === 'slendrina') { st.gaze = p.gaze > 0; st.speed = c.spd; }
-        if (p.char === 'nosferatu') st.speed = c.spd;
+        if (p.char === 'nosferatu' || p.char === 'father') st.speed = c.spd;
         if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
@@ -1105,6 +1136,14 @@ export class Game {
         if (cg) { const yw = R.root.rotation.y; R.root.position.set(cg.x - Math.cos(yw) * 0.17, HOOK_Y - 1.62 + Math.sin(this.t * 1.1) * 0.015, cg.z + Math.sin(yw) * 0.17); }
       }
       if (p.role === 'survivor') this.placeTorch(c, R, p, flashOn && R.root.visible);
+      // Season 2: the Teddy, held up in both hands while it's raised
+      if (p.role === 'survivor' && (p.tedT > 0 || c.teddy)) {
+        if (!c.teddy) { const t = makeTeddy(); if (t) { c.teddy = t; this.scene.add(t); } }
+        if (c.teddy) {
+          const up = p.tedT > 0 && R.root.visible; c.teddy.visible = up;
+          if (up) { const f = fwd(c.yaw); c.teddy.position.set(c.x + f.x * 0.42, 1.25 + (c.h || 0), c.z + f.z * 0.42); c.teddy.rotation.y = c.yaw; }
+        }
+      }
       if (p.role === 'survivor' && local && (p.st === 'ghost') !== !!c.ghostFx) { c.ghostFx = p.st === 'ghost'; R.setOpacity(c.ghostFx ? 0.35 : 1); } // you, as a ghost
       if (p.role === 'killer' && p.char === 'slimer') R.setOpacity(p.phase > 0 ? (viewerKiller ? 0.4 : 0.25 + Math.sin(this.t * 12) * 0.08) : 1);
       // Granny fading out on a Creep
@@ -1112,7 +1151,7 @@ export class Game {
       // Angeline's Yellow Eyes: a cone of yellow light from her eyes while it's on
       if (p.role === 'killer' && p.char === 'angeline') this.updateBeam(c, p, R);
       // your own third-person Angeline fades when a wall pushes the camera up close (her sleeves would fill the view)
-      if (local && p.role === 'killer' && (p.char === 'angeline' || p.char === 'nosferatu')) {
+      if (local && p.role === 'killer' && (p.char === 'angeline' || p.char === 'nosferatu' || p.char === 'father')) {
         const o = Math.round(Math.max(0.22, Math.min(1, ((this.camDist ?? 3) - 1.2) / 1.6)) * 20) / 20;
         if (o !== c.anOp) { c.anOp = o; R.setOpacity(o); }
       }
@@ -1136,7 +1175,7 @@ export class Game {
     if (this.view && me) {
       const c = this.chars.get(me.id), cs = (c && c.st) || {};
       animateView(this.view, { atk: me.dash ? 1 : me.atk, atkF: me.dash ? Math.min(1, me.dash.t / me.dash.d) : cs.atkF, atkHit: me.atkHit, recF: cs.recF, aim: me.aim, stun: me.stun > 0, rampage: me.char === 'butcher' && me.ab === 1, carry: me.carry != null, act: me.act && me.act.k !== 'execute', speed: c ? c.spd : 0, t: this.t, tele: !!me.tele, saw: me.char === 'bateman' && me.ammo > 0 }, dt);
-      this.view.visible = !(me.act && me.act.k === 'execute') && !(this.swapHeld && this.t - this.swapT > 0.18); // (hidden while looking through Spider Mom's eyes)
+      this.view.visible = !(me.car >= 0) && !(me.act && me.act.k === 'execute') && !(this.swapHeld && this.t - this.swapT > 0.18); // (hidden while looking through Spider Mom's eyes)
       const faded = me.char === 'wisp' && me.ab !== 0;
       if (faded !== this.viewFaded) { this.viewFaded = faded; this.view.traverse(o => { if (o.isMesh) { o.material.transparent = faded || o.userData.op < 1; o.material.opacity = faded ? 0.35 : o.userData.op; } }); }
       // swing trail
@@ -1389,6 +1428,7 @@ export class Game {
     const shake = this.shake > 0 ? this.shake : 0;
     this.shake = Math.max(0, this.shake - dt * 1.5);
     const sx = (Math.random() - 0.5) * shake * 0.15, sy = (Math.random() - 0.5) * shake * 0.15;
+    if (S.cars && (target.car >= 0 || target.hide >= 0)) { this.cityCamera(dt, S, me, target, sx, sy); return; }
     const tpv = me.role === 'killer' && isTpv(me);
     if (me.role === 'killer' && this.swapHeld && this.t - this.swapT > 0.18 && this.spider && S.spider) {
       // looking through Spider Mom's eyes: low to the floor, wherever she is
@@ -1468,6 +1508,92 @@ export class Game {
     cam.fov = this.settings.fov || 75; cam.updateProjectionMatrix();
     sound.listener(fx, fz, yaw);
   }
+  // Slendrina's Father: his lashes (a black whip of tendrils that snaps out and withers), and the static on a
+  // survivor's screen while he is close and in sight (stronger the longer they look)
+  updateFatherFx(dt, S, me) {
+    for (const L of this.lashes || []) {
+      L.t += dt; const f = L.t / 0.45;
+      L.m.scale.set(Math.max(0.05, 1 - f), Math.min(1, L.t / 0.08), Math.max(0.05, 1 - f)); L.m.material.opacity = Math.max(0, 1 - f);
+      if (f >= 1) { this.scene.remove(L.m); L.done = true; }
+    }
+    if (this.lashes) this.lashes = this.lashes.filter(L => !L.done);
+    let st = 0;
+    if (me && me.role === 'survivor' && me.st === 'ok') for (const K of S.players) {
+      if (K.role !== 'killer' || K.char !== 'father') continue;
+      const d = Math.hypot(K.x - me.x, K.z - me.z), R = KILLERS.father.feature.radius;
+      if (d < R && levelsMeet(K, me) && !losBlocked(this.M, me.x, me.z, K.x, K.z, 1.2)) st = Math.max(st, (1 - d / R) * 0.55 + (me.sta || 0) / KILLERS.father.feature.need * 0.45);
+    }
+    this.staticK = (this.staticK || 0) + (st - (this.staticK || 0)) * Math.min(1, dt * 5);
+    let ov = this.staticEl;
+    if (!ov && this.staticK > 0.02) { ov = this.staticEl = document.getElementById('staticov') || document.createElement('div'); ov.id = 'staticov'; document.body.appendChild(ov); }
+    if (ov) { ov.style.opacity = this.staticK > 0.02 ? Math.min(0.85, this.staticK).toFixed(2) : '0'; ov.style.backgroundPosition = `${(Math.random() * 200) | 0}px ${(Math.random() * 200) | 0}px`; }
+  }
+  // The Pages: each generator is drawn as a page nailed to a post (a light flickers on it until it is taken)
+  updatePages(S, dt) {
+    if (!this.pages) {
+      const R = (i => () => ((i = (i * 16807) % 2147483647) / 2147483647))(7), lines = ['ALWAYS WATCHES', 'NO EYES', 'LEAVE ME ALONE', 'HE IS TALL', "DON'T LOOK", 'FOLLOWS', 'CAN\'T RUN', 'HELP ME'];
+      this.pages = this.M.gens.map((g, i) => {
+        const o = this.W.gens[i], au = o.userData.aura;
+        o.traverse(m => { if (m.isMesh && m !== au) m.visible = false; });
+        if (au) { au.geometry = new THREE.BoxGeometry(0.5, 0.62, 0.12); au.position.set(0, 1.35, 0.09); au.scale.setScalar(1); au.rotation.set(0, 0, 0); } // (the outline of the page)
+        const c = document.createElement('canvas'); c.width = 128; c.height = 160; const x = c.getContext('2d');
+        x.fillStyle = '#e8e4d8'; x.fillRect(0, 0, 128, 160); x.strokeStyle = '#1a1a1a'; x.lineWidth = 3;
+        for (let k = 0; k < 14; k++) { x.beginPath(); x.moveTo(10 + R() * 108, 60 + R() * 90); x.lineTo(10 + R() * 108, 60 + R() * 90); x.stroke(); }
+        x.beginPath(); x.ellipse(64, 95, 14, 40, 0, 0, 7); x.stroke(); x.beginPath(); x.arc(64, 48, 11, 0, 7); x.stroke();
+        x.fillStyle = '#111'; x.font = 'bold 15px serif'; x.textAlign = 'center'; x.fillText(lines[i % lines.length], 64, 22);
+        const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+        const grp = new THREE.Group(); grp.position.set(g.x, 0, g.z); grp.rotation.y = g.rot || 0;
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.7, 0.16), new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 1 })); post.position.y = 0.85; post.castShadow = true; grp.add(post);
+        const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.52), new THREE.MeshStandardMaterial({ map: t, roughness: 0.9, side: THREE.DoubleSide, emissive: 0x302820, emissiveMap: t })); paper.position.set(0, 1.35, 0.09); grp.add(paper);
+        const glow = new THREE.PointLight(0xe8e0c8, 2.2, 5, 1.6); glow.position.set(0, 1.5, 0.6); grp.add(glow);
+        this.scene.add(grp);
+        return { grp, paper, glow };
+      });
+    }
+    this.pages.forEach((P, i) => {
+      const gs = S.gens[i]; P.paper.visible = !gs.done; P.glow.intensity = gs.done ? 0 : 2.2 * (0.8 + Math.sin(this.t * 3 + i) * 0.2);
+      P.paper.rotation.z = gs.n > 0 ? Math.sin(this.t * 14) * 0.05 * gs.p : 0;
+      this.W.genLights[i].intensity = 0; // (no generator glow)
+    });
+    // the fog closes in with every page
+    if (this.scene.fog && this.scene.fog.density != null) { this.fog0 ??= this.scene.fog.density; this.scene.fog.density = this.fog0 * (1 + (S.gensDone || 0) * 0.12); }
+  }
+  lashFx(e) {
+    const len = Math.max(0.6, e.len || 1), g = new THREE.CylinderGeometry(0.02, 0.09, len, 6); g.translate(0, len / 2, 0); g.rotateX(Math.PI / 2);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true }));
+    const kc = this.chars.get(e.id), x = kc ? kc.x : e.x, z = kc ? kc.z : e.z;
+    m.position.set(x + Math.sin(e.yaw) * 0.3, 1.75, z + Math.cos(e.yaw) * 0.3); m.rotation.y = e.yaw; m.rotation.x = 0.08;
+    this.scene.add(m); (this.lashes ||= []).push({ m, t: 0 });
+  }
+
+  // City Mode: a chase camera behind the car; from inside a hiding spot, a peek out through the gap
+  cityCamera(dt, S, me, target, sx, sy) {
+    const cam = this.camera, C = this.W.city, mine = target === me;
+    let ov = document.getElementById('hideov');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'hideov'; document.body.appendChild(ov); }
+    ov.classList.toggle('on', mine && target.hide >= 0);
+    if (mine && this.t - (this.mouseT || 0) > 1.6) this.carOrbit = (this.carOrbit || 0) * Math.exp(-dt * 2.2);
+    const orbit = mine ? this.carOrbit || 0 : 0, pitch = mine ? this.carPitch ?? 0.22 : 0.22;
+    if (target.car >= 0) {
+      const o = C && C.cars[target.car], cx = o ? o.x : target.x, cz = o ? o.z : target.z, yaw = (o ? o.y : target.yaw) + orbit;
+      const dist = 6.6, bx = -Math.sin(yaw) * Math.cos(pitch), by = Math.sin(pitch), bz = -Math.cos(yaw) * Math.cos(pitch);
+      let d = dist;
+      for (let k = 0.8; k <= dist; k += 0.2) if (pointBlocked(this.M, cx + bx * k, 1.7 + by * k, cz + bz * k)) { d = Math.max(1.4, k - 0.3); break; }
+      cam.position.set(cx + bx * d + sx, Math.max(0.7, 1.7 + by * d) + sy, cz + bz * d);
+      cam.lookAt(cx + Math.sin(yaw) * 2.5, 1.15, cz + Math.cos(yaw) * 2.5);
+      cam.fov = (this.settings.fov || 75) + Math.min(14, Math.abs(mine && this.drive ? this.drive.v : 0) * 0.9); cam.updateProjectionMatrix();
+      sound.listener(cx, cz, yaw);
+      return;
+    }
+    const h = this.M.hides[target.hide], K = HIDE_KINDS[h.kind], ext = (K.r || K.hz) + 0.06;
+    const ey = h.kind === 'toilet' ? 1.55 : Math.max(0.75, K.h - 0.28), yaw = h.yaw + Math.max(-1.1, Math.min(1.1, orbit));
+    const px = h.x + Math.sin(h.yaw) * ext, pz = h.z + Math.cos(h.yaw) * ext;
+    cam.position.set(px, ey, pz);
+    cam.lookAt(px + Math.sin(yaw) * 3, ey - 0.25 - (pitch - 0.22) * 1.5, pz + Math.cos(yaw) * 3);
+    cam.fov = 70; cam.updateProjectionMatrix();
+    sound.listener(px, pz, yaw);
+  }
+
   execFx(victim, K, f, ch, pos) {
     const key = victim.id + ':' + (victim.stage || 0);
     if (!this.execFired || this.execFired.key !== key) this.execFired = { key, s: new Set(), pool: 0 };
@@ -2060,7 +2186,7 @@ export class Game {
         case 'gen': for (const p of S.players) if (p.role === 'survivor' && Math.hypot(p.x - e.x, p.z - e.z) < 3) this.petReact(p.id, 'cheer', 2);
           sound.play('gen', e.x, e.z);
           this.sparks.spawn(e.x, 1.6, e.z, 60, 0xffc060, 4, 1.2, -6);
-          this.feed(e.left > 0 ? `A generator has been repaired. ${e.left} to go.` : 'All required generators repaired!');
+          if (S.mode !== 'pages') this.feed(e.left > 0 ? `A generator has been repaired. ${e.left} to go.` : 'All required generators repaired!');
           if (me && me.role === 'killer') this.marker(e.x, 1.5, e.z, 'gen'); // the killer sees where it was finished
           break;
         case 'genfail': {
@@ -2188,6 +2314,78 @@ export class Game {
         case 'creep': {
           this.smoke.spawn(e.x, 1, e.z, 16, 0x0a0a0a, 1.1, 2, 0.5, 1); sound.play('fade', e.x, e.z, { on: true });
           if (e.id === this.myId) this.teleFx = 1;
+          break;
+        }
+        // ---- Slendrina's Father ----
+        case 'lash': {
+          this.lashFx(e); sound.play('whisper', e.x, e.z, { pitch: 0.6 });
+          if (e.hit === this.myId) { this.shake = 0.5; this.feed('The tendrils caught you!', 'big'); }
+          else if (e.id === this.myId && e.hit == null) this.feed('The lash missed.');
+          break;
+        }
+        case 'fstep': {
+          const kc = this.chars.get(e.id); if (kc) kc.rig.setOpacity && kc.rig.setOpacity(0.25);
+          this.smoke.spawn(e.x, 1.3, e.z, 18, 0x060606, 1.2, 1.2, 0.3, 1);
+          if (e.to === this.myId) { sound.play('whisper', e.x, e.z, { pitch: 0.5 }); this.feed('Something is behind you.', 'big'); }
+          break;
+        }
+        case 'fstep-end': {
+          const kc = this.chars.get(e.id); if (kc) { kc.rig.setOpacity && kc.rig.setOpacity(1); kc.x = e.x; kc.z = e.z; }
+          this.smoke.spawn(e.x, 1.3, e.z, 22, 0x060606, 1.4, 1.2, 0.3, 1);
+          if (e.to === this.myId) { sound.play('scream', e.x, e.z, { pitch: 0.7, len: 0.5 }); this.staticK = 1; this.shake = 0.4; }
+          break;
+        }
+        case 'teddy': sound.play('whisper', e.x, e.z, { pitch: 1.6 }); break;
+        case 'pacify': {
+          if (e.id === this.myId) { this.feed(`A Teddy! You're pacified for ${e.t}s.`, 'big'); this.shake = 0.3; }
+          else if (e.by === this.myId) this.feed(`${name(e.id)} saw your Teddy: pacified for ${e.t}s!`, 'big');
+          else this.feed(`${name(e.by)}'s Teddy pacified ${name(e.id)}.`);
+          sound.play('stun', e.x, e.z);
+          break;
+        }
+        case 'teddygone': if (e.id === this.myId) this.feed('Your Teddy is spent for this match.'); break;
+        case 'page': {
+          sound.play('whisper', this.M.gens[e.id].x, this.M.gens[e.id].z, { pitch: 0.7 });
+          this.feed(`${e.n} / ${e.of} pages${e.n >= e.of ? ': the gates have power!' : ''}`, 'big');
+          if (me && me.role === 'survivor') this.staticK = 0.6; // (the static flares: he heard)
+          break;
+        }
+        case 'shufwarn': this.feed('CHAOS SHUFFLE in 3…', 'big'); sound.play('whisper', me ? me.x : 0, me ? me.z : 0, { pitch: 0.5 }); break;
+        case 'shuffle': {
+          this.teleFx = 1; this.shake = 0.5; sound.play('roar', me ? me.x : 0, me ? me.z : 0, { vol: 0.5 });
+          if (e.a === this.myId || e.b === this.myId) { const m2 = this.mine(); this.feed(m2 && m2.role === 'killer' ? 'CHAOS SHUFFLE: you are the killer now. Hunt!' : 'CHAOS SHUFFLE: you are a survivor now. Run!', 'big'); }
+          break;
+        }
+        case 'fstep-none': if (e.id === this.myId) this.feed('Look at a survivor to step behind them.'); break;
+        case 'staticrev': if (e.id === this.myId) this.feed("You stared too long. He knows where you are.", 'big'); else if (e.by === this.myId) this.feed(name(e.id) + ' looked at you. Revealed.'); break;
+        // ---- City Mode ----
+        case 'hidein': case 'hideout': {
+          cityHideFx(this, e.id, false); sound.play('thunk', e.x, e.z, { vol: 0.5 });
+          if (e.k === 'hidein' && e.by === this.myId) this.feed('You are hiding. The killer can still search it.');
+          break;
+        }
+        case 'search': {
+          cityHideFx(this, e.id, true); sound.play('thud', e.x, e.z);
+          if (e.found === this.myId) { this.feed('The killer found you!', 'big'); this.shake = 0.6; }
+          else if (e.by === this.myId && e.found == null) this.feed('Nobody in there.');
+          else if (e.by === this.myId) this.feed('Found ' + name(e.found) + '!', 'big');
+          break;
+        }
+        case 'pedkill': case 'runover': {
+          this.blood.spawn(e.x, 1.0, e.z, 26, 0x6a0505, 2.6, 0.9);
+          this.decals.add(e.x, e.z, 0.5 + Math.random() * 0.4, 0);
+          sound.play(e.k === 'runover' ? 'thud' : 'hit', e.x, e.z, { down: true });
+          sound.play('scream', e.x, e.z, { pitch: 1.25, len: 0.5 });
+          if (e.by === this.myId) this.feed((e.k === 'runover' ? 'Ran over a pedestrian' : 'Pedestrian killed') + (e.got ? ` · +${e.got} Embers` : ' · (no more Embers for that this match)'));
+          break;
+        }
+        case 'scream': sound.play('scream', e.x, e.z, { pitch: 1.3 + Math.random() * 0.3, len: 0.7 }); break;
+        case 'carjack': sound.play('thunk', e.x, e.z); if (e.by === this.myId) this.feed("You pulled the driver out. It's yours."); break;
+        case 'cardoor': sound.play('thunk', e.x, e.z, { vol: 0.4 }); if (e.in && e.by === this.myId) this.feed("Victim's Car: " + (MOBILE ? 'push the stick to drive and steer, USE to get out.' : 'W / S to drive, A / D to steer, hold E to get out.')); break;
+        case 'carhit': {
+          sound.play('thud', e.x, e.z);
+          if (e.id === this.myId) { this.shake = 0.8; this.feed(e.ram ? 'Rammed by a car!' : 'Knocked over by a car!', 'big'); }
+          else if (e.by === this.myId && e.ram) this.feed('You rammed the killer!', 'big');
           break;
         }
         case 'kidcry': {
@@ -2362,6 +2560,12 @@ export class Game {
       pct = me.abCd / def.cooldown;
       sub = me.pull ? 'Reeling…' : me.aim ? 'Aiming…' : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready';
       extra = me.ab ? `Lights Out · ${Math.ceil(me.abT)}s · one hit downs` : me.ab2Cd > 0 ? `${kbd('ability2')} Lights Out ${Math.ceil(me.ab2Cd)}s` : '' + kbd('ability2') + ' Lights Out ready';
+    } else if (me.char === 'father') {
+      const D2 = K.ability2, wound = me.aim ? Math.min(1, (me.abT || 0) / def.wind) : 0;
+      ready = me.abCd <= 0; pct = me.aim ? 1 - wound : me.abCd / def.cooldown;
+      sub = me.aim ? (wound < 1 ? 'Growing…' : 'Release to lash!') : me.abCd > 0 ? Math.ceil(me.abCd) + 's' : 'Ready · hold ' + B('RMB');
+      const seen = this.S.players.filter(o => o.role === 'survivor' && o.st === 'ok' && o.sta > 0.3).length;
+      extra = (me.tele ? '<b>Stepping…</b>' : me.ab2Cd > 0 ? `${kbd('ability2')} Faceless Step ${Math.ceil(me.ab2Cd)}s` : `${kbd('ability2')} Faceless Step ready (look at a survivor)`) + (seen ? ` · ${seen} staring at you` : '');
     } else if (me.char === 'nosferatu') {
       const coil = me.aim ? Math.min(1, Math.max(0, (me.abT || 0) - 0.1) / def.coil) : 0, D2 = K.ability2, bleeding = this.S.players.filter(o => o.role === 'survivor' && o.st === 'ok' && o.hp === 1).length;
       ready = me.abCd <= 0 && !me.leap; pct = me.aim ? 1 - coil : me.abCd / def.cooldown;
@@ -2466,7 +2670,7 @@ export class Game {
     // objective
     const left = Math.max(0, S.gensNeeded - S.gensDone);
     const obj = !S.gatesPowered
-      ? `<div class="oi">${icon('gen')}</div><div><div class="on">${left}</div><div class="ol">Generator${left === 1 ? '' : 's'} left</div></div>`
+      ? `<div class="oi">${icon('gen')}</div><div><div class="on">${left}</div><div class="ol">${S.mode === 'pages' ? 'Page' : 'Generator'}${left === 1 ? '' : 's'} left</div></div>`
       : `<div class="oi">${icon('gate')}</div><div><div class="ol" style="color:var(--gold)">Exit gates powered</div><div class="ol">The night falls in ${Math.ceil(S.collapse)}s</div><div class="collapse"><div style="width:${(S.collapse / RULES.collapse * 100).toFixed(1)}%"></div></div></div>`;
     let clock = '';
     const mm = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
@@ -2512,7 +2716,7 @@ export class Game {
         if (me.st === 'ok') {
           if (me.act) {
             prog = me.prog;
-            label = { repair: 'Repairing', heal: 'Healing', self: 'Self-care', rescue: 'Unhooking', gate: 'Opening gate', snuff: 'Snuffing lantern' }[me.act.k] || '';
+            label = { repair: S.mode === 'pages' ? 'Taking the page' : 'Repairing', heal: 'Healing', self: 'Self-care', rescue: 'Unhooking', gate: 'Opening gate', snuff: 'Snuffing lantern' }[me.act.k] || '';
             if (me.act.k === 'rescue' || me.act.k === 'snuff') prog = (me.act.t || 0) / actionTime(me.act.k, me, S);
           } else {
             const it = findInteraction(this.M, S, me);
@@ -2722,6 +2926,7 @@ export class Game {
   }
 
   dispose() {
+    { const ov = document.getElementById('hideov'); if (ov) ov.classList.remove('on'); const so = document.getElementById('staticov'); if (so) so.style.opacity = '0'; }
     this.disposed = true;
     if (this.emoteBar && this.emoteBar.parentNode === document.body) this.emoteBar.remove();
     this.unbind();

@@ -1089,3 +1089,36 @@ html:not(.mobile) .mobile-only { display: none !important; }
 .cd-hero .cd-row .btn { font-size: 22px; padding: 0 28px; }
 .cd-kinds { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; color: var(--dim); font-size: 14px; }
 .cd-kinds b { color: var(--bone); }
+
+/* City Mode: peeking out of a hiding spot */
+#hideov { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  background: radial-gradient(ellipse 60% 22% at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 70%, rgba(0,0,0,.92) 100%),
+    repeating-linear-gradient(180deg, rgba(0,0,0,0) 0 7vh, rgba(8,10,8,.85) 7vh 9vh); }
+#hideov.on { display: block; }
+
+/* the season's headline mode on the main menu */
+.mainnav #nav-event { border-color: rgba(255, 176, 60, .55); background: linear-gradient(90deg, rgba(120, 40, 10, .55), rgba(40, 14, 8, .2)); }
+.mainnav #nav-event span { color: #ffc060; letter-spacing: .04em; }
+.mainnav #nav-event small { color: #ffdca0; }
+
+/* Slendrina's Father: static on the screen while he is close */
+#staticov { position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .8 0 0 0 0 .8 0 0 0 0 .8 0 0 0 1.4 -.35'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-color: rgba(30, 30, 34, .25); }
+
+/* Season 2: the Teddy (loadout item picker, store card) */
+.it-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.it-opt { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.35); color: #ddd; border-radius: 4px; cursor: pointer; font: inherit; }
+.it-opt.on { border-color: #e8b04a; color: #ffd890; background: rgba(120,70,10,.35); }
+.it-opt .ico { width: 20px; height: 20px; }
+.teddy-art { display: inline-block; width: 22px; height: 22px; background: url(../img/teddy.png) center / contain no-repeat; }
+.teddy-art.big { width: 74px; height: 74px; flex: none; }
+.teddy-card { border-color: rgba(232,176,74,.6) !important; }
+
+/* 1.4.4: the loading reel held on a still while the match is built (moved by the compositor, so it never stutters) */
+#loading .ls-still { position: absolute; inset: 0; display: none; overflow: hidden; background: #020203; }
+#loading.held .ls-still { display: block; }
+#loading .ls-still canvas { position: absolute; inset: -3%; width: 106%; height: 106%; will-change: transform; animation: lsdrift 9s ease-in-out infinite alternate; }
+#loading .ls-flick { position: absolute; inset: 0; background: radial-gradient(ellipse at 52% 40%, rgba(255,190,120,.16), transparent 55%); will-change: opacity; animation: lsflick 3.2s steps(1, end) infinite; }
+@keyframes lsdrift { 0% { transform: scale(1) translate(0, 0); } 100% { transform: scale(1.06) translate(-1.2%, -0.8%); } }
+@keyframes lsflick { 0%, 100% { opacity: 1; } 6% { opacity: .2; } 8% { opacity: 1; } 47% { opacity: .85; } 49% { opacity: .1; } 51% { opacity: .9; } 80% { opacity: 1; } }

@@ -7,7 +7,7 @@ export const isTouch = () => typeof window !== 'undefined' && (window.__forceTou
 // never a key or a mouse button.
 export const MOBILE = isTouch();
 if (MOBILE && typeof document !== 'undefined') document.documentElement.classList.add('mobile');
-const R_BTN = { granny: 'HEAR', grandpa: 'TRAP', slendrina: 'GAZE', angeline: 'LULLABY', nosferatu: 'NIGHTFALL' };
+const R_BTN = { granny: 'HEAR', grandpa: 'TRAP', slendrina: 'GAZE', angeline: 'LULLABY', nosferatu: 'NIGHTFALL', father: 'STEP' };
 let ctxRole = 'survivor', ctxChar = 'mara';
 export function setTouchCtx(role, char) { ctxRole = role || ctxRole; ctxChar = char || ctxChar; }
 // an action (keybind id, or 'LMB' / 'RMB' / 'V') -> the name of the on-screen button that does it
@@ -51,10 +51,13 @@ const TC_ICONS = {
   take: SV('<circle cx="32" cy="16" r="6"/><path d="M22 54l4-20h12l4 20M10 28a24 24 0 0 1 8-12M54 28a24 24 0 0 0-8-12"/>'),
   next: SV('<path d="M14 32h34M36 18l14 14-14 14"/>'),
   bat: SV('<path d="M14 52l6 6 30-34a9 9 0 0 0-12-12z"/><path d="M14 52l-4 4"/><path d="M40 16l8 8" stroke-dasharray="3 4"/>'),
+  // Slendrina's Father: a tall faceless figure (Faceless Step) and his tendrils (Tendril Lash)
+  step: SV('<path d="M32 6a6 7 0 1 1 0 14a6 7 0 1 1 0-14z"/><path d="M26 22h12l2 20h-4l-2 16h-4l-2-16h-4z"/><path d="M20 30l6-6M44 30l-6-6"/>'),
+  tendril: SV('<path d="M32 56V30"/><path d="M32 34C22 30 18 20 10 18M32 34c10-4 14-14 22-16M32 42c-8 0-14 6-20 4M32 42c8 0 14 6 20 4"/>'),
   night: SV('<path d="M40 10a22 22 0 1 0 14 34A18 18 0 0 1 40 10z"/><path d="M14 16l3 3M10 30h4M18 6v4"/>'),
   ghost: SV('<path d="M16 54V28a16 16 0 0 1 32 0v26l-6-5-5 5-5-5-5 5-5-5z"/><circle cx="26" cy="28" r="3"/><circle cx="38" cy="28" r="3"/>'),
 };
-const POWER_PIC = { granny: 'bat', grandpa: 'shotgun', slendrina: 'ghost', angeline: 'eyes', nosferatu: 'fangs' };
+const POWER_PIC = { granny: 'bat', grandpa: 'shotgun', slendrina: 'ghost', angeline: 'eyes', nosferatu: 'fangs', father: 'tendril' };
 function picOf(id, kind) {
   if (id === 'power') { const c = (kind || '').split('-')[1] || ctxChar; const k = POWER_PIC[c] || 'bat'; return TC_ICONS[k] || icon(k); }
   const lib = { atk: 'claws', light: 'flashlight', trap: 'beartrap', gaze: 'gaze', exec: 'exec' };
@@ -76,7 +79,7 @@ const BTN = {
   // id: [label, kind, what] kind: key (tap) / hold (key held while pressed) / mouse (button held) / toggle
   atk: ['ATTACK', 'mouse', 0], power: ['POWER', 'mouse', 2], light: ['LIGHT', 'mouse', 2],
   use: ['USE', 'hold', 'KeyE'], jump: ['VAULT', 'hold', 'Space'], run: ['RUN', 'toggle', 'ShiftLeft'], crouch: ['CROUCH', 'toggle', 'ControlLeft'],
-  hear: ['HEAR', 'key', 'KeyR'], trap: ['TRAP', 'key', 'KeyR'], gaze: ['GAZE', 'key', 'KeyR'], lull: ['LULLABY', 'key', 'KeyR'], night: ['NIGHTFALL', 'key', 'KeyR'], creep: ['CREEP', 'hold', 'KeyG'], swap: ['SWAP', 'hold', 'KeyV'], exec: ['EXECUTE', 'key', 'KeyF'], drop: ['DROP', 'key', 'KeyQ'],
+  hear: ['HEAR', 'key', 'KeyR'], trap: ['TRAP', 'key', 'KeyR'], gaze: ['GAZE', 'key', 'KeyR'], lull: ['LULLABY', 'key', 'KeyR'], night: ['NIGHTFALL', 'key', 'KeyR'], step: ['STEP', 'key', 'KeyR'], creep: ['CREEP', 'hold', 'KeyG'], swap: ['SWAP', 'hold', 'KeyV'], exec: ['EXECUTE', 'key', 'KeyF'], drop: ['DROP', 'key', 'KeyQ'],
   take: ['TAKE OVER', 'key', 'KeyT'], next: ['NEXT', 'key', 'KeyF'], status: ['STATUS', 'hold', 'Tab'], emote: ['EMOTE', 'key', 'KeyB'],
 };
 // 1.3.3: players can move / resize the buttons (Settings > Edit touch controls). Saved per device:
@@ -102,6 +105,7 @@ const LAYOUT = {
   'killer-slendrina': ['atk', 'power', 'use', 'jump', 'gaze', 'exec', 'drop'],
   'killer-angeline': ['atk', 'power', 'use', 'jump', 'lull', 'exec', 'drop'],
   'killer-nosferatu': ['atk', 'power', 'use', 'jump', 'night', 'exec', 'drop'],
+  'killer-father': ['atk', 'power', 'use', 'jump', 'step', 'exec', 'drop'],
   survivor: ['light', 'use', 'jump', 'run', 'crouch', 'status', 'emote'],
   dead: ['take', 'next', 'status'],
 };

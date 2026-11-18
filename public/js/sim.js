@@ -1,5 +1,6 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS, cleanAddons, addonMods } from './config.js';
+import { cityInit, cityUpdate, cityFinish, cityKillerHit, cityOnDamage } from './city.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt, levelStep, overlaps, floorUnder } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
@@ -17,7 +18,7 @@ export class Sim {
     this.mode = mode;
     this.S = {
       t: 0, phase: 'play', endT: 0, mode, timer: MODES[mode].time || 0, infStart: nSurv, lastStand: false,
-      gensNeeded: Math.max(2, Math.min(mode === 'duo' ? Math.min(6, M.gens.length - 1) : (M.half || HALF) > 60 ? Math.min(8, M.gens.length - 2) : 5, nSurv + 1)), gensDone: 0, gatesPowered: false, collapse: -1,
+      gensNeeded: mode === 'pages' ? Math.min(8, M.gens.length) : Math.max(2, Math.min(mode === 'duo' ? Math.min(6, M.gens.length - 1) : (M.half || HALF) > 60 ? Math.min(8, M.gens.length - 2) : 5, nSurv + 1)), gensDone: 0, gatesPowered: false, collapse: -1,
       players: [],
       gens: M.gens.map(() => ({ p: 0, done: false, reg: false, n: 0 })),
       bars: M.bars.map(() => 0),
@@ -55,6 +56,7 @@ export class Sim {
       }
     }
     this.possessionOn = POSSESSION;
+    cityInit(this); // City Mode: cars, pedestrians
   }
 
   makePlayer(r, sp, mode = this.mode) {
@@ -70,13 +72,15 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
+        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.role === 'survivor' && r.item === 'teddy' ? 'teddy' : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' && r.item !== 'teddy' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
         // 1.4: character stats (levels) and the killer's sidekick
         stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : '',
         addons: r.role === 'survivor' ? cleanAddons(r.addons) : [],
+        hide: -1, car: -1, hg: -1, // City Mode
+        teddy: r.role === 'survivor' && r.item === 'teddy' && mode !== 'bloodmoon' ? ITEMS.teddy.uses.length : 0, tedT: 0, tedCd: 0, // Season 2: the Teddy (uses left, held up, cooldown): in a hiding spot / at the wheel of a car
       });
     }
   }
@@ -93,13 +97,17 @@ export class Sim {
       case 'pos': {
         if (m.tp !== p.tp) return;
         if (p.role === 'survivor' && p.st !== 'ok' && p.st !== 'down' && p.st !== 'ghost') return;
+        if (p.hide >= 0) { p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); return; } // (in a hiding spot: only looking round)
         if (p.act || p.stun > 0 || p.leap || p.dash || p.pull || p.snare > 0 || p.swing || p.perchT > 0) { p.yaw = num(m.yaw, p.yaw); p.pitch = num(m.pitch, 0); return; }
         const nx = num(m.x, p.x), nz = num(m.z, p.z);
         // accept anything the player could have covered since their last update (lag spikes
         // included); otherwise pull them back to where the host has them instead of desyncing
         const since = Math.min(2, S.t - (p.posT ?? S.t)) + 0.25;
-        if (Math.hypot(nx - p.x, nz - p.z) <= 2 + since * 9) {
+        const car = p.car >= 0 && S.cars ? S.cars[p.car] : null;
+        if (Math.hypot(nx - p.x, nz - p.z) <= (car ? 3 + since * 17 : 2 + since * 9)) {
           p.x = nx; p.z = nz;
+          // at the wheel: the driver's machine drives the car
+          if (car && car.d === p.id) { car.x = nx; car.z = nz; car.y = num(m.cy, car.y); car.v = Math.max(-6, Math.min(15, num(m.cv, 0))); }
           // floors (Granny's House): the player's own idea of which floor they are on, if it's one
           // they could have stepped to from the floor the host has them on
           if (M.stairs && typeof m.fl === 'number') { const nf = m.fl | 0, fell = nf < (p.fl || 0) && (p.fl || 0) < 10 && !floorUnder(M, p.fl, nx, nz); if (nf === (p.fl || 0) || levelsMeet(p, { fl: nf }) || fell) { p.fl = nf; if (typeof m.sp === 'number') p.sp = m.sp; } }
@@ -129,6 +137,14 @@ export class Sim {
         }
         if (p.role === 'killer' && p.char === 'slendrina') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.tele && (p.fl || 0) < 10; if (p.aim && !was) p.abT = 0; }
         if (p.role === 'killer' && (p.char === 'chucky' || p.char === 'nosferatu')) { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && !p.leap && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
+        if (p.role === 'killer' && p.char === 'father') {
+          // Tendril Lash: hold to grow them, let go (after the wind-up) to lash
+          const was = p.aim, A = KILLERS.father.ability;
+          p.aim = !!m.aim && p.abCd <= 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk && !p.tele;
+          if (p.aim && !was) p.abT = 0;
+          if (was && !m.aim && p.abT >= A.wind && p.stun <= 0 && p.carry == null) this.fatherLash(p);
+        }
+        if (p.car >= 0 || p.hide >= 0) { p.aim = false; p.flashOn = false; } // (City Mode: driving or hiding)
         break;
       }
       case 'act': {
@@ -142,6 +158,7 @@ export class Sim {
 
   onAct(p, m) {
     const S = this.S, M = this.M;
+    if ((p.car >= 0 || p.hide >= 0) && m.a !== 'emote') return; // (at the wheel / hiding: nothing but getting out)
     switch (m.a) {
       case 'vault': {
         const kind = m.kind === 'bar' ? 'bar' : 'win';
@@ -249,6 +266,13 @@ export class Sim {
           else { hit.webK = Math.max(hit.webK || 0, W.time); p.score.d += 400; }
           this.ev({ k: 'webhit', id: hit.id, by: p.id, freed: carried, x: hit.x, z: hit.z });
         }
+        break;
+      }
+      case 'teddy': {
+        // hold the Teddy up: every killer who sees it in the next moment is pacified
+        if (p.role !== 'survivor' || p.st !== 'ok' || p.item !== 'teddy' || !(p.teddy > 0) || p.tedT > 0 || p.tedCd > 0 || p.act) return;
+        p.tedT = ITEMS.teddy.hold; p.tedHit = false; p.flashOn = false;
+        this.ev({ k: 'teddy', id: p.id, x: p.x, z: p.z });
         break;
       }
       case 'taser': {
@@ -499,6 +523,21 @@ export class Sim {
           p.phase = KILLERS.slimer.ability2.duration; p.ab2Cd = KILLERS.slimer.ability2.cooldown;
           this.ev({ k: 'phase', id: p.id, x: p.x, z: p.z });
         }
+        if (p.role === 'killer' && p.char === 'father' && p.ab2Cd <= 0 && !p.tele && !p.act && p.stun <= 0 && p.carry == null) {
+          // Faceless Step: the survivor he is looking at (closest to the middle of his view)
+          const B = KILLERS.father.ability2, f = fwd(p.yaw);
+          let best = null, ba = 1e9;
+          for (const o of S.players) {
+            if (o.role !== 'survivor' || o.st !== 'ok' || o.hide >= 0 || o.car >= 0) continue;
+            const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
+            if (d > B.range || d < 4) continue;
+            const a = Math.acos(Math.max(-1, Math.min(1, (dx * f.x + dz * f.z) / d)));
+            if (a < B.cone && a < ba) { ba = a; best = o; }
+          }
+          if (!best) { this.ev({ k: 'fstep-none', id: p.id }); break; }
+          p.tele = { t: 0, id: best.id, step: true }; p.ab2Cd = B.cooldown;
+          this.ev({ k: 'fstep', id: p.id, to: best.id, x: p.x, z: p.z });
+        }
         if (p.role === 'killer' && p.char === 'nosferatu' && !p.ab && p.ab2Cd <= 0 && !p.act && p.stun <= 0) {
           // Nightfall: the dark swallows the map; he goes silent and quicker
           p.ab = 1; p.abT = KILLERS.nosferatu.ability2.duration; S.dark = Math.max(S.dark || 0, p.abT);
@@ -657,6 +696,7 @@ export class Sim {
     const Ks = killersOf(S);
     this.updateMode(dt);
     if (S.phase !== 'play') return;
+    if (S.cars) cityUpdate(this, dt);
     // short position history of every survivor, for lag-compensated hits
     this.hist ||= new Map();
     for (const p of S.players) if (p.role === 'survivor') {
@@ -734,6 +774,8 @@ export class Sim {
     this.updateGrandpa(dt);
     this.updateSlendrina(dt);
     this.updateAngeline(dt);
+    this.updateFather(dt);
+    this.updateTeddy(dt);
     this.updateKids(dt);
 
     // ---- survivor states ----
@@ -783,7 +825,7 @@ export class Sim {
         g.reg = false;
         let rate = 0;
         for (const p of S.players) if (p.act && p.act.k === 'repair' && p.act.id === i) {
-          let r = 1 / RULES.genCharges * (M.indoor ? 1.12 : 1) * (this.mode === 'rush' ? 2 : 1) * (this.mode === 'glass' ? 1.4 : this.mode === 'adrenaline' ? 1.25 : 1) * (p.st === 'ghost' ? 0.9 : 1); // tighter indoor maps favour the killer
+          let r = 1 / RULES.genCharges * (this.mode === 'pages' ? RULES.genCharges / 14 : 1) * (M.indoor ? 1.12 : 1) * (this.mode === 'rush' ? 2 : 1) * (this.mode === 'glass' ? 1.4 : this.mode === 'adrenaline' ? 1.25 : 1) * (p.st === 'ghost' ? 0.9 : 1); // tighter indoor maps favour the killer
           if (has(p, 'shared')) r *= 1 + 0.15 * (g.n - 1);
           r *= 1 + statK(p, 'rep'); // Mechanic (character stats)
           if (Ks.some(K => has(K, 'dread') && dist(K, p) < terrorRadius(K))) r *= 0.9;
@@ -827,6 +869,19 @@ export class Sim {
       const P = this.possession, X = this.P(P.X); P.t += dt;
       if (X) X.possT = Math.max(0, POSSESS_MAX - P.t);
       if (P.t >= POSSESS_MAX && !(X && X.act && X.act.k === 'execute')) { this.ev({ k: 'msg', text: 'Chucky was forced out of the body!' }); this.release(); }
+    }
+    for (const K of S.players) if (K.silentT > 0) K.silentT = Math.max(0, K.silentT - dt);
+    // Chaos Shuffle: every minute or so the killer and a survivor swap bodies
+    if (this.mode === 'shuffle') {
+      if (this.shufAt == null) this.shufAt = 55 + Math.random() * 20;
+      const left = this.shufAt - S.t;
+      if (left <= 3 && !this.shufWarned) { this.shufWarned = true; this.ev({ k: 'shufwarn' }); }
+      if (left <= 0) {
+        const K = killersOf(S).find(k => k.carry == null && !k.act && !k.tele && !k.leap && !k.dash && k.stun <= 0);
+        const pool = S.players.filter(o => o.role === 'survivor' && o.st === 'ok' && !o.act && !o.vault && o.hide < 0 && o.car < 0);
+        if (!K || !pool.length) this.shufAt = S.t + 2;
+        else { this.shuffle(K, pool[Math.floor(Math.random() * pool.length)]); this.shufAt = S.t + 50 + Math.random() * 30; this.shufWarned = false; }
+      }
     }
     // Blood Moon: every 45s the killer sees every survivor for a moment
     if (this.mode === 'bloodmoon') {
@@ -963,7 +1018,7 @@ export class Sim {
       };
       let cur = null;
       for (const s of S.players) {
-        if (s.role !== 'survivor' || s.st !== 'ok') continue;
+        if (s.role !== 'survivor' || s.st !== 'ok' || s.hide >= 0) continue;
         if (!levelsMeet(K, s) || (M.stairs && Math.abs(heightAt(M, K) - heightAt(M, s)) > 1.7)) continue;
         cur = s;
         let ok = inReach(s.x, s.z);
@@ -974,6 +1029,8 @@ export class Sim {
         K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown * (has(K, 'relentless') ? 0.65 : 1);
         break;
       }
+      // City Mode: pedestrians
+      if (K.atk === 1 && S.peds && cityKillerHit(this, K, range)) { K.atk = 2; K.atkHit = true; K.atkT = RULES.hitCooldown; }
       if (K.atk === 1 && K.atkT <= 0) {
         K.atk = 2; K.atkHit = false; K.atkT = RULES.missCooldown; this.ev({ k: 'whiff', id: K.id });
       }
@@ -1046,6 +1103,7 @@ export class Sim {
     if (K && K.harmless) return;
     if (K && (!levelsMeet(K, s) || (this.M.stairs && Math.abs(heightAt(this.M, K) - heightAt(this.M, s)) > 1.7))) return; // a floor apart // Chucky's empty doll can chase, but not hurt
     if (s.st === 'ghost') return;
+    if (s.car >= 0 || s.hide >= 0) cityOnDamage(this, s); // (pulled out of the car first)
     if (s.perchT > 0 && s.perchY > 1.2) return; // up on a wall or in a tree: out of reach
     if (K && K.char === 'foreman' && K.ab === 1 && !this.chainDmg) instantDown = true;
     // (slimed survivors are slowed and revealed, not one-shot: that made him unbeatable) // one strike from the hook, in the dark
@@ -1115,6 +1173,8 @@ export class Sim {
     const g = S.gens[i];
     g.p = 1; g.done = true; g.reg = false;
     S.gensDone++;
+    // The Pages: every page taken, the killer goes silent for a moment (and is a little faster: rules.speedOf)
+    if (this.mode === 'pages') { for (const K of killersOf(S)) K.silentT = 6; this.ev({ k: 'page', id: i, n: S.gensDone, of: S.gensNeeded }); }
     const sentry = anyKillerHas(S, 'sentry');
     const boost = S.players.some(p => p.act && p.act.k === 'repair' && p.act.id === i && has(p, 'overclock'));
     for (const p of S.players) if (p.act && p.act.k === 'repair' && p.act.id === i) {
@@ -1308,6 +1368,7 @@ export class Sim {
         this.ev({ k: 'break', id: a.id });
         break;
       }
+      default: cityFinish(this, p, a);
     }
   }
 
@@ -1652,6 +1713,91 @@ export class Sim {
       }
     }
   }
+  // Chaos Shuffle: the killer K and survivor V trade bodies. Each player keeps who they are (id, name, bot or not,
+  // score); everything about the body (role, character, outfit, perks, health, where it stands, cooldowns) swaps
+  shuffle(K, V) {
+    const keep = new Set(['id', 'name', 'bot', 'score', 'posT', 'outcome', 'tp', 'cityPay']);
+    const a = {}, b = {};
+    for (const k of Object.keys(K)) if (!keep.has(k)) a[k] = K[k];
+    for (const k of Object.keys(V)) if (!keep.has(k)) b[k] = V[k];
+    for (const k of Object.keys(a)) delete K[k];
+    for (const k of Object.keys(b)) delete V[k];
+    Object.assign(K, b); Object.assign(V, a);
+    for (const p of [K, V]) { p.tp = (p.tp || 0) + 1; p.act = null; p.prog = 0; p.atk = 0; p.aim = false; p.diffMul = p.role === 'killer' && p.bot ? this.diff.killerSpeed : 1; }
+    for (const kd of this.S.kids || []) if (kd.id === K.id) kd.id = V.id; // (the Child follows the killer's body)
+    if (this.hist) { this.hist.delete(K.id); this.hist.delete(V.id); }
+    if (this.cdPrev) { this.cdPrev.delete(K.id); this.cdPrev.delete(V.id); }
+    this.ev({ k: 'shuffle', a: K.id, b: V.id });
+    this.ev({ k: 'msg', text: `CHAOS SHUFFLE! ${K.name} and ${V.name} swapped bodies.` });
+  }
+  // the Teddy: a killer who can see the survivor holding it (in front of him, in sight, close enough) is pacified
+  updateTeddy(dt) {
+    const S = this.S, M = this.M, T = ITEMS.teddy;
+    for (const K of S.players) if (K.pacified > 0) K.pacified = Math.max(0, K.pacified - dt);
+    for (const p of S.players) {
+      if (p.role !== 'survivor') continue;
+      if (p.tedCd > 0) p.tedCd = Math.max(0, p.tedCd - dt);
+      if (!(p.tedT > 0)) continue;
+      p.tedT = Math.max(0, p.tedT - dt);
+      if (p.st !== 'ok') p.tedT = 0;
+      const dur = T.uses[T.uses.length - p.teddy] || T.uses[T.uses.length - 1];
+      for (const K of S.players) {
+        if (K.role !== 'killer' || K.stun > 0 || (K.act && K.act.k === 'execute') || !levelsMeet(K, p)) continue;
+        const dx = p.x - K.x, dz = p.z - K.z, d = Math.hypot(dx, dz);
+        if (d > T.range || d < 0.01) continue;
+        if ((dx * Math.sin(K.yaw) + dz * Math.cos(K.yaw)) / d < Math.cos(T.cone)) continue; // (behind him: he didn't see it)
+        if (losL(M, K, p, 1.2)) continue;
+        this.stunKiller(K, dur); K.pacified = dur;
+        p.tedHit = true; p.score.b += 400;
+        this.ev({ k: 'pacify', id: K.id, by: p.id, t: dur, x: K.x, z: K.z });
+      }
+      if (p.tedT === 0) { if (p.tedHit) { p.teddy--; p.tedHit = false; if (!p.teddy) this.ev({ k: 'teddygone', id: p.id }); } p.tedCd = T.cooldown; }
+    }
+  }
+  // Slendrina's Father (Season 2): his Tendril Lash, the Faceless Step, and the static that gives away whoever stares
+  fatherLash(K) {
+    const S = this.S, M = this.M, A = KILLERS.father.ability, f = fwd(K.yaw);
+    let best = null, bd = 1e9;
+    for (const o of S.players) {
+      if (o.role !== 'survivor' || o.st !== 'ok' || o.hide >= 0 || !levelsMeet(K, o)) continue;
+      const dx = o.x - K.x, dz = o.z - K.z, along = dx * f.x + dz * f.z, side = Math.abs(dx * f.z - dz * f.x);
+      if (along < 0.3 || along > A.range || side > A.width || along >= bd) continue;
+      if (losL(M, K, o, 1.0)) continue;
+      bd = along; best = o;
+    }
+    // walls stop the tendrils short
+    let len = best ? bd : A.range;
+    if (!best) for (let d = 0.5; d <= A.range; d += 0.5) if (losBlocked(M, K.x, K.z, K.x + f.x * d, K.z + f.z * d, 1.0)) { len = d - 0.3; break; }
+    K.abCd = A.cooldown; K.aim = false; K.abT = 0;
+    this.ev({ k: 'lash', id: K.id, x: K.x, z: K.z, yaw: K.yaw, len, hit: best ? best.id : null });
+    if (best) this.damage(best, K, false);
+  }
+  updateFather(dt) {
+    const S = this.S, F = KILLERS.father.feature, B = KILLERS.father.ability2;
+    for (const K of S.players) {
+      if (K.role !== 'killer' || K.char !== 'father') continue;
+      if (K.tele && K.tele.step) {
+        K.tele.t += dt;
+        const T = this.P(K.tele.id);
+        if (!T || T.st !== 'ok' || T.hide >= 0) { K.tele = null; this.ev({ k: 'fstep-end', id: K.id, x: K.x, z: K.z }); continue; }
+        if (K.tele.t >= B.delay) {
+          const bx = T.x - Math.sin(T.yaw) * B.behind, bz = T.z - Math.cos(T.yaw) * B.behind;
+          const sp = this.safeSpot(bx, bz, T.x, T.z, T.fl || 0);
+          K.x = sp.x; K.z = sp.z; K.fl = T.fl || 0; K.yaw = Math.atan2(T.x - K.x, T.z - K.z); K.tp++; K.tele = null;
+          T.reveal = Math.max(T.reveal, 3);
+          this.ev({ k: 'fstep-end', id: K.id, to: T.id, x: K.x, z: K.z });
+        }
+      }
+      // Static: survivors who look at him (facing him, in sight, close) are found out
+      for (const s of S.players) {
+        if (s.role !== 'survivor' || s.st !== 'ok' || s.hide >= 0) continue;
+        const dx = K.x - s.x, dz = K.z - s.z, d = Math.hypot(dx, dz);
+        const looking = d < F.radius && levelsMeet(K, s) && (dx * Math.sin(s.yaw) + dz * Math.cos(s.yaw)) / Math.max(0.01, d) > 0.8 && !losL(this.M, s, K, 1.2);
+        if (looking) { s.sta = (s.sta || 0) + dt; if (s.sta >= F.need) { s.sta = 0; s.reveal = Math.max(s.reveal, F.reveal); this.ev({ k: 'staticrev', id: s.id, by: K.id }); } }
+        else if (s.sta > 0) s.sta = Math.max(0, s.sta - dt * 0.5);
+      }
+    }
+  }
   // Angeline: Yellow Eyes (a beam from her eyes: half a second in it and you are Spotted); drowsiness from her Lullaby
   updateAngeline(dt) {
     const S = this.S, M = this.M, A = KILLERS.angeline.ability;
@@ -1807,7 +1953,7 @@ export class Sim {
 
   updateSaws(dt) {
     const S = this.S, M = this.M;
-    for (const p of S.players) if (p.role === 'killer' && (p.char === 'bateman' || p.char === 'chucky' || p.char === 'nosferatu') && p.aim) p.abT += dt;
+    for (const p of S.players) if (p.role === 'killer' && (p.char === 'bateman' || p.char === 'chucky' || p.char === 'nosferatu' || p.char === 'father') && p.aim) p.abT += dt;
     for (let i = S.saws.length - 1; i >= 0; i--) {
       const sw = S.saws[i], K = this.P(sw.by);
       sw.t += dt;

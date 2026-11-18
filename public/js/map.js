@@ -4,6 +4,8 @@ import { HALF } from './config.js';
 import { buildMeatworks } from './meatworks.js';
 import { buildGrannyHouse } from './grannyhouse.js';
 import { THEMES, BIG_MAPS } from './themes.js';
+import { CITY } from './citymap.js';
+import { pushFromCars } from './city.js';
 import { HOUSE1_BOXES, HOUSE1_FOOT, HOUSE1_GEN } from './granny1grid.js';
 import { FOREST } from './forestdata.js';
 
@@ -96,7 +98,7 @@ export function makeCtx(M, R, cx, cz, rot) {
 
 
 export function buildMap(seed, map) {
-  const M = map === 'granny1' || map === 'forest' ? buildArena(seed, map) : buildGrannyHouse(seed);
+  const M = map === 'granny1' || map === 'forest' || map === 'city' ? buildArena(seed, map) : buildGrannyHouse(seed);
   addChests(M, seed);
   return M;
 }
@@ -150,9 +152,11 @@ function buildArena(seed, map) {
   const BIG = BIG_MAPS[map] || null; // Infection maps reuse a theme on a bigger grid
   const FO = map === 'forest' ? FORESTMAP : null;
   const H = map === 'granny1' ? HOUSE1 : FO; // a house in the middle (the forest: landmark buildings)
+  const CI = map === 'city' ? CITY : null; // City Mode: blocks on an exact grid with streets between them
   const base = BIG ? BIG.base : H ? 'woods' : map;
   const TH = THEMES[base] || null; // outdoor themes (marsh, carnival, snow); woods when null
-  const N = BIG ? BIG.N : 5, half = N * 10 + 6, off = (N - 1) * 10, mid = (N - 1) / 2;
+  const N = CI ? CI.N : BIG ? BIG.N : 5, half = CI ? CI.half : N * 10 + 6, off = (N - 1) * 10, mid = (N - 1) / 2;
+  const XS = H ? H.xs : CI ? CI.xs : null, ZS = H ? H.zs : CI ? CI.xs : null;
   const M = {
     seed, map: H ? H.theme : TH ? base : 'woods', forest: !!FO, mapId: map, half, props: [], pools: [], lights: [], boxes: [], circles: [], windows: [], bars: [], gens: [], cages: [], gates: [],
     visual: [], trees: [], rocks: [], spawns: { survivors: [], killer: null },
@@ -242,10 +246,11 @@ function buildArena(seed, map) {
   const centre = TH ? TH.center : FO ? 'mark' : H ? 'house' : 'chapel';
   templates.house = () => ({ G: null, C: null, trees: [] }); // (the house map's middle: the house itself)
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-    const cx = H ? H.xs[i] : -off + i * 20, cz = H ? H.zs[j] : -off + j * 20;
+    const cx = XS ? XS[i] : -off + i * 20, cz = ZS ? ZS[j] : -off + j * 20;
     if (FO && FO.marks[i + ',' + j]) { cells.push({ i, j, cx, cz, t: 'mark', mark: FO.marks[i + ',' + j], rot: 0 }); continue; }
     if (i === mid && j === mid) { cells.push({ i, j, cx, cz, t: centre, rot: R.int(0, 1) * 2 }); continue; }
-    cells.push({ i, j, cx: cx + R.range(-1, 1), cz: cz + R.range(-1, 1), t: R.pick(tnames), rot: R.int(0, 3) });
+    const jit = CI ? 0 : 1;
+    cells.push({ i, j, cx: cx + R.range(-jit, jit), cz: cz + R.range(-jit, jit), t: R.pick(tnames), rot: R.int(0, 3) });
   }
   // survivors spawn in one corner, killer in the opposite one: keep those corner cells open
   const corner = R.int(0, 3);
@@ -296,7 +301,7 @@ function buildArena(seed, map) {
   const genCells = chapel.G ? [chapel] : [];
   const isCorner = c => (c.i === sc[0] && c.j === sc[1]) || (c.i === kc[0] && c.j === kc[1]);
   const pool = R.shuffle(cells.filter(c => c !== chapel && !isCorner(c) && c.G));
-  const nGens = BIG ? BIG.gens : 7, nCages = BIG ? BIG.cages : 7;
+  const nGens = CI ? CI.gens : BIG ? BIG.gens : 7, nCages = CI ? CI.cages : BIG ? BIG.cages : 7;
   for (let minD = 30; genCells.length < nGens && minD > 0; minD -= 4)
     for (const c of pool) {
       if (genCells.length >= nGens) break;
@@ -328,7 +333,8 @@ function buildArena(seed, map) {
 
   // ---------- boundary + exit gates ----------
   const HALF = half, gr = half - 26;
-  const gx1 = Math.round(R.range(-gr, gr)), gx2 = Math.round(R.range(-gr, gr));
+  // (the city: the gates stand at the end of a street)
+  const gx1 = CI ? R.pick([-33, -11, 11, 33]) : Math.round(R.range(-gr, gr)), gx2 = CI ? R.pick([-33, -11, 11, 33]) : Math.round(R.range(-gr, gr));
   const gateDefs = [{ x: gx1, z: -HALF, dir: -1 }, { x: gx2, z: HALF, dir: 1 }];
   const BW = 0.5, BH = 4.2;
   const bound = (x1, x2, z) => { if (x2 - x1 > 0.1) M.boxes.push({ x: (x1 + x2) / 2, z, hx: (x2 - x1) / 2, hz: BW, h: BH, kind: 'boundary', style: TH ? TH.boundary : FO ? 'boards' : 'stone' }); };
@@ -339,8 +345,8 @@ function buildArena(seed, map) {
   addGates(M, gateDefs, TH ? TH.boundary : FO ? 'boards' : 'stone');
 
   // ---------- spawns ----------
-  const ccx = H ? H.xs[sc[0]] : -off + sc[0] * 20, ccz = H ? H.zs[sc[1]] : -off + sc[1] * 20;
-  const kcx = H ? H.xs[kc[0]] : -off + kc[0] * 20, kcz = H ? H.zs[kc[1]] : -off + kc[1] * 20;
+  const ccx = XS ? XS[sc[0]] : -off + sc[0] * 20, ccz = ZS ? ZS[sc[1]] : -off + sc[1] * 20;
+  const kcx = XS ? XS[kc[0]] : -off + kc[0] * 20, kcz = ZS ? ZS[kc[1]] : -off + kc[1] * 20;
   for (let i = 0; i < 4; i++) M.spawns.survivors.push(freePoint(M, ccx + (i % 2) * 2.4 - 1.2, ccz + Math.floor(i / 2) * 2.4 - 1.2, 0.6));
   // big maps: survivor groups start spread around the edges (first group in the corner above)
   if (BIG) for (const [a, b] of [[mid, 0], [0, mid], [N - 1, mid], [mid, N - 1], [sc[0], N - 1 - sc[1]]]) {
@@ -476,7 +482,7 @@ function pushOutBox(p, b, r) {
 
 // Moves a circle of radius r from (x,z) by (dx,dz), sliding along obstacles.
 // low > 0: mid-jump, anything lower than that is cleared (window sills, dropped barricades, rocks)
-export function moveCircle(M, st, x, z, dx, dz, r = 0.38, low = 0) {
+export function moveCircle(M, st, x, z, dx, dz, r = 0.38, low = 0, noCars = false) {
   const p = { x: x + dx, z: z + dz };
   const dyn = low > 0 ? dynBoxes(M, st).filter(o => o.kind !== 'bar') : dynBoxes(M, st);
   let hit = false;
@@ -495,6 +501,7 @@ export function moveCircle(M, st, x, z, dx, dz, r = 0.38, low = 0) {
       }
     }
     for (const o of dyn) if (pushOutBox(p, o, r)) any = true;
+    if (st && st.cars && !noCars) { const bx = p.x, bz = p.z; pushFromCars(st, p, r); if (bx !== p.x || bz !== p.z) any = true; } // City Mode: cars are solid
     if (!any) break;
     hit = true;
   }

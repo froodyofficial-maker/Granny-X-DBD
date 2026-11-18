@@ -30,7 +30,7 @@ window.run = (map, killer, minutes, diff, seed) => {
     t += dt;
     for (const p of S.players) { if (p.x > -5.5 && p.x < 12.4 && p.z > 4 && p.z < 15.6) insideT += dt; if ((p.fl || 0) > 0) upT += dt; if (p.fell) { falls += p.fell; p.fell = 0; } }
     for (const p of S.players) {
-      const busy = p.act || p.stun > 0 || p.vault || (p.role === 'survivor' && p.st !== 'ok') || p.tele || p.carry != null && false || S.players.some(o => o.act && o.act.k === 'heal' && o.act.id === p.id); // (being healed: held still)
+      const busy = p.act || p.hide >= 0 || p.stun > 0 || p.vault || (p.role === 'survivor' && p.st !== 'ok') || p.tele || p.carry != null && false || S.players.some(o => o.act && o.act.k === 'heal' && o.act.id === p.id); // (being healed: held still)
       const w = still.get(p.id) || { x: p.x, z: p.z, t: 0 };
       if (Math.hypot(p.x - w.x, p.z - w.z) > 0.6 || busy) { w.x = p.x; w.z = p.z; w.t = 0; }
       else { w.t += dt; if (w.t > 6) stallSec += dt; if (w.t > 6 && !w.logged) { w.logged = true; const b = bots.brains.get(p.id) || {}; log.push({ t: +t.toFixed(1), id: p.id, char: p.char, st: p.st, x: +p.x.toFixed(1), z: +p.z.toFixed(1), fl: p.fl || 0, mode: b.mode, goalKey: b.goalKey, path: b.path ? b.path.length : null, pi: b.pi, aim: b.aim, target: b.target, ab: p.ab, leap: p.leap ? JSON.stringify(p.leap) : null, abCd: p.abCd, paim: p.aim, haste: p.haste, gp: S.gatesPowered, carry: p.carry, it: JSON.stringify(findInteraction(M, S, p)), stun: p.stun, gensP: S.gens.map(g => g.done ? 'D' : g.p.toFixed(2)).join(' '), inp: JSON.stringify(sim.inputs.get(p.id)) }); } }

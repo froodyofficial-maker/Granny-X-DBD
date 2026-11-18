@@ -21,6 +21,9 @@ export const LOOK = {
   // Slendrina: The Forest (1.4.3): the game's own trees in thick dark mist (the trees are drawn from its model, not here)
   forest: { fog: 0x10151a, density: 1.45, hemi: [0x56627a, 0x221c14, 1.6], amb: 0x262c38, moon: [0xbcc8e2, 2.3], sky: [0x020306, 0x0a0f18], moonDisc: 0xeef2ff, halo: 0x8a9ab8,
     ground: [0x2c3422, 0x3c4430, 0x463a28, 0x2a2218, 0x382e20, 0x22241a], groundTex: 'ground2', ruins: false, trees: 'none', bushes: 0.8, bush: 0x222a1a, grass: 0.8, grassTint: 0x7e8a5e, lamp: 0xffa850, groundFog: 0x6a7686, groundFogK: 2.2 },
+  // Midnight City (City Mode): orange sodium haze over wet asphalt
+  city: { fog: 0x1c1b22, density: 0.7, hemi: [0x8a8494, 0x3a3028, 2.3], amb: 0x3a3844, moon: [0xc8cce6, 2.2], sky: [0x05060c, 0x1a1420], moonDisc: 0xeef0ff, halo: 0x9a90b0,
+    ground: [0x2a2a2c, 0x323234, 0x3a3836, 0x262628, 0x2e2e30, 0x202022], groundTex: 'ground2', ruins: false, trees: 'dead', bushes: 0, bush: 0x222a1a, grass: 0, grassTint: 0x7e8a5e, lamp: 0xffb060, groundFog: 0x6a6070, groundFogK: 0.9 },
   snow: { fog: 0x222c3a, density: 0.95, hemi: [0x8aa0c4, 0x2a3240, 1.45], amb: 0x2e3648, moon: [0xc8d8f4, 2.3], sky: [0x03060e, 0x0e1a30], moonDisc: 0xf4f8ff, halo: 0xa8c0e8,
     ground: [0xc8d2e0, 0xdde4f0, 0x9aa2ae, 0xb0bac8, 0xc0c8d4, 0x9aa4b4], groundTex: 'snow', ruins: false, snowcaps: true, trees: 'snowpine', bushes: 0.4, bush: 0xb8c4d0, grass: 0, grassTint: 0x8a8a70, lamp: 0xffc070, groundFog: 0xc8d8f0, groundFogK: 1.6, particles: 'snow' },
 };

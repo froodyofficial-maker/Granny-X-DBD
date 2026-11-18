@@ -16,18 +16,19 @@ import { loadRealism, realismReady } from './realism.js';
 import { loadSlappy, slappyReady } from './slappyGlb.js';
 import { loadStatic } from './glbModels.js';
 import { loadScene, sceneReady } from './sceneGlb.js';
-import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadNosferatu, nosferatuReady, loadChild, childReady, loadSkinModel, skinModelReady } from './grannyGlb.js';
+import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadNosferatu, nosferatuReady, loadChild, childReady, loadSkinModel, skinModelReady, loadFather } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
 import { icon, POWER_ICON } from './icons.js';
 import { sound, loadClip } from './audio.js';
 import { showTrailer, trailerPlaying } from './trailer.js';
-import { showLoading, loadingUp, sceneShownAt } from './loadscreen.js';
+import { showLoading, loadingUp, sceneShownAt, holdLoading } from './loadscreen.js';
 import { initTouch, MOBILE, mobileText, openTouchEditor } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
-import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, INBOX, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
-import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS } from './config.js';
+import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
+import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS, modeOpen, nowMs, skinOf, INBOX as INBOX_ALL } from './config.js';
+const INBOX = INBOX_ALL.filter(m => !m.from || nowMs() >= m.from); // (a season's message shows up when it starts)
 import { readCode, makeGift } from './codes.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
@@ -238,6 +239,8 @@ loadGrandpa().then(m => { if (m) { forgetArt('grandpa'); if (menu && menu.killer
 loadSlendrina().then(m => { if (m) { forgetArt('slendrina'); if (menu && menu.killerChar === 'slendrina') menu.setKiller('slendrina', menu.killerSkin); } });
 loadAngeline().then(m => { if (m) { forgetArt('angeline'); if (menu && menu.killerChar === 'angeline') menu.setKiller('angeline', menu.killerSkin); } });
 loadNosferatu().then(m => { if (m) { forgetArt('nosferatu'); if (menu && menu.killerChar === 'nosferatu') menu.setKiller('nosferatu', menu.killerSkin); } });
+// Season 2: Slendrina's Father (only once he's out)
+if (PLAY_K.includes('father')) loadFather().then(m => { if (m) { forgetArt('father'); if (menu && menu.killerChar === 'father') menu.setKiller('father', menu.killerSkin); } });
 // a match with Chucky in it waits (on the loading screen) for his real model, up to 20s
 const spiderOk = () => !!window.__nbSpiderLoaded;
 loadSpiderMom().then(m => { window.__nbSpiderLoaded = !!m; }); loadChild();
@@ -245,12 +248,16 @@ async function waitForModels(need) {
   // killers wearing an outfit with its own model (1.4.4)
   if (need && need.glbs && need.glbs.includes('freddy') && !realismReady('freddy')) { loading(true, 'Someone brought a friend from the pizzeria…'); await Promise.race([loadRealism('freddy'), new Promise(r => setTimeout(r, 25000))]); }
   const glbs = (need && need.glbs || []).filter(n => n !== 'freddy' && !skinModelReady(n));
-  if (glbs.length) { loading(true, 'Granny is getting changed…'); await Promise.race([Promise.all(glbs.map(loadSkinModel)), new Promise(r => setTimeout(r, 25000))]); }
+  if (glbs.length) { loading(true, glbs.includes('victim_car') ? 'Parking the cars…' : glbs.includes('slenderman') ? 'Something tall is standing in the trees…' : 'Granny is getting changed…'); await Promise.race([Promise.all(glbs.map(loadSkinModel)), new Promise(r => setTimeout(r, 25000))]); }
   if (need && need.spider && !realismReady('spiderman')) { loading(true, 'Spider-Man is swinging in…'); await Promise.race([loadRealism('spiderman'), new Promise(r => setTimeout(r, 25000))]); }
   // the Granny's House scenery (a big model) must be in before any match can use the map
-  if (!sceneReady('granny_map') || !sceneReady('granny1_map') || !sceneReady('forest_map')) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all([loadScene('granny_map'), loadScene('granny1_map'), loadScene('forest_map')]), new Promise(r => setTimeout(r, 25000))]); }
+  // (1.4.4: only the scenery of the map being played; the others keep loading in the background)
+  const SCN = { granny: 'granny_map', granny1: 'granny1_map', forest: 'forest_map' }, scenes = need && need.map ? [SCN[need.map]].filter(Boolean) : Object.values(SCN);
+  if (scenes.some(n => !sceneReady(n))) { loading(true, 'Unlocking Granny\'s front door…'); await Promise.race([Promise.all(scenes.map(loadScene)), new Promise(r => setTimeout(r, 25000))]); }
   // Granny and her granddaughter, when she's in the match
-  if (need === 'granny' || (need && need.granny)) { if (!grannyReady() || !spiderOk() || !grandpaReady() || !slendrinaReady() || !angelineReady() || !nosferatuReady() || !childReady()) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([loadGranny(), loadGrandpa(), loadSpiderMom(), loadSlendrina(), loadAngeline(), loadNosferatu(), loadChild()]), new Promise(r => setTimeout(r, 25000))]); } }
+  // (1.4.4: only the killers in the match)
+  const K = need && need.killers, want = k => !K || K.includes(k);
+  if (need === 'granny' || (need && need.granny)) { if ((want('granny') && (!grannyReady() || !spiderOk())) || (want('grandpa') && !grandpaReady()) || (want('slendrina') && !slendrinaReady()) || (want('angeline') && !angelineReady()) || (want('nosferatu') && !nosferatuReady()) || (need.kid && !childReady())) { loading(true, 'Granny is coming down the stairs…'); await Promise.race([Promise.all([want('granny') && loadGranny(), want('grandpa') && loadGrandpa(), want('granny') && loadSpiderMom(), want('slendrina') && loadSlendrina(), want('angeline') && loadAngeline(), want('nosferatu') && loadNosferatu(), need.kid && loadChild()].filter(Boolean)), new Promise(r => setTimeout(r, 25000))]); } }
   if (need && need.granny) need = need.chucky;
   if (!need || (chuckyReady() && slappyReady())) return;
   loading(true, "Waking Chucky up…");
@@ -330,7 +337,19 @@ const navActions = {
   codes: () => { openStore('codes'); setTimeout(() => { const i = $('cd-in'); if (i && !MOBILE) i.focus(); }, 80); },
   pass: () => openPanel('p-pass', 'Progress', true),
   test: () => { renderTest(); openPanel('p-test', 'Testing Area', true); },
+  // the season's headline mode (Season 1: City Mode): a bot match in it, ready to start
+  event: () => { const gm = eventMode(); if (!gm) return; navActions['play-survivor'](); botsCfg.gm = gm; $('bots-gm').value = gm; $('bots-gm').dispatchEvent(new Event('change')); },
 };
+// the event mode that's on right now (the newest one), for the menu's headline button
+function eventMode() { const on = Object.keys(MODES).filter(id => MODES[id].event && modeOpen(id)); return on[on.length - 1] || null; }
+function renderEventBtn() {
+  const b = $('nav-event'), gm = eventMode();
+  b.classList.toggle('hidden', !gm); if (!gm) return;
+  const m = MODES[gm], left = m.until ? Math.ceil((m.until - nowMs()) / 86400000) : 0;
+  b.querySelector('span').textContent = '★ ' + m.name;
+  b.querySelector('small').textContent = (m.season ? m.season + ' · ' : 'Season 1 event · ') + (m.until ? (left <= 1 ? 'last day!' : left + ' days left') : 'new this season');
+}
+renderEventBtn();
 for (const b of $('mainnav').children) {
   b.addEventListener('mouseenter', () => { sound.init(); sound.play('hover'); if (b.dataset.scene) setScene(b.dataset.scene); });
   b.addEventListener('click', () => {
@@ -389,6 +408,17 @@ function bindLevel(container, role, char, rerender) {
     profile.lvTokens--; saveProfile(); sound.play('escaped'); toast(`${charName0(char)} reached level ${charLv(C.xp).lvl}`); rerender();
   });
   container.querySelectorAll('[data-respec]').forEach(b => b.onclick = () => { C.st = {}; saveProfile(); sound.play('click'); rerender(); });
+}
+// Season 2: the Teddy. Bought for the season it's bought in (profile.teddy = that season's id); gone after
+const teddyOut = () => nowMs() >= Date.UTC(2026, 11, 1);
+const ownsTeddy = () => teddyOut() && profile.teddy === SEASON.id;
+const myItem = () => profile.survivor.item === 'teddy' && ownsTeddy() ? 'teddy' : 'flashlight';
+function itemRowHTML() {
+  if (!teddyOut()) return '';
+  const it = myItem();
+  return `<div class="lo2-row it-row"><span class="lo2-lbl">Item</span><div class="it-pick">
+    <button class="it-opt ${it === 'flashlight' ? 'on' : ''}" data-item="flashlight">${icon('flashlight')}<span>Flashlight</span></button>
+    <button class="it-opt ${it === 'teddy' ? 'on' : ''}" ${ownsTeddy() ? 'data-item="teddy"' : 'data-teddystore'} title="${esc(ITEMS.teddy.desc)}"><span class="teddy-art"></span><span>Teddy${ownsTeddy() ? '' : ' · in the Store'}</span></button></div></div>`;
 }
 // 1.4.3 item add-ons: two slots on the survivor's flashlight (taser ones work if you find a taser in a chest)
 const RAR = { common: 'common', uncommon: 'uncommon', rare: 'rare', 'very rare': 'veryrare' };
@@ -449,7 +479,7 @@ function renderLoadout(container, role, compact, onChange) {
       <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
       <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
       ${levelHTML(role, lo.char)}
-      ${role === 'killer' ? kidRowHTML() : addonRowHTML()}
+      ${role === 'killer' ? kidRowHTML() : itemRowHTML() + addonRowHTML()}
       
 
       <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
@@ -498,6 +528,7 @@ function renderLoadout(container, role, compact, onChange) {
     rerender();
   });
   container.querySelectorAll('[data-item]').forEach(el => el.onclick = () => { lo.item = el.dataset.item; saveProfile(); sound.play('click'); rerender(); });
+  container.querySelectorAll('[data-teddystore]').forEach(el => el.onclick = () => { sound.play('click'); openStore('addons'); });
 }
 
 // ---------- settings ----------
@@ -706,7 +737,10 @@ function addonsHTML() {
   const card = ([k, A]) => { const own = !!profile.addons[k], on = cleanAddons(profile.survivor.addons).includes(k);
     return `<div class="ad-card ${RAR[A.rarity]}"><div class="ad-ic">${icon(A.item === 'taser' ? 'taser' : 'flashlight')}</div><div class="ad-b"><small>${esc(A.rarity)} · ${A.item === 'taser' ? 'Taser' : 'Flashlight'} add-on</small><b>${esc(A.name)}</b><p>${esc(A.desc)}</p>${A.credit ? '<em class="ad-credit">Idea by Ommm &amp; WolfSpider</em>' : ''}</div>
       <div class="ad-buy">${own ? `<button class="btn ${on ? '' : 'primary'}" data-adeq="${k}">${on ? 'Unequip' : 'Equip'}</button>` : `<span class="ch-price">${price(A.price)}</span><button class="btn primary" data-adbuy="${k}">Buy</button>`}</div></div>`; };
-  return `<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
+  const T = ITEMS.teddy, tOwn = ownsTeddy();
+  const teddy = teddyOut() ? `<div class="ad-card teddy-card veryrare"><span class="teddy-art big"></span><div class="ad-b"><small>Season 2 item · ${esc(SEASON.name)}</small><b>Teddy</b><p>${esc(T.desc)}</p><em class="hint">Yours until the end of this season.</em></div>
+      <div class="ad-buy">${tOwn ? `<button class="btn ${myItem() === 'teddy' ? '' : 'primary'}" data-teddyeq>${myItem() === 'teddy' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(T.price)}</span><button class="btn primary" data-teddybuy>Buy</button>`}</div></div>` : '';
+  return `${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
     <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
 }
 // ---------- codes (1.3.2, back in 1.4.4 with its own main-menu button): secret codes, gift codes, backup codes ----------
@@ -790,6 +824,8 @@ function sidekicksHTML() {
 
 function bindStore(body) {
   bindCodes(body);
+  body.querySelectorAll('[data-teddybuy]').forEach(b => b.onclick = () => { if (ownsTeddy() || !spend(ITEMS.teddy.price, 'Teddy (' + SEASON.name + ')')) return; profile.teddy = SEASON.id; profile.survivor.item = 'teddy'; saveProfile(); sound.play('escaped'); toast('The Teddy is yours for the rest of ' + SEASON.name + '. Hold it up with RMB.'); renderStore(); });
+  body.querySelectorAll('[data-teddyeq]').forEach(b => b.onclick = () => { profile.survivor.item = myItem() === 'teddy' ? 'flashlight' : 'teddy'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-adbuy]').forEach(b => b.onclick = () => { const k = b.dataset.adbuy, A = ADDONS[k]; if (profile.addons[k] || !spend(A.price, A.name)) return; profile.addons[k] = true; const L = profile.survivor.addons = cleanAddons(profile.survivor.addons); if (L.length < ADDON_SLOTS) L.push(k); saveProfile(); sound.play('escaped'); renderStore(); });
   body.querySelectorAll('[data-adeq]').forEach(b => b.onclick = () => { const k = b.dataset.adeq, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-kidbuy]').forEach(b => b.onclick = () => { if (profile.pets.child || !spend(SIDEKICKS.child.price, SIDEKICKS.child.name)) return; profile.pets.child = true; profile.killer.pet = 'child'; saveProfile(); sound.play('escaped'); renderStore(); });
@@ -897,7 +933,7 @@ if (profile.lastVersion !== VERSION) {
 // ---------- bot match ----------
 const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', killer2: 'random', diff: 'normal', map: 'granny', gm: 'classic' };
 // game mode pickers (bot match and lobby)
-const gmOptions = () => Object.entries(MODES).map(([id, m]) => `<option value="${id}">${m.name} (${m.short})</option>`).join('');
+const gmOptions = () => Object.entries(MODES).filter(([id]) => modeOpen(id)).map(([id, m]) => `<option value="${id}">${m.event ? '★ ' : ''}${m.name} (${m.short})</option>`).join('');
 $('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
 const gmDesc = gm => (MODES[gm] || MODES.classic).desc;
 $('bots-gm-desc').textContent = gmDesc('classic');
@@ -907,6 +943,8 @@ seg('bots-team', v => { botsCfg.team = +v; });
 seg('bots-surv', v => { botsCfg.surv = +v; });
 seg('bots-diff', v => { botsCfg.diff = v; });
 $('bots-map').addEventListener('change', e => { botsCfg.map = e.target.value; });
+// (killers who aren't out yet, like Slendrina's Father before Season 2, aren't on the lists)
+for (const id of ['bots-killer', 'bots-killer2']) for (const o of [...$(id).options]) if (KILLERS[o.value] && !PLAY_K.includes(o.value)) o.remove();
 $('bots-killer').addEventListener('change', e => { botsCfg.killer = e.target.value; });
 $('bots-killer2').addEventListener('change', e => { botsCfg.killer2 = e.target.value; });
 function renderBotsPanel() {
@@ -917,6 +955,7 @@ function renderBotsPanel() {
   // Two Killers: pick the other killer too (as a survivor: both bot killers; as a killer: your partner)
   $('bots-killer2-row').classList.toggle('hidden', !duo);
   $('bots-killer2-l').textContent = k ? 'Your partner killer' : 'Second bot killer';
+  $('bots-map-row').classList.toggle('hidden', !!(MODES[botsCfg.gm] && MODES[botsCfg.gm].map)); // (City Mode: its own map)
   renderLoadout($('bots-loadout'), botsCfg.role, true);
 }
 const randomPerks = (pool, n = PERK_SLOTS, char) => Object.keys(pool).filter(k => perkFits(k, char)).sort(() => Math.random() - 0.5).slice(0, n);
@@ -924,7 +963,7 @@ function botSurvivor(i, used) {
   const free = PLAY_S.filter(c => !used.includes(c));
   const char = free.length ? free[Math.floor(Math.random() * free.length)] : PLAY_S[i % 4];
   used.push(char);
-  const item = 'flashlight';
+  const item = teddyOut() && Math.random() < 0.2 ? 'teddy' : 'flashlight'; // (Season 2: a bot brings a Teddy now and then)
   used.names ||= [];
   const pool = BOT_NAMES.filter(n => !used.names.includes(n));
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
@@ -958,7 +997,7 @@ function renderTest() {
   $('test-opp-row').classList.toggle('hidden', role !== 'survivor'); $('test-surv-row').classList.toggle('hidden', role !== 'killer');
   $('test-opp').innerHTML = Object.values(KILLERS).filter(d => playable(d.id)).map(d => `<option value="${d.id}" ${d.id === T.opp ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
   $('test-map').innerHTML = REGULAR_MAPS.map(m => `<option value="${m}" ${m === T.map ? 'selected' : ''}>${m === 'random' ? 'Random' : esc(MAP_NAMES[m])}</option>`).join('');
-  $('test-gm').innerHTML = Object.entries(MODES).map(([id, m]) => `<option value="${id}" ${id === T.gm ? 'selected' : ''}>${m.name} (${m.short})</option>`).join('');
+  $('test-gm').innerHTML = Object.entries(MODES).filter(([id]) => modeOpen(id)).map(([id, m]) => `<option value="${id}" ${id === T.gm ? 'selected' : ''}>${m.name} (${m.short})</option>`).join('');
   const L = role === 'killer' && POWER_LV[c];
   $('test-reach-row').classList.toggle('hidden', !L);
   if (L) { const r = $('test-reach'); r.min = L.base; r.max = L.max; r.step = L.step; r.value = T.reach[c] ?? L.max; $('test-reach-l').textContent = `${L.power} reach: ${r.value}m`; }
@@ -1001,7 +1040,7 @@ $('btn-bots-start').addEventListener('click', () => {
   const meRole = botsCfg.role;
   if (meRole === 'survivor' && !ownsChar(profile.survivor.char)) { toast(`${charName(profile.survivor.char)} is locked. Unlock them in the Store, or pick another survivor.`, 5000); profile.survivor.char = 'mara'; saveProfile(); return; }
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
-  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
+  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: meRole === 'survivor' ? myItem() : 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
   const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
@@ -1013,7 +1052,7 @@ $('btn-bots-start').addEventListener('click', () => {
   }
   const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, net: null, kind: 'bots', map, mode: gm });
   botsCfg.map = $('bots-map').value || botsCfg.map; // what the dropdown shows is what you get
-  if (botsCfg.map === 'vote') botVote(gm, roster.filter(r => r.bot).length, go); else go(botsCfg.map);
+  if (MODES[gm].map) go(MODES[gm].map); else if (botsCfg.map === 'vote') botVote(gm, roster.filter(r => r.bot).length, go); else go(botsCfg.map);
 });
 // ---------- map select screen (Rivals style): pictures, live tallies, a countdown ----------
 const MAP_IMG = id => (window.__MAPIMG && window.__MAPIMG[id]) || (document.querySelector('script[type=importmap]') ? '' : 'public/') + 'img/maps/' + id + '.jpg';
@@ -1069,7 +1108,8 @@ let session = null;
 
 const MAPS = MAP_NAMES;
 // Infection is played on its own big maps; the other modes on the regular ones (unless picked by name)
-function resolveMap(m) { return REGULAR_MAPS.includes(m) ? m : REGULAR_MAPS[Math.floor(Math.random() * REGULAR_MAPS.length)]; }
+// (an event mode with its own map, like City Mode, always plays there)
+function resolveMap(m, mode) { if (MODES[mode] && MODES[mode].map) return MODES[mode].map; return REGULAR_MAPS.includes(m) ? m : REGULAR_MAPS[Math.floor(Math.random() * REGULAR_MAPS.length)]; }
 
 class HostSession {
   constructor(roster, opts) {
@@ -1082,6 +1122,7 @@ class HostSession {
   async start() {
     this.seed = Math.floor(Math.random() * 1e9);
     this.map = resolveMap(this.opts.map, this.opts.mode);
+    holdLoading(true); await nextFrame(); await nextFrame(); // (the reel holds still while the match is built: no stutter)
     this.M = buildMap(this.seed, this.map);
     await nextFrame();
     this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, mode: this.opts.mode });
@@ -1234,7 +1275,8 @@ async function startHostMatch(roster, opts) {
   loading(true, 'Entering the fog…');
   await nextFrame();
   // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
-  await waitForModels({ spider: roster.some(r => r.char === 'spiderman'), glbs: roster.map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), granny: true, chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
+  opts.map = resolveMap(opts.map, opts.mode); // (known now, so only its scenery is waited for)
+  await waitForModels({ map: opts.map, killers: roster.filter(r => r.role === 'killer').map(r => r.char), kid: roster.some(r => r.kid === 'child' || r.pet === 'child'), spider: roster.some(r => r.char === 'spiderman'), glbs: [...roster.map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), ...(MODES[opts.mode] && MODES[opts.mode].map === 'city' ? ['victim_car'] : []), ...(roster.some(r => r.char === 'father') ? ['slenderman'] : []), ...(roster.some(r => r.item === 'teddy') ? ['teddy'] : [])], granny: true, chucky: roster.some(r => r.char === 'chucky') || opts.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
@@ -1460,7 +1502,7 @@ function applyLoadout(p, m) {
   if (role === 'survivor' && p.role !== 'survivor' && lobby.players.filter(x => x.role === 'survivor').length >= cap.s) role = p.role;
   if (m.loadouts) p.loadouts = m.loadouts;
   const lo = sanitizeLoadout(role, m.char ?? p.loadouts?.[role]?.char, m.perks ?? p.loadouts?.[role]?.perks);
-  p.item = 'flashlight';
+  p.item = m.item === 'teddy' && role === 'survivor' ? 'teddy' : 'flashlight'; // (Season 2: the Teddy)
   p.role = role; p.char = lo.char; p.perks = lo.perks; p.skin = cleanSkin(lo.char, m.skin ?? p.loadouts?.[role]?.skin);
   p.pet = '';
 }
@@ -1521,11 +1563,12 @@ setInterval(() => {
 async function startClientMatch(m) {
   loading(true, 'Entering the fog…');
   await nextFrame();
-  await waitForModels({ spider: (m.roster || []).some(r => r.char === 'spiderman'), glbs: (m.roster || []).map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), granny: true, chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
+  await waitForModels({ map: m.map, killers: (m.roster || []).filter(r => r.role === 'killer').map(r => r.char), kid: (m.roster || []).some(r => r.kid === 'child' || r.pet === 'child'), spider: (m.roster || []).some(r => r.char === 'spiderman'), glbs: [...(m.roster || []).map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), ...(MODES[m.mode] && MODES[m.mode].map === 'city' ? ['victim_car'] : []), ...((m.roster || []).some(r => r.char === 'father') ? ['slenderman'] : []), ...((m.roster || []).some(r => r.item === 'teddy') ? ['teddy'] : [])], granny: true, chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
   loading(true, 'Entering the fog…');
   stopBG();
   $('menu').classList.add('hidden');
   lobby.inGame = true;
+  holdLoading(true); await nextFrame(); await nextFrame(); // (the reel holds still while the match is built)
   session = new ClientSession(lobby.net, m, lobby.myId);
   session.kind = 'online';
 }
@@ -1563,8 +1606,10 @@ function renderLobby() {
   for (let i = 0; i < cap.s; i++) html += slot(survs[i], 'survivor');
   $('lobby-slots').innerHTML = html;
   // the map vote happens on its own screen when the host starts the match
-  $('map-vote').classList.toggle('hidden', lobby.map !== 'vote');
-  $('map-vote').innerHTML = '<p class="hint">Map: everyone votes on a map screen right before the match starts.</p>';
+  const forced = MODES[lobby.gm] && MODES[lobby.gm].map;
+  $('map-vote').classList.toggle('hidden', lobby.map !== 'vote' && !forced);
+  $('lobby-map').disabled = !lobby.isHost || !!forced;
+  $('map-vote').innerHTML = forced ? `<p class="hint">Map: ${esc(MAP_NAMES[forced] || forced)} (${esc(MODES[lobby.gm].name)} is always played there).</p>` : '<p class="hint">Map: everyone votes on a map screen right before the match starts.</p>';
   const me = myLobbyPlayer();
   if (me) {
     setSeg('lobby-role', me.role);
@@ -1579,7 +1624,7 @@ function sendMyLoadout(role) {
   if (!me) return;
   role = role || me.role;
   const lo = profile[role], ch = role === 'killer' ? playableKiller() : lo.char;
-  const m = { t: 'loadout', role, char: ch, skin: skinId(ch), perks: lo.perks, item: 'flashlight', loadouts: myLoadouts() };
+  const m = { t: 'loadout', role, char: ch, skin: skinId(ch), perks: lo.perks, item: role === 'survivor' ? myItem() : 'flashlight', loadouts: myLoadouts() };
   if (lobby.isHost) { applyLoadout(me, m); broadcastLobby(); }
   else lobby.net.send(m);
 }
@@ -1634,6 +1679,7 @@ $('btn-lobby-start').addEventListener('click', () => {
   if (ns === 0) { toast('At least one survivor is needed (or enable bots).'); return; }
   lobby.inGame = true; advertise();
   const go = map => startHostMatch(roster, { myId: 'host', difficulty: lobby.diff, net: lobby.net, kind: 'online', map, mode: lobby.gm || 'classic' });
+  if (MODES[lobby.gm] && MODES[lobby.gm].map) { go(MODES[lobby.gm].map); return; } // (City Mode: its own map)
   if ((lobby.map || 'vote') !== 'vote') { go(lobby.map); return; }
   // everyone (and the bots filling empty slots) votes on the map screen first
   const total = 10000, nBots = roster.filter(r => r.bot).length, V = lobby.voting = { cands: voteCands(lobby.gm), votes: {}, ends: Date.now() + total, total, voters: ps.length + nBots, winner: null };

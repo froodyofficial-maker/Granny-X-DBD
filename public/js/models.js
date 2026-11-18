@@ -5,7 +5,7 @@ import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
 import { makeSlappy, animateSlappy } from './slappyGlb.js';
-import { makeGrannyGlb, animateGranny, makeSlendrinaGlb, animateSlendrina, makeAngelineGlb, animateAngeline, makeNosferatuGlb, animateNosferatu, loadSkinModel, skinModelReady } from './grannyGlb.js';
+import { makeGrannyGlb, animateGranny, makeSlendrinaGlb, animateSlendrina, makeAngelineGlb, animateAngeline, makeNosferatuGlb, animateNosferatu, makeFatherGlb, animateFather, loadSkinModel, skinModelReady } from './grannyGlb.js';
 import { makeRealism, loadRealism, realismReady } from './realism.js';
 import { makeStaticKiller, animateStaticKiller, cloneStatic } from './glbModels.js';
 import { applySkinFx } from './skinfx.js';
@@ -309,6 +309,7 @@ export function makeKiller(id, sk = {}) {
   if (id === 'slendrina') { const g = makeSlendrinaGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
   if (id === 'angeline') { const g = makeAngelineGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
   if (id === 'nosferatu') { const g = makeNosferatuGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
+  if (id === 'father') { const g = makeFatherGlb(sk, DETAIL.lite); if (g) return g; id = 'wisp'; }
   if (id === 'foreman') { const g = makeForemanGlb(sk, DETAIL.lite); if (g) { applySkinFx(g, sk); return g; } }
   const R = new Rig();
   if (id === 'foreman') {
@@ -597,6 +598,7 @@ export function animate(R, s, dt) {
   if (R.slendrina) return animateSlendrina(R, s, dt);
   if (R.angeline) return animateAngeline(R, s, dt);
   if (R.nosferatu) return animateNosferatu(R, s, dt);
+  if (R.father) return animateFather(R, s, dt);
   if (R.granny) return animateGranny(R, s, dt);
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;

@@ -85,6 +85,7 @@ export class Bots {
   onEvents(evs) {
     for (const e of evs) if (e.k === 'infected') this.brains.delete(e.id); // a fresh (killer) brain
     for (const e of evs) if (e.k === 'swap') { this.brains.delete(e.from); this.brains.delete(e.to); }
+    for (const e of evs) if (e.k === 'shuffle') { this.brains.delete(e.a); this.brains.delete(e.b); } // (Chaos Shuffle: new bodies, fresh brains)
     for (const e of evs) if (e.k === 'noise') this.noises.push({ x: e.x, z: e.z, t: this.sim.S.t });
     this.noises = this.noises.filter(n => this.sim.S.t - n.t < 6);
   }
@@ -348,6 +349,15 @@ export class Bots {
       return;
     }
     if (p.st !== 'ok') { this.setE(p, b, false); b.wd = null; return; }
+    // City Mode: in a hiding spot, wait till the killer has gone (never forever: the generators won't fix themselves)
+    if (p.hide >= 0) {
+      const kd = K ? Math.hypot(K.x - p.x, K.z - p.z) : 99;
+      b.wd = null; b.path = null;
+      const leave = (p.hideT > 4 && kd > 15) || p.hideT > 28 || (p.hideT > 12 && kd > 9);
+      this.setE(p, b, leave && !(K && kd < 5));
+      return;
+    }
+    if (p.hg >= 0 && !(b.hideGoal >= 0)) p.hg = -1;
     // watchdog: a survivor that has not moved or done anything for a while gives up on what it was
     // trying to reach (that generator / chest / teammate) for a bit, steps aside and picks something else
     {
@@ -380,6 +390,9 @@ export class Bots {
       // Angeline's yellow eyes are on us: get out of the beam (it's narrow: a sideways dash does it)
       // Nosferatu crouching to leap: break sideways
       if (K.char === 'nosferatu' && K.aim && vis && kd < 12) { threat = true; b.juke = true; }
+      if (K.char === 'father' && K.aim && vis && kd < 10) { threat = true; b.juke = true; }
+      // the Teddy: up it goes when the killer is about to catch us and is looking our way
+      if (p.item === 'teddy' && p.teddy > 0 && !(p.tedT > 0) && !(p.tedCd > 0) && vis && kd < 9 && K.stun <= 0 && (p.x - K.x) * Math.sin(K.yaw) + (p.z - K.z) * Math.cos(K.yaw) > kd * 0.85 && Math.random() < dt * 1.5) this.sim.onMsg(p.id, { t: 'act', a: 'teddy' });
       if (K.char === 'angeline' && K.aim && vis && kd < 18) { const kf = fwd(K.yaw), toMe = ((p.x - K.x) * kf.x + (p.z - K.z) * kf.z) / (kd || 1); if (toMe > 0.9) { threat = true; b.juke = true; } }
       // Slendrina's eyes are open: don't stand there looking at her
       if (K.char === 'slendrina' && K.gaze > 0 && vis && kd < 26) threat = true;
@@ -413,11 +426,13 @@ export class Bots {
     }
 
     if (fleeing) {
-      this.setE(p, b, false);
       b.crouch = false;
+      if (S.cars && this.hideFrom(p, b, K, kd, dt)) return;
+      this.setE(p, b, false);
       this.flee(p, b, K, kd, dt);
       return;
     }
+    b.hideGoal = -1; p.hg = -1;
     // just broke the chase: sneak away crouched before going back to work
     if (b.alert > 2.5 && K && kd < 16 && !p.act) {
       this.setE(p, b, false);
@@ -543,6 +558,74 @@ export class Bots {
     this.setE(p, b, false);
     const sprint = goal.mode === 'rescue' || goal.mode === 'help' || goal.mode === 'exit' || goal.mode === 'gate' || !K || kd > 22 || Math.random() < 0.5;
     this.goTo(p, b, goal.x, goal.z, goal.mode + ':' + (goal.modeId ?? '') + ':' + Math.round(goal.x) + ',' + Math.round(goal.z), dt, sprint && !b.crouch, goal.mode === 'help' || goal.mode === 'heal' ? 0.5 : 1.5);
+  }
+
+  searchHides(p, b, dt) {
+    const sim = this.sim, S = sim.S, M = sim.M, at = b.seen0;
+    b.searched ||= {};
+    let hb = null, hd = 9;
+    for (const h of M.hides || []) { if (b.searched[h.id] > S.t - 40) continue; const d = Math.hypot(h.x - at.x, h.z - at.z); if (d < hd) { hd = d; hb = h; } }
+    if (!hb) return false;
+    p.hg = hb.id;
+    const it = findInteraction(M, S, p);
+    if (it && it.k === 'search' && it.id === hb.id) { p.yaw = Math.atan2(hb.x - p.x, hb.z - p.z); b.searched[hb.id] = S.t; this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); return true; }
+    this.setE(p, b, false);
+    const key = 'hide' + hb.id;
+    if (b.goalKey === key && (b.hideTry = (b.hideTry || 0) + dt) > 8) { b.searched[hb.id] = S.t; b.hideTry = 0; return false; }
+    if (b.goalKey !== key) b.hideTry = 0;
+    this.goTo(p, b, hb.x, hb.z, key, dt, true, 1.0);
+    return true;
+  }
+  huntPed(p, b, dt) {
+    const sim = this.sim, S = sim.S, M = sim.M, D = sim.diff;
+    if ((b.peds || 0) >= 5) return false;
+    b.pedPlan ||= {};
+    let tgt = null, td = 12;
+    for (const q of S.peds) {
+      if (q.s > 1 || q.c >= 0) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d >= td) continue;
+      const key = q.id + ':' + q.lk;
+      b.pedPlan[key] ??= Math.random() < 0.55;
+      if (!b.pedPlan[key] || losBlocked(M, p.x, p.z, q.x, q.z, 1.2)) continue;
+      td = d; tgt = q;
+    }
+    if (!tgt) { b.pedT = 0; return false; }
+    if ((b.pedT = (b.pedT || 0) + dt) > 10) { b.pedPlan[tgt.id + ':' + tgt.lk] = false; b.pedT = 0; return false; }
+    const ang = Math.atan2(tgt.x - p.x, tgt.z - p.z);
+    if (td < (D.reach || 2.4) && !p.atk) { p.yaw = ang; sim.onMsg(p.id, { t: 'act', a: 'attack' }); b.peds = (b.peds || 0) + 0.5; }
+    if (td < 3.5) { p.yaw += angDiff(p.yaw, ang) * Math.min(1, dt * 10); this.move(p, b, Math.sin(ang), Math.cos(ang), dt, true); return true; }
+    this.goTo(p, b, tgt.x, tgt.z, 'ped' + tgt.id + ':' + Math.round(tgt.x / 3) + ',' + Math.round(tgt.z / 3), dt, true, 1.0);
+    return true;
+  }
+  // City Mode: dive into a hiding spot close by, if the killer won't see us get in
+  hideFrom(p, b, K, kd, dt) {
+    const sim = this.sim, S = sim.S, M = sim.M;
+    if (!K || !M.hides) return false;
+    if (b.hideGoal >= 0) {
+      const h = M.hides[b.hideGoal], taken = S.players.some(o => o.hide === b.hideGoal);
+      const dh = h ? Math.hypot(h.x - p.x, h.z - p.z) : 99;
+      if (!h || taken || dh > 9 || (kd < 2.2) || (b.hideT = (b.hideT || 0) + dt) > 5) { b.hideGoal = -1; p.hg = -1; b.noHide = S.t + 12; return false; }
+      p.hg = h.id;
+      const it = findInteraction(M, S, p);
+      if (it && it.k === 'hide' && it.id === h.id) { this.setE(p, b, true); this.move(p, b, 0, 0, dt, false); return true; }
+      this.setE(p, b, false);
+      this.goTo(p, b, h.x, h.z, 'hide' + h.id, dt, true, 0.9);
+      return true;
+    }
+    if (b.noHide > S.t || kd < 5 || kd > 22 || p.hp === 1 && Math.random() < 0.5 * dt) return false;
+    // only where she can't see us go in (or far enough that she won't notice)
+    let best = null, bd = 7;
+    for (const h of M.hides) {
+      const d = Math.hypot(h.x - p.x, h.z - p.z);
+      if (d > bd || S.players.some(o => o.hide === h.id)) continue;
+      if (Math.hypot(h.x - K.x, h.z - K.z) < kd * 0.9) continue; // (not toward her)
+      if (kd < 13 && !losBlocked(M, K.x, K.z, h.x, h.z, 1.2)) continue;
+      bd = d; best = h;
+    }
+    if (!best || Math.random() > 0.6) { b.noHide = S.t + 4; return false; }
+    b.hideGoal = best.id; b.hideT = 0; p.hg = best.id;
+    return true;
   }
 
   flee(p, b, K, kd, dt) {
@@ -707,7 +790,7 @@ export class Bots {
     }
     let target = null, td = 1e9;
     for (const s of S.players) {
-      if (s.role !== 'survivor' || s.st !== 'ok') continue;
+      if (s.role !== 'survivor' || s.st !== 'ok' || s.hide >= 0) continue;
       const d = dist(p, s);
       const sight = s.cr && !s.mv ? D.sight * 0.45 : s.cr ? D.sight * 0.7 : D.sight;
       const vis = d < sight && !losL(M, p, s);
@@ -728,7 +811,7 @@ export class Bots {
     // drop a chase that has gone on too long without a hit
     if (target && b.target === target.id) { b.chaseT = (b.chaseT || 0) + dt; if (b.chaseT > 25 + D.react * 10 && target.hp === 2) { b.ignore = { id: target.id, t: 12 }; b.chaseT = 0; } } else if (target) b.chaseT = 0;
     if (b.ignore) { b.ignore.t -= dt; if (b.ignore.t <= 0) b.ignore = null; else if (target && target.id === b.ignore.id && dist(p, target) > 3) target = null; }
-    if (target) { b.target = target.id; b.lastSeen = { x: target.x, z: target.z, fl: target.fl || 0 }; b.lastVel = { ...(b.vel[target.id] || { x: 0, z: 0 }) }; b.lostT = 0; }
+    if (target) { b.seen0 = { x: target.x, z: target.z, t: S.t }; b.target = target.id; b.lastSeen = { x: target.x, z: target.z, fl: target.fl || 0 }; b.lastVel = { ...(b.vel[target.id] || { x: 0, z: 0 }) }; b.lostT = 0; }
     else if (b.target != null) {
       b.lostT += dt;
       // follow where they were heading
@@ -775,6 +858,9 @@ export class Bots {
       if (sw && !(target && dist(p, target) < 5)) { this.goTo(p, b, sw.x, sw.z, 'saw' + sw.id, dt, true, 0.5); return; }
     }
 
+    // City Mode: lost them right by a hiding spot? look inside
+    if (S.cars && !target && b.seen0 && S.t - b.seen0.t < 14 && this.searchHides(p, b, dt)) return;
+    p.hg = -1;
     // chase
     const chaseT = target || (b.target != null ? playerById(S, b.target) : null);
     if (chaseT && chaseT.st === 'ok') {
@@ -812,6 +898,12 @@ export class Bots {
         if (!b.aim) { b.aim = true; b.aimT = 0.1 + Math.max(0, (lead - A.min) / (AM - A.min)) * A.coil + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
       }
       if (p.char === 'chucky' && !p.harmless && !target && p.ab2Cd <= 0 && Math.random() < dt * 0.15) sim.onMsg(p.id, { t: 'act', a: 'ability2' });
+      if (p.char === 'father') {
+        // Tendril Lash in reach (but not right on top of them: the claws are quicker there); Faceless Step after a runner
+        const A = KILLERS.father.ability;
+        if (target && los && !b.aim && p.abCd <= 0 && !p.atk && d > 2.6 && d < A.range - 0.6 && this.clearLine(p.x, p.z, tx, tz, p.fl) && this.willing(b, D, dt)) { b.aim = true; b.aimT = A.wind + 0.05 + D.react * 0.2; sim.onMsg(p.id, { t: 'in', e: false, aim: true }); }
+        if (target && p.ab2Cd <= 0 && !p.tele && !b.aim && d > 15 && d < KILLERS.father.ability2.range - 2 && Math.random() < dt * 0.9 * D.aim) { p.yaw = Math.atan2(tx - p.x, tz - p.z); sim.onMsg(p.id, { t: 'act', a: 'ability2' }); }
+      }
       if (p.char === 'nosferatu') {
         // Night Leap: crouch just long enough to land on them
         const A = KILLERS.nosferatu.ability;
@@ -872,7 +964,7 @@ export class Bots {
       if (b.aim) {
         b.aimT -= dt;
         // lead the target
-        const lead = p.char === 'grandpa' || p.char === 'slendrina' || p.char === 'angeline' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'nosferatu' ? 15 : p.char === 'granny' ? 13 : 32);
+        const lead = p.char === 'grandpa' || p.char === 'slendrina' || p.char === 'angeline' || p.char === 'father' ? 0 : d / (p.char === 'bateman' ? 26 : p.char === 'chucky' ? 14 : p.char === 'nosferatu' ? 15 : p.char === 'granny' ? 13 : 32);
         const vx = target ? (target.x - (b.prevTX ?? target.x)) / Math.max(dt, 1e-3) : 0, vz = target ? (target.z - (b.prevTZ ?? target.z)) / Math.max(dt, 1e-3) : 0;
         const ax = tx + vx * lead * D.aim, az = tz + vz * lead * D.aim;
         p.yaw = Math.atan2(ax - p.x, az - p.z) + (Math.random() - 0.5) * (1 - D.aim) * 0.25;
@@ -964,11 +1056,15 @@ export class Bots {
       return;
     }
 
+    // City Mode: a pedestrian close by is worth a few Embers
+    if (S.peds && this.huntPed(p, b, dt)) return;
     // patrol generators: the one with most progress (killer hears active repairs within 40m)
     if (p.char === 'wisp' && p.ab === 0 && p.abCd <= 0) sim.onMsg(p.id, { t: 'act', a: 'ability' });
     let gi = b.patrolGen;
     if (b.leaveCage && b.leaveCage.t > 0 && gi >= 0 && Math.hypot(M.gens[gi].x - b.leaveCage.x, M.gens[gi].z - b.leaveCage.z) < 20) gi = -1;
     if (gi >= 0 && Math.hypot(M.gens[gi].x - p.x, M.gens[gi].z - p.z) < 3.2) b.genIdle = (b.genIdle || 0) + dt; else b.genIdle = 0;
+    // The Pages: nothing to kick at a page: prowl round it for a while instead of standing there
+    if (S.mode === 'pages' && gi >= 0 && b.genIdle > 1.5) { const g = M.gens[gi]; b.search = { x: g.x, z: g.z, fl: 0, t: 6 }; b.genIdle = 0; b.patrolGen = -1; return; }
     // once the gates are powered, generators don't matter any more: guard the gates (below) instead of kicking a leftover one
     if (S.gatesPowered) { gi = -1; b.patrolGen = -1; }
     else if (gi < 0 || S.gens[gi].done || b.genIdle > 2.5 || (Math.hypot(M.gens[gi].x - p.x, M.gens[gi].z - p.z) < 2.5 && (S.gens[gi].reg || S.gens[gi].p < 0.2))) {
