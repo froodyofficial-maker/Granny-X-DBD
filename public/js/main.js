@@ -341,7 +341,7 @@ const navActions = {
   event: () => { const gm = eventMode(); if (!gm) return; navActions['play-survivor'](); botsCfg.gm = gm; $('bots-gm').value = gm; $('bots-gm').dispatchEvent(new Event('change')); },
 };
 // the event mode that's on right now (the newest one), for the menu's headline button
-function eventMode() { const on = Object.keys(MODES).filter(id => MODES[id].event && modeOpen(id)); return on[on.length - 1] || null; }
+function eventMode() { const on = Object.keys(MODES).filter(id => MODES[id].event && modeOpen(id)); return on[0] || null; } // (the first one listed is the season's headline)
 function renderEventBtn() {
   const b = $('nav-event'), gm = eventMode();
   b.classList.toggle('hidden', !gm); if (!gm) return;

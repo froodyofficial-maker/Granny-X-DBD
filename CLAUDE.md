@@ -9,10 +9,10 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   Don't turn on GitHub Pages or upload it anywhere else unless the owner asks. Hand builds to the
   owner directly as files (the .exe zip, the .apk, videos). Built files (GrannyDBD.html, exe, apk)
   are not committed: rebuild them with the commands below.
-- **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina, Angeline (1.3) and Nosferatu (1.4.3).**
+- **Killers: Granny, Grandpa (his own killer since 1.1, no longer an outfit), Slendrina, Angeline (1.3), Nosferatu (1.4.3) and Slendrina's Father (`father`, 1.5.0, playable from Season 2 = 1 Dec 2026).**
 - **Survivors: only Mara, Eli, June and Tomás.**
-- **Maps: Granny's House (`granny`), Granny's Old House (`granny1`) and Slendrina: The Forest (`forest`, 1.4.3, at the
-  owner's request, from the owner's copy of the game).** No other maps unless the owner asks.
+- **Maps: Granny's House (`granny`), Granny's Old House (`granny1`), Slendrina: The Forest (`forest`, 1.4.3, at the
+  owner's request, from the owner's copy of the game) and Midnight City (`city`, 1.5.0, City Mode only).** No other maps unless the owner asks.
 - Removed for good (don't bring back): ghost traps, all lore, Testing Area, the old intro banner / trailer gate.
   (Sidekicks, the Progress screen, ranks and levelling were removed in 1.0 but the owner asked for them back in 1.4:
   they are in again, in the 1.4 form described below.)
@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 14`, `VERSION = '1.4.3'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 15`, `VERSION = '1.5.0'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,7 +205,48 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.4.3 (current; APK versionCode 22 so it installs over every earlier APK, incl. the 1.3.3 one (21) built on the other branch;
+1.5.0 (current; APK versionCode 24, Windows 1.5.0; NET_PROTOCOL 15). The owner's requests: new skins, a proper place to
+redeem codes, City Mode (a one-month event), loading stutter; then "Season 1 ends 1 Dec with City Mode as its headline, Season 2
+comes by itself on 1 Dec" with Slendrina's Father, the Teddy, a main mode of my own design and Chaos Shuffle.
+- Dates: `nowMs()` (config.js) = `window.__now` || Date.now() (tests fake the date with `window.__now`). `modeOpen(id)`: MODES with
+  `from` / `until`. City Mode `until` 1 Dec 2026; pages + shuffle `from` 1 Dec 2026 `until` 12 Jan 2027. `KILLERS.father.from` 1 Dec
+  (PLAY_K filters it out before then). progress.js: S1 = 1 Nov..1 Dec 2026 (30 days), S2 from 1 Dec, then every 42 days; `S_SKINS` =
+  each season's premium outfits (S2: Slendrina 'snow' tier 15, Father 'frost' tier 30). INBOX entries with `from` show up then.
+  Main menu: `#nav-event` (the newest open event mode, days left) opens Play as Survivor with that mode picked.
+- **City Mode** (`MODES.city`, map: 'city'; resolveMap / lobby / bots force the map): citymap.js (no imports: CITY grid 7x7 blocks
+  22 m apart, 15 m blocks, 7 m streets on `ROADS`, half 81; block templates + `extra`: `M.hides`, `M.carSpots` (kerbs + parking
+  lots, >= 12), `M.pedNodes` (pavement corners graph), `M.cityLamps`, `M.cityCells`), built by map.js buildArena (CI = CITY: no
+  jitter, gates at street ends). city.js (sim): `S.cars` [{id,x,z,y,v,d driver id,pd ped id,home,lane}], `S.peds` [{s 0 walk/1 flee/
+  2 dead/3 driving, c car, n node, lk look}], players `hide` / `car` (-1). findInteraction (rules.js) wraps `baseInteraction` +
+  `cityInteraction` (exitcar / unhide are exclusive; bots only hide/search the spot in `p.hg`, never drive). Acts hide/unhide/search/
+  car/exitcar/carjack (CITY_TIMES) finish in `cityFinish`. The driver drives on their own machine (`driveCar`; game.js `this.drive`,
+  pos message `cy`/`cv`, host allows 3+17/s): survivor car rams the killer = stun 2 s; killer car knocks a survivor aside; a killer
+  strike on a car pulls the survivor out (`cityOnDamage`). Peds: killers' lunge kills (`cityKillerHit`), run-overs; Embers via
+  `score.c`, capped 2400 per match (`CITY_PAY`). Cars push walkers (moveCircle `pushFromCars`) except bots (`noCars`: cars aren't on the
+  walking grid). Abandoned cars off the streets are towed after 40 s. cityworld.js draws it (asphalt, pavements, markings, buildings
+  `kind 'bldg'` with canvas facades + lit windows, neon, skyline, lamps in W.lamps, hides, cars = `makeVictimCar()` (grannyGlb;
+  bonnet "Motorhuv" is -x in the file), peds = makeSurvivor with random colours); chase cam / hiding peek in game.js `cityCamera`.
+  Bots: survivors `hideFrom` while fleeing, leave after the killer goes; killers `searchHides` near where they lost someone, `huntPed`.
+- **Slendrina's Father** (`father`): public/models/slenderman.glb ("SlenderMan" by Voidircel, CC BY 4.0), a static mesh given a code
+  rig in grannyGlb.js (`fatherGeo`: arm weights by distance along shoulder->hand; `FatherRig`, `animateFather`; tendrils = segment
+  chains shown while aiming). Tendril Lash (hold RMB, release after `wind` -> `sim.fatherLash`, 8 m line), Faceless Step (R:
+  survivor in his view cone up to 36 m, `p.tele.step`, appears behind them after 1 s, `updateFather`), Static (survivors facing him
+  within 16 m build `sta`; 2.5 s = revealed; game.js `#staticov`). Outfits default / static (3500) / frost (S2 pass).
+- **Teddy** (`ITEMS.teddy`, models/teddy.glb "Teddy" by iskaa!, CC BY 4.0; img/teddy.png): Store > Add-ons card, 6000 Embers,
+  `profile.teddy = SEASON.id` (owned only that season), survivor Loadout "Item" row (`profile.survivor.item`), roster `item: 'teddy'`.
+  Sim: act 'teddy' -> `tedT` 1.4 s raised; killers facing it (cone 0.62 rad, 24 m, in sight) are stunned 10 s, second use 5 s
+  (`updateTeddy`, `teddy` = uses left). Bots bring one 20% of the time in S2 and hold it up when caught.
+- **The Pages** (`MODES.pages`, S2 headline): generators are pages (game.js `updatePages` swaps the models for a page on a post),
+  ~14 s solo each (`RULES.genCharges / 14`), all pages needed (max 8), no kicks, no skill checks; killer +4% speed per page and
+  `silentT` 6 s (terror 0) after each; fog thickens. **Chaos Shuffle** (`MODES.shuffle`): every 50-80 s `sim.shuffle(K, V)` swaps
+  everything about the bodies except id/name/bot/score (event 'shuffle'; bots get fresh brains).
+- Loading: `waitForModels` waits only for the played map's scenery and the killers in the roster; `holdLoading(true)` (loadscreen.js)
+  freezes the 3D reel on a still that CSS animates (compositor, so no stutter) while the match is built. Fixed: main.js used `skinOf`
+  without importing it (every match start failed after the outfit commit).
+- Tests: `citylook.mjs` (City Mode shots: street, peds, driving, hiding), `s2look.mjs` (date faked to 2 Dec: Pages + Father + Teddy),
+  `offevent.mjs <gm> <killer> [date]` (offline single file: event button, match start, held loading), `glbview.mjs` (static GLB bounds
+  + shots), simtest `MODE=city|pages|shuffle`. Devlog banner: devlog150-page.js ("CITY MODE · SHE CAME TO TOWN").
+1.4.3 (APK versionCode 22 so it installs over every earlier APK, incl. the 1.3.3 one (21) built on the other branch;
 NET_PROTOCOL 14: a new killer, so 1.4.2 and 1.4.3 don't share lobbies):
 - **Nosferatu** (`nosferatu`, third person): model public/models/nosferatu.glb ("Nosferatu Trailer version/Slendrina The Forest" by
   Mr.Prizz, sketchfab.com/Rodolfoisreal1423, CC BY 4.0; credited in How to Play) with its own clips idle/Walk/attack/hurt; its
