@@ -240,6 +240,9 @@ comes by itself on 1 Dec" with Slendrina's Father, the Teddy, a main mode of my 
   ~14 s solo each (`RULES.genCharges / 14`), all pages needed (max 8), no kicks, no skill checks; killer +4% speed per page and
   `silentT` 6 s (terror 0) after each; fog thickens. **Chaos Shuffle** (`MODES.shuffle`): every 50-80 s `sim.shuffle(K, V)` swaps
   everything about the bodies except id/name/bot/score (event 'shuffle'; bots get fresh brains).
+- Outfits with their own models: only **Sigma Grandpa** (`grandpa_thug.glb`, weight-transferred onto Grandpa's rig by `reskin`).
+  The four Granny ones made the same way (Bloody, Nightmare Mode, Santa, Witch) were removed again before 1.5.0 shipped: the owner
+  said they didn't look good in game. Don't bring them back unless asked. Freddy (secret code outfit) stays.
 - Loading: `waitForModels` waits only for the played map's scenery and the killers in the roster; `holdLoading(true)` (loadscreen.js)
   freezes the 3D reel on a still that CSS animates (compositor, so no stutter) while the match is built. Fixed: main.js used `skinOf`
   without importing it (every match start failed after the outfit commit).

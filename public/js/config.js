@@ -357,7 +357,7 @@ export const SECRET_CODES = ["a6fb993d580ca12455d500af871be912e902f2ed21e22e270c
 export const GIFT_CHARS = ['mara', 'eli', 'june', 'tomas', 'granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'];
 export const GIFT_SKINS = {
   mara: ['default', 'nightshift', 'crimson', 'medic'], eli: ['default', 'overalls', 'hazard', 'midnight'], june: ['default', 'autumn', 'ghost', 'reporter'], tomas: ['default', 'camo', 'firewatch', 'searchlight'],
-  granny: ['default', 'bloodbath', 'ghost', 'freddy', 'bloody', 'nightmare', 'santa', 'witch'], grandpa: ['default', 'bloodbath', 'sigma'], slendrina: ['default', 'pale'], angeline: ['default', 'pale'], nosferatu: ['default', 'plague', 'blood'], father: ['default', 'static'],
+  granny: ['default', 'bloodbath', 'ghost', 'freddy'], grandpa: ['default', 'bloodbath', 'sigma'], slendrina: ['default', 'pale'], angeline: ['default', 'pale'], nosferatu: ['default', 'plague', 'blood'], father: ['default', 'static'],
 };
 export const SKINS = {
   mara: [
@@ -438,10 +438,6 @@ export const SKINS = {
     { id: 'bloodbath', name: 'Spring Cleaning', price: 3000, tint: 0x8a1010, tintK: 0.35, desc: 'She has been busy. Most of the red is not hers.' },
     { id: 'ghost', name: 'Pale Visitor', price: 4500, tint: 0xd8e4f0, tintK: 0.5, glow: 0x6a8aa8, glowK: 0.35, desc: 'Drained of colour, glowing faintly, like something that stayed in the house long after it should have left.' },
     // 1.4.4: outfits with their own models (loaded only when worn)
-    { id: 'bloody', name: 'Bloody Granny', price: 6000, glb: 'granny_bloody', desc: 'Soaked from collar to hem. The bat is the cleanest thing on her.' },
-    { id: 'nightmare', name: 'Granny: Nightmare Mode', price: 8000, glb: 'granny_nightmare', desc: 'The Granny from Nightmare Mode: pale as ash, eyes like coals. The house gets darker when she walks in.' },
-    { id: 'santa', name: 'Santa Granny', price: 5000, glb: 'granny_santa', santa: true, desc: 'A Santa hat, a white beard, and a sack she will not let you look inside.' },
-    { id: 'witch', name: 'Witch Granny', price: 6000, glb: 'granny_witch', desc: 'A pointed hat, a crooked nose and her broom. She still prefers the bat.' },
     { id: 'freddy', name: 'Freddy Fazbear', price: 9000, secret: true, glb: 'freddy', desc: 'Legendary. The pizzeria\'s star performer, still running after closing time, with her bat in his paw. Unlocked with a secret code. (Model: "FNaF 1 Freddy Fazbear Rigged" by ShadowSupreme, Sketchfab.)' },
     { id: 'longnight', name: 'The Long Night', price: -1, pass: true, tint: 0x3a2a5a, tintK: 0.45, glow: 0x7a40c0, glowK: 0.3, desc: 'Season Pass reward (tier 30). Dressed for a night that never ends.' },
   ],
@@ -517,7 +513,7 @@ export const INBOX = [
     id: 'gdbd150', version: '1.5.0', date: 'Nov 2026', title: 'City Mode', tag: 'Season 1 Event',
     body: [
       "City Mode, the big event of Season 1 (on until 1 December): Midnight City, a whole city at night. Hide in dumpsters, trash cans, portable toilets and piles of boxes (the killer can search them). Drive the Victim's Cars parked all over town: ram the killer to stun them, but a strike on your car pulls you out. Pedestrians walk the streets: killers earn Embers for every one they catch, and anyone earns Embers for running them over. Pull a driving pedestrian out to take the car. Find it at the top of the main menu.",
-      'New outfits with their own models: Bloody Granny, Granny: Nightmare Mode, Santa Granny, Witch Granny and Sigma Grandpa.',
+      'New outfit with its own model: Sigma Grandpa.',
       'Redeem Code now has its own button on the main menu (Discord codes, gift codes and backup codes).',
       "Season 2 starts by itself on 1 December: Slendrina's Father (a new killer: Tendril Lash, Faceless Step, and static if you look at him), the Teddy (a new item, this season only: hold it up and every killer who sees it is pacified for 10s, then once more for 5s), The Pages (no generators: collect the pages) and Chaos Shuffle (the killer and a survivor keep swapping bodies).",
       'Loading screens no longer stutter while the match is being built, and only the map you are playing is waited for.',

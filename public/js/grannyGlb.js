@@ -28,8 +28,7 @@ async function bytes(name) {
 // height (m) and which way the raw model faces
 const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI },
   // 1.4.4 outfits (their own meshes on Granny's / Grandpa's rig): bind = how to straighten the file's skeleton first
-  granny_bloody: { bind: 'fit', reskin: true }, granny_nightmare: { bind: 'fit', reskin: true }, granny_witch: { bind: 'fit', reskin: true },
-  granny_santa: { h: 1.82, yaw: 0, bind: 'pure' }, grandpa_thug: { mesh: true }, victim_car: { mesh: true },
+  grandpa_thug: { mesh: true }, victim_car: { mesh: true },
   slenderman: { mesh: true }, teddy: { mesh: true } };
 function load(name) {
   if (loading[name]) return loading[name];
@@ -471,10 +470,8 @@ export function makeGrannyGlb(sk = {}, lite = false) {
   return sk.glb && M[sk.glb] ? new GrannyRig(sk, lite, sk.glb) : new GrannyRig(sk, lite);
 }
 // 1.4.4 outfits that bring their own model, loaded only when someone wears one
-// Bloody Granny: "Granny Animated Nightmare" by Unit games (sketchfab.com/UnitGames.445); Granny: Nightmare Mode: "Nightmare
-// Granny (4)" by Yandu27; Santa Granny: "Santa Granny - Granny in Christmas Theme" by Arthurzin (sketchfab.com/arthurbat64);
-// Witch Granny: "DVloper - Granny (Official Model, Halloween)" by danielthesecond; Sigma Grandpa: "GRANNY 3 GRANDPA THUG" by
-// Dark Phantom Thunderball (sketchfab.com/dpt); all CC BY 4.0
+// Sigma Grandpa: "GRANNY 3 GRANDPA THUG" by Dark Phantom Thunderball (sketchfab.com/dpt), CC BY 4.0. (The four Granny outfits
+// made this way in 1.5.0 were taken out again before release at the owner's request: they didn't look good in game.)
 // ---------------- Slendrina's Father (Season 2) ----------------
 // "SlenderMan" by Voidircel (sketchfab.com/teethisyum), CC BY 4.0: one static mesh, arms held out. It gets a small rig
 // made here: a root and, per arm, an upper arm and a forearm (weights from how far along the arm each vertex is), so
