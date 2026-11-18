@@ -26,3 +26,6 @@ public/models/freddy.glb
 
 # finished builds handed to the owner (exe zips, apk): never committed
 tools/test/node_modules
+
+# builds and banners handed to the owner (sent as files, never committed)
+deliverables/
