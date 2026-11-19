@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 15`, `VERSION = '1.5.0'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 16`, `VERSION = '1.5.1'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,6 +205,27 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
+1.5.1 (current; APK versionCode 25, Windows 1.5.1, NET_PROTOCOL 16): the community update (credited in How to Play + inbox:
+Ommm = outlines, sound variety, backup file, Pepper Spray; WolfSpider = instant sacrifice, generator pistons/sparks).
+- City Mode cars: `carBlocked(..., from)` = `carDepth` (penetration) may not grow, so a wedged car can always drive/back out (the
+  "can't drive" reports: ped cars passed through parked ones and left them stuck forever); enter range 3.5 m from the centre;
+  ped lanes 0.95 m off the centre line, kerb parking 2.5 m; ped cars ignore parked cars at the side (`ahead(.., 1.0)`).
+  Tests: `cardrive.mjs` (host, real key presses), `citynet.mjs` (client B drives through a local relay: `node broker.mjs` first).
+- Outlines (`auraMat` / `auraSkinMat` + `auraParts` in models.js): a stencil mask of the silhouette (opaque pass, renderOrder 9) +
+  faint fill + a screen-space extruded outline drawn only outside the mask (`AURA_W`, pulse `AURA_T`). The composer's render
+  target has `stencilBuffer: true`. game.js calls `auraParts` whenever it colours an aura.
+- Pepper Spray (`ITEMS.pepper`, chests 20%, 3 sprays, 3.6 m cone): `K.peppered` 25 s: game.js `#pepperov` blur, no survivor auras
+  for that killer, bot killers see 4 m and ignore reveals. Bot survivors spray when the killer is within 3.2 m.
+- Sound: every `sound.play` gets its own pitch/volume (`vf`/`vv` in audio.js). Menu music: public/audio/menu.mp3 (owner's track,
+  128 kbps), `sound.menuMusic(on)` (main.js toggles it every 0.5 s: on unless a match is being played); offline builds embed it
+  as `#nb-music-mp3`.
+- Backup file: main.js `autoBackup` (every profile save, max once a minute, once there's a match played): Windows app
+  `gdbdDisk.backup` -> Documents\Granny x DBD\Granny x DBD backup.txt (`gdbd-backup` IPC; loaded by itself on a fresh start);
+  Android `GameStore.writeBackup` -> MediaStore Download/Granny x DBD (API 29+), `pickBackup()` = SAF picker ->
+  MainActivity.onActivityResult -> `window.__gdbdBackupFile`. Profile panel: Save backup file / Load backup file.
+- Embers: `embersOf(p)` (rules.js) = score / 2 (survivor) or / 4.5 (killer), max `EMBER_CAP` 4000. Gift codes: the list shows all.
+- Instant sacrifice: no survivor left with st 'ok' -> everyone on a hook dies at once (sim.update). Generators: pistons pump at
+  3 + 15 x progress once there is any; regressing gens spark (game.js). Main menu season card (`renderSeasonCard`).
 1.5.0 (current; APK versionCode 24, Windows 1.5.0; NET_PROTOCOL 15). The owner's requests: new skins, a proper place to
 redeem codes, City Mode (a one-month event), loading stutter; then "Season 1 ends 1 Dec with City Mode as its headline, Season 2
 comes by itself on 1 Dec" with Slendrina's Father, the Teddy, a main mode of my own design and Chaos Shuffle.
