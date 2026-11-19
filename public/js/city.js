@@ -48,7 +48,7 @@ export function cityInit(sim) {
   }
 }
 // lanes: a car on road line `line` running along axis `ax` (its x or z changes) in direction dir keeps 1.75 m to one side
-function laneOff(L) { return -L.dir * 1.75; }
+function laneOff(L) { return -L.dir * 0.95; } // (1.5.1: nearer the middle, clear of the cars parked at the kerb)
 function placeOnLane(c, t) {
   const L = c.lane;
   if (L.ax === 'x') { c.x = t; c.z = L.line + laneOff(L); c.y = L.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
@@ -73,17 +73,42 @@ function hitAt(M, x, z, r) {
   }
   return false;
 }
-export function carBlocked(M, S, x, z, yaw, self) {
+// how far into things a car would be at x, z facing yaw (0 = clear): its three circles against walls, props, closed
+// gates, dropped pallets and the other cars
+function hitDepth(M, x, z, r) {
+  const g = M.hash; if (!g) return 0;
+  const hh = M.half + 12, gx = Math.floor((x + hh) / 8), gz = Math.floor((z + hh) / 8);
+  let worst = 0;
+  for (let a = gx - 1; a <= gx + 1; a++) for (let b = gz - 1; b <= gz + 1; b++) {
+    const bucket = g.get(a * 1000 + b); if (!bucket) continue;
+    for (const o of bucket) {
+      if (o.h !== undefined && o.h < 0.35) continue;
+      if (o.r !== undefined) worst = Math.max(worst, o.r + r - Math.hypot(x - o.x, z - o.z));
+      else { const dx = Math.abs(x - o.x) - o.hx, dz = Math.abs(z - o.z) - o.hz; worst = Math.max(worst, r - Math.max(dx, dz, Math.hypot(Math.max(0, dx), Math.max(0, dz)))); }
+    }
+  }
+  return worst;
+}
+export function carDepth(M, S, x, z, yaw, self) {
   const f = fwdOf(yaw), h = M.half - 0.6;
   const dyn = dynBoxes(M, S);
+  let depth = 0;
   for (const k of [-1.3, 0, 1.3]) {
     const px = x + f.x * k, pz = z + f.z * k;
-    if (Math.abs(px) > h || Math.abs(pz) > h) return true;
-    if (hitAt(M, px, pz, 0.9)) return true;
-    for (const b of dyn) if (Math.abs(px - b.x) < b.hx + 0.9 && Math.abs(pz - b.z) < b.hz + 0.9) return true;
+    depth += Math.max(0, Math.abs(px) - h, Math.abs(pz) - h);
+    depth += Math.max(0, hitDepth(M, px, pz, 0.9));
+    for (const b of dyn) { const dx = Math.abs(px - b.x) - b.hx, dz = Math.abs(pz - b.z) - b.hz; depth += Math.max(0, 0.9 - Math.max(dx, dz)); }
   }
-  if (S.cars) for (const o of S.cars) if (o.id !== self && Math.hypot(o.x - x, o.z - z) < 2.0) return true;
-  return false;
+  if (S.cars) for (const o of S.cars) if (o.id !== self) depth += Math.max(0, 2.0 - Math.hypot(o.x - x, o.z - z));
+  return depth;
+}
+// 1.5.1: a move is allowed when it doesn't push the car further into anything. A car that somehow ended up overlapping
+// something (a pedestrian's car stopped through it, a tow onto a busy kerb) can always drive or reverse out of it: before,
+// every move counted as blocked and the car never moved again ("I can't drive the cars").
+export function carBlocked(M, S, x, z, yaw, self, from) {
+  const d = carDepth(M, S, x, z, yaw, self);
+  if (d <= 1e-4) return false;
+  return !from || d > carDepth(M, S, from.x, from.z, from.y, self) - 1e-4;
 }
 // walkers are pushed out of cars (three circles along the car)
 export function pushFromCars(S, p, r) {
@@ -109,13 +134,13 @@ export function driveCar(M, S, c, inp, dt) {
   const sk = Math.min(1, Math.abs(v) / 3.5) * Math.sign(v) * (1 - Math.min(0.4, Math.abs(v) / CAR.maxV * 0.4));
   const yaw = c.y - inp.r * CAR.steer * sk * dt;
   const f = fwdOf(yaw), nx = c.x + f.x * v * dt, nz = c.z + f.z * v * dt;
-  if (!carBlocked(M, S, nx, nz, yaw, c.id)) { c.x = nx; c.z = nz; c.y = yaw; c.v = v; return 0; }
+  if (!carBlocked(M, S, nx, nz, yaw, c.id, c)) { c.x = nx; c.z = nz; c.y = yaw; c.v = v; return 0; }
   // scrape along the wall
-  if (!carBlocked(M, S, nx, c.z, c.y, c.id)) { c.x = nx; c.v = v * 0.75; return 0; }
-  if (!carBlocked(M, S, c.x, nz, c.y, c.id)) { c.z = nz; c.v = v * 0.75; return 0; }
+  if (!carBlocked(M, S, nx, c.z, c.y, c.id, c)) { c.x = nx; c.v = v * 0.75; return 0; }
+  if (!carBlocked(M, S, c.x, nz, c.y, c.id, c)) { c.z = nz; c.v = v * 0.75; return 0; }
   const hit = Math.abs(v);
   c.v = -v * 0.2;
-  if (!carBlocked(M, S, c.x, c.z, yaw, c.id)) c.y = yaw;
+  if (!carBlocked(M, S, c.x, c.z, yaw, c.id, c)) c.y = yaw;
   return hit;
 }
 
@@ -132,7 +157,7 @@ export function cityInteraction(M, S, p) {
   // (bots never drive, and only hide in / search the spot they picked: p.hg)
   if (!p.bot) for (const c of S.cars) {
     const d = D(c.x, c.z);
-    if (d > 2.9 || d >= bd) continue;
+    if (d > 3.5 || d >= bd) continue; // (from the bumpers too, not just the doors)
     if (c.d == null && c.pd < 0 && Math.abs(c.v) < 1.2) { bd = d; best = { k: 'car', id: c.id, label: "Drive the Victim's Car" }; }
     else if (c.pd >= 0 && Math.abs(c.v) < 2.2) { bd = d; best = { k: 'carjack', id: c.id, label: 'Pull the driver out' }; }
   }
@@ -330,9 +355,9 @@ function driveLane(sim, c, dt) {
   c.y += clamp(da, -2.4 * dt, 2.4 * dt);
   const f = fwdOf(c.y);
   let top = Math.abs(da) > 0.35 ? 3.2 : Math.min(7.5, 2 + d * 1.2);
-  const ahead = (x, z) => { const rx = x - c.x, rz = z - c.z, along = rx * f.x + rz * f.z, side = Math.abs(rx * f.z - rz * f.x); return along > 0 && along < 7 && side < 1.6; };
+  const ahead = (x, z, w = 1.6) => { const rx = x - c.x, rz = z - c.z, along = rx * f.x + rz * f.z, side = Math.abs(rx * f.z - rz * f.x); return along > 0 && along < 7 && side < w; };
   if (S.players.some(p => p.car !== c.id && p.st !== 'dead' && p.st !== 'out' && ahead(p.x, p.z))) top = 0;
-  if (S.cars.some(o => o !== c && ahead(o.x, o.z))) top = 0;
+  if (S.cars.some(o => o !== c && ahead(o.x, o.z, 1.0))) top = 0; // (a car parked at the kerb is passed)
   if (S.peds.some(q => q.s < 2 && q.c < 0 && ahead(q.x, q.z))) top = Math.min(top, 0.8);
   c.v += clamp(top - c.v, -12 * dt, 4 * dt);
   c.x += f.x * c.v * dt; c.z += f.z * c.v * dt;

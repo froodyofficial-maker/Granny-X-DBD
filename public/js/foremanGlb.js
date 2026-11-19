@@ -3,6 +3,7 @@
 // driven by its own clips (Idle, Walk, Stalk, Run, Attack, Grab, Stunned) through a mixer.
 import * as THREE from 'three';
 import { b64buf, heavy } from './heavy.js';
+import { OUTLINE_VS, OUTLINE_FS, STENCIL_OUT, AURA_T } from './models.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
@@ -43,10 +44,11 @@ const auraSkin = new Map();
 export function auraSkinMat(color) {
   if (auraSkin.has(color)) return auraSkin.get(color);
   const m = new THREE.ShaderMaterial({
-    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 } },
+    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 }, time: AURA_T },
+    // 1.5.1: a continuous outline (see auraMat in models.js; the mask + fill children come from auraParts)
     vertexShader: `#include <common>
       #include <skinning_pars_vertex>
-      varying vec3 vN; varying vec3 vV;
+      ${OUTLINE_VS}
       void main(){
         #include <beginnormal_vertex>
         #include <skinbase_vertex>
@@ -54,12 +56,10 @@ export function auraSkinMat(color) {
         #include <begin_vertex>
         #include <skinning_vertex>
         vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
-        vN = normalize(normalMatrix * objectNormal); vV = normalize(-mv.xyz);
-        gl_Position = projectionMatrix * mv;
+        gl_Position = outlineClip(mv, normalize(normalMatrix * objectNormal));
       }`,
-    fragmentShader: `uniform vec3 color; uniform float opacity; varying vec3 vN; varying vec3 vV;
-      void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); f = 0.18 + pow(f, 1.6)*1.1; gl_FragColor = vec4(color*f, f*opacity); }`,
-    transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    fragmentShader: OUTLINE_FS,
+    transparent: true, depthTest: false, depthWrite: false, ...STENCIL_OUT,
   });
   auraSkin.set(color, m);
   return m;

@@ -391,6 +391,8 @@ export class Bots {
       // Nosferatu crouching to leap: break sideways
       if (K.char === 'nosferatu' && K.aim && vis && kd < 12) { threat = true; b.juke = true; }
       if (K.char === 'father' && K.aim && vis && kd < 10) { threat = true; b.juke = true; }
+      // Pepper Spray: right in the face when the killer is on top of us
+      if (p.item === 'pepper' && p.pepper > 0 && vis && kd < 3.2 && !(K.peppered > 0) && Math.random() < dt * 3) this.sim.onMsg(p.id, { t: 'act', a: 'pepper', yaw: Math.atan2(K.x - p.x, K.z - p.z) });
       // the Teddy: up it goes when the killer is about to catch us and is looking our way
       if (p.item === 'teddy' && p.teddy > 0 && !(p.tedT > 0) && !(p.tedCd > 0) && vis && kd < 9 && K.stun <= 0 && (p.x - K.x) * Math.sin(K.yaw) + (p.z - K.z) * Math.cos(K.yaw) > kd * 0.85 && Math.random() < dt * 1.5) this.sim.onMsg(p.id, { t: 'act', a: 'teddy' });
       if (K.char === 'angeline' && K.aim && vis && kd < 18) { const kf = fwd(K.yaw), toMe = ((p.x - K.x) * kf.x + (p.z - K.z) * kf.z) / (kd || 1); if (toMe > 0.9) { threat = true; b.juke = true; } }
@@ -792,12 +794,12 @@ export class Bots {
     for (const s of S.players) {
       if (s.role !== 'survivor' || s.st !== 'ok' || s.hide >= 0) continue;
       const d = dist(p, s);
-      const sight = s.cr && !s.mv ? D.sight * 0.45 : s.cr ? D.sight * 0.7 : D.sight;
+      const sight = p.peppered > 0 ? 4 : s.cr && !s.mv ? D.sight * 0.45 : s.cr ? D.sight * 0.7 : D.sight; // (pepper-sprayed: nearly blind)
       const vis = d < sight && !losL(M, p, s);
       const facingOk = d < 7 || Math.abs(angDiff(p.yaw, Math.atan2(s.x - p.x, s.z - p.z))) < 1.4 || b.target === s.id;
       const scent = s.hp === 1 && p.perks.includes('scent') && d < 24;
       const heard = (s.mv === 2 && !s.cr && d < 16 && !s.perks.includes('hushed')) || (s.hp === 1 && d < 9 && !s.perks.includes('hushed'));
-      if ((vis && facingOk) || (d < 5 && s.mv && !s.cr) || (scent && d < 14) || s.reveal > 0 || (heard && b.target === s.id)) {
+      if ((vis && facingOk) || (d < 5 && s.mv && !s.cr) || (scent && d < 14 && !(p.peppered > 0)) || (s.reveal > 0 && !(p.peppered > 0)) || (heard && b.target === s.id)) {
         // (caught in a trap: a free hit; fully Cursed / Heard: one hit downs; low on Grandpa's shotgun bar)
         const score = d - (b.target === s.id ? 8 : 0) - (s.hp === 1 ? 3 : 0) - (s.snare > 0 ? 10 : 0) - (p.char === 'slendrina' && s.doomed > 0 ? 7 : 0) - (p.char === 'angeline' && s.spotted > 0 ? 7 : 0) - (p.char === 'granny' && s.heard > 0 ? 5 : 0) - (p.char === 'grandpa' && (s.shp ?? 100) < 60 ? 5 : 0);
         if (score < td) { td = score; target = s; }

@@ -25,9 +25,9 @@ import { foremanReady, batmanReady } from './foremanGlb.js';
 let KB_SETTINGS = null;
 const kbd = id => `<kbd>${KL(KB_SETTINGS, id).replace(/[<>&]/g, '')}</kbd>`;
 import { staticReady, cloneStatic } from './glbModels.js';
-import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, HOOK_Y } from './models.js';
+import { makeSurvivor, makeKiller, animate, makeViewModel, animateView, makeSpear, makeLantern, makeChainsaw, auraMat, auraParts, AURA_T, HOOK_Y } from './models.js';
 import { stepMover, startVault } from './movement.js';
-import { findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
+import { embersOf, findInteraction, findSpace, findExecute, vaultDuration, killerOf, killersOf, nearestKiller, playerById, has, terrorRadius, dist, angDiff, fwd, actionTime } from './rules.js';
 import { losBlocked, heightAt, levelOf, levelsMeet } from './map.js';
 import { sound } from './audio.js';
 import { updateCity, cityHideFx } from './cityworld.js';
@@ -440,7 +440,8 @@ export class Game {
     else if (realistic() && q.shadow) this.scene.environment = nightEnv(r, 0x2a1a14, 0x100806);
     if (q.post) {
       // multisampled render target: the post-processing chain otherwise loses anti-aliasing
-      const rt = real ? new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }) : undefined;
+      // (with a stencil buffer: the aura outlines are masked with it)
+      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: real ? 4 : 0, stencilBuffer: true });
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       if (real) {
@@ -666,6 +667,10 @@ export class Game {
           this.send({ t: 'act', a: 'ability' });
         }
       }
+    } else if (e.button === 2 && me.item === 'pepper') {
+      // Pepper Spray: click to spray where you're looking
+      if (down && me.st === 'ok' && !me.act && me.pepper > 0) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'pepper', yaw: this.camYaw }); }
+      else if (down && me.st === 'ok' && !(me.pepper > 0)) this.feed('Your Pepper Spray is empty.');
     } else if (e.button === 2 && me.item === 'teddy') {
       // the Teddy: hold it up (killers who see it are pacified)
       if (down && me.st === 'ok' && !me.act) { if (me.teddy > 0 && !(me.tedT > 0) && !(me.tedCd > 0)) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'teddy' }); } else if (!(me.teddy > 0)) this.feed('Your Teddy is spent.'); }
@@ -785,7 +790,7 @@ export class Game {
     if (this.disposed) return;
     // brief hit-stop when your strike connects
     if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.15; }
-    this.t += dt;
+    this.t += dt; AURA_T.value = this.t;
     const S = this.syncState();
     if (!S) return;
     const me = this.mine();
@@ -805,6 +810,13 @@ export class Game {
     this.updateKids(dt, S);
     if (S.cars) updateCity(this, S, dt, me);
     this.updateFatherFx(dt, S, me);
+    // pepper-sprayed killer: eyes streaming (heavy until the last few seconds)
+    { const k = me && me.role === 'killer' && me.peppered > 0 ? Math.min(1, me.peppered / 3) : 0; let pe = this.pepEl;
+      if (!pe && k > 0) { pe = this.pepEl = document.getElementById('pepperov') || document.createElement('div'); pe.id = 'pepperov'; document.body.appendChild(pe); }
+      if (pe) pe.style.opacity = (k * (0.9 + Math.sin(this.t * 5) * 0.05)).toFixed(2); }
+    // a kicked generator spits sparks for as long as it keeps losing progress (1.5.1, WolfSpider)
+    this.regSparkT = (this.regSparkT || 0) - dt;
+    if (this.regSparkT <= 0) { this.regSparkT = 0.28; S.gens.forEach((gs, i) => { if (gs.reg && !gs.done && S.mode !== 'pages') { const g = this.M.gens[i]; this.sparks.spawn(g.x + (Math.random() - 0.5) * 0.6, 1.15, g.z + (Math.random() - 0.5) * 0.6, 7, 0xffb040, 2.2, 0.5, -7); } }); }
     if (S.mode === 'pages') this.updatePages(S, dt);
     this.updateCreep(S, me);
     this.updateSlime(S);
@@ -1984,7 +1996,8 @@ export class Game {
       let col = null;
       if (p.id === me.id && !(me.st === 'dead' || me.st === 'out')) col = null;
       else if (killerView && p.role === 'survivor') {
-        if (p.st === 'ok' && p.spied > 0) col = 0xc050ff; // Spider Mom found them: a purple outline
+        if (me.peppered > 0) col = null; // (pepper-sprayed: no outlines at all)
+        else if (p.st === 'ok' && p.spied > 0) col = 0xc050ff; // Spider Mom found them: a purple outline
         else if (p.st === 'ok' && (p.reveal > 0 || (has(me, 'scent') && p.hp === 1 && dist(p, me) < 24) || (has(me, 'static') && p.act && p.act.k === 'repair'))) col = 0xff3030;
         else if (p.st === 'caged') col = 0xff8a2a; // caged survivors stay in sight until they are freed
       } else if (!killerView) {
@@ -1998,7 +2011,7 @@ export class Game {
       }
       if (p.st === 'dead' || p.st === 'out') col = null;
       if ((S.dark > 0 || S.mode === 'dark') && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
-      if (c.aura !== col) { c.rig.setAura(col); c.aura = col; }
+      if (c.aura !== col) { c.rig.setAura(col); c.aura = col; if (col != null) for (const a of c.rig.aura || []) auraParts(a); }
     }
     // gens
     for (let i = 0; i < this.M.gens.length; i++) {
@@ -2008,21 +2021,23 @@ export class Game {
       else if (!gs.done && !S.gatesPowered && !(S.dark > 0) && S.mode !== 'dark') { on = Math.hypot(g.x - me.x, g.z - me.z) > 6; col = gs.reg ? 0xff6040 : 0xffe8a0; }
       // (the generators are on the ground: from an upper floor of the house their outlines only float in the air)
       if (on && this.M.stairs && (me.fl || 0) !== 0) on = false;
-      a.visible = on; if (on) a.material = this.auraMatFor(col);
+      a.visible = on; if (on) this.auraOn(a, col);
     }
     // cages for the killer while carrying
     for (let i = 0; i < this.M.cages.length; i++) {
       const a = this.W.cages[i].userData.aura;
       const on = killerView && me.carry != null && S.cages[i] == null && !S.cageBroken[i];
-      a.visible = on; if (on) a.material = this.auraMatFor(0xff3a2a);
+      a.visible = on; if (on) this.auraOn(a, 0xff3a2a);
     }
     for (let i = 0; i < this.M.gates.length; i++) {
       const a = this.W.gates[i].userData.aura;
       const on = (S.gatesPowered || (!killerView && has(me, 'pathfinder'))) && !S.gates[i].open && Math.hypot(this.M.gates[i].x - me.x, this.M.gates[i].z - me.z) > 8;
-      a.visible = on; if (on) a.material = this.auraMatFor(0xffffff);
+      a.visible = on; if (on) this.auraOn(a, 0xffffff);
     }
   }
   auraMatFor(col) { return auraMat(col); }
+  // (gens, hooks, gates: the outline needs its mask + fill too)
+  auraOn(a, col) { a.material = this.auraMatFor(col); auraParts(a); }
 
   // ---------------- audio ----------------
   updateAudio(dt, S, me) {
@@ -2336,6 +2351,20 @@ export class Game {
           break;
         }
         case 'teddy': sound.play('whisper', e.x, e.z, { pitch: 1.6 }); break;
+        case 'pepper': {
+          const f = { x: Math.sin(e.yaw), z: Math.cos(e.yaw) };
+          for (let k = 1; k <= 6; k++) this.smoke.spawn(e.x + f.x * k * 0.55, 1.45, e.z + f.z * k * 0.55, 3, 0xd86a2a, 0.5, 0.7, 0.2, 0.5);
+          sound.play('snuff', e.x, e.z, { pitch: 1.8 });
+          if (e.id === this.myId && !e.hit) this.feed('You missed: get closer (3.6m).');
+          break;
+        }
+        case 'peppered': {
+          if (e.id === this.myId) { this.feed(`Pepper spray! You're blinded for ${e.t}s.`, 'big'); this.shake = 0.5; }
+          else if (e.by === this.myId) this.feed(`Right in the eyes: ${name(e.id)} is blinded for ${e.t}s.`, 'big');
+          { const kc = this.chars.get(e.id); if (kc) sound.play('grunt', kc.x, kc.z); }
+          break;
+        }
+        case 'pepperdead': if (e.id === this.myId) this.feed('Your Pepper Spray is empty. Swap it at a chest.'); break;
         case 'pacify': {
           if (e.id === this.myId) { this.feed(`A Teddy! You're pacified for ${e.t}s.`, 'big'); this.shake = 0.3; }
           else if (e.by === this.myId) this.feed(`${name(e.id)} saw your Teddy: pacified for ${e.t}s!`, 'big');
@@ -2830,7 +2859,7 @@ export class Game {
       if (p.disguise) p = { ...p, role: 'survivor' };
       const state = p.role === 'killer' ? null : p.st === 'ok' ? (p.hp === 2 ? 'healthy' : 'injured') : p.st;
       const st = p.role === 'killer' ? 'Killer' : { healthy: 'Healthy', injured: 'Injured', exec: 'Being executed', down: 'Dying', carried: 'Carried', caged: 'Hooked', dead: 'Dead', out: 'Escaped', ghost: 'Ghost' }[state];
-      const sc = Math.round(p.score.a + p.score.b + p.score.c + p.score.d);
+      const sc = embersOf(p);
       const cname = p.role === 'killer' ? KILLERS[p.char].name : SURVIVORS[p.char].name;
       return `<tr class="${p.id === this.myId ? 'me' : ''}"><td>${icon(p.role === 'killer' ? POWER_ICON[p.char] : STATE_ICON[state])}</td><td>${esc(p.name)}${p.bot ? ' <small>BOT</small>' : ''}</td><td>${esc(cname)}</td><td>${st}</td><td>${sc}</td></tr>`;
     }).join('');
@@ -2845,14 +2874,14 @@ export class Game {
     const cats = { survivor: ['Objectives', 'Altruism', 'Survival', 'Boldness'], killer: ['Brutality', 'Deviousness', 'Hunter', 'Sacrifice'] };
     const rows = S.players.map(p => {
       const c = cats[p.role];
-      const tot = Math.round(p.score.a + p.score.b + p.score.c + p.score.d);
+      const tot = embersOf(p);
       const out = p.role === 'killer' ? p.outcome : p.outcome === 'escaped' ? 'Escaped' : p.outcome === 'executed' ? 'Executed' : 'Sacrificed';
       const cls = p.role === 'killer' ? 'killer' : p.outcome === 'escaped' ? 'esc' : 'dead';
       const ic = p.role === 'killer' ? POWER_ICON[p.char] : p.outcome === 'escaped' ? 'out' : p.outcome === 'executed' ? 'exec' : 'dead';
       return `<div class="res ${cls} ${p.id === this.myId ? 'me' : ''}"><div class="rp">${icon(ic)}</div><div class="res-name">${esc(p.name)}<small>${esc(p.role === 'killer' ? KILLERS[p.char].name : SURVIVORS[p.char].name)}</small></div>
         <div class="res-out">${esc(out)}</div>
         <div class="res-cats">${['a', 'b', 'c', 'd'].map((k, i) => `<span>${c[i]}<b>${Math.round(p.score[k])}</b></span>`).join('')}</div>
-        <div class="res-tot">${tot}<small>embers</small></div></div>`;
+        <div class="res-tot">${tot.toLocaleString()}<small>embers${tot >= 4000 ? ' (max)' : ''}</small></div></div>`;
     }).join('');
     let title = 'Match Over';
     if (me) title = me.role === 'killer' ? me.outcome : me.outcome === 'escaped' ? 'You Escaped' : me.outcome === 'executed' ? 'You Were Executed' : 'You Were Sacrificed';
@@ -2926,7 +2955,7 @@ export class Game {
   }
 
   dispose() {
-    { const ov = document.getElementById('hideov'); if (ov) ov.classList.remove('on'); const so = document.getElementById('staticov'); if (so) so.style.opacity = '0'; }
+    { const ov = document.getElementById('hideov'); if (ov) ov.classList.remove('on'); const so = document.getElementById('staticov'); if (so) so.style.opacity = '0'; const pv = document.getElementById('pepperov'); if (pv) pv.style.opacity = '0'; }
     this.disposed = true;
     if (this.emoteBar && this.emoteBar.parentNode === document.body) this.emoteBar.remove();
     this.unbind();

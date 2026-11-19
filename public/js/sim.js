@@ -275,6 +275,23 @@ export class Sim {
         this.ev({ k: 'teddy', id: p.id, x: p.x, z: p.z });
         break;
       }
+      case 'pepper': {
+        // Pepper Spray: a short cone along the aim; a killer in it is blinded for 25s
+        if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.item !== 'pepper' || !(p.pepper > 0) || ((this.pepCd ||= new Map()).get(p.id) || 0) > S.t) return;
+        p.pepper--; this.pepCd.set(p.id, S.t + 0.9);
+        const P = ITEMS.pepper, yaw = num(m.yaw, p.yaw), f = fwd(yaw);
+        const hits = [];
+        for (const K of S.players) {
+          if (K.role !== 'killer' || K.disguise || !levelsMeet(K, p)) continue;
+          const dx = K.x - p.x, dz = K.z - p.z, d = Math.hypot(dx, dz);
+          if (d > P.range + 0.4 || (d > 0.6 && (dx * f.x + dz * f.z) / d < Math.cos(P.cone)) || losBlocked(M, p.x, p.z, K.x, K.z, 1.2)) continue;
+          K.peppered = P.time; hits.push(K.id); p.score.d += 500;
+          this.ev({ k: 'peppered', id: K.id, by: p.id, t: P.time });
+        }
+        this.ev({ k: 'pepper', id: p.id, x: p.x, z: p.z, yaw, hit: hits.length > 0 });
+        if (p.pepper <= 0) this.ev({ k: 'pepperdead', id: p.id });
+        break;
+      }
       case 'taser': {
         // Taser: a short-range shot along the aim; the first killer it reaches is electrocuted
         if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.item !== 'taser' || !(p.tasers > 0) || ((this.taserCd ||= new Map()).get(p.id) || 0) > S.t) return;
@@ -778,6 +795,9 @@ export class Sim {
     this.updateTeddy(dt);
     this.updateKids(dt);
 
+    // 1.5.1 (WolfSpider): nobody left free to unhook them: whoever is on a hook is sacrificed now, not after minutes of waiting
+    if (this.mode !== 'infection' && S.players.some(p => p.role === 'survivor' && p.st === 'caged') && !S.players.some(p => p.role === 'survivor' && p.st === 'ok'))
+      for (const p of S.players) if (p.role === 'survivor' && p.st === 'caged') { this.ev({ k: 'caged', id: p.id, cage: p.cage, stage: 3 }); this.kill(p, 'sacrificed'); }
     // ---- survivor states ----
     for (const p of S.players) {
       if (p.role !== 'survivor') continue;
@@ -1339,7 +1359,7 @@ export class Sim {
         const cs = S.chests[a.id]; if (!cs || cs.open) break;
         const r = Math.random();
         cs.open = true;
-        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots, fresh: true } : { k: 'flashlight', n: RULES.flashBattery, fresh: true };
+        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots, fresh: true } : r < ITEMS.taser.chance + ITEMS.pepper.chance ? { k: 'pepper', n: ITEMS.pepper.uses, fresh: true } : { k: 'flashlight', n: RULES.flashBattery, fresh: true };
         p.score.c += 150;
         this.ev({ k: 'chest', id: a.id, by: p.id, item: cs.it.k });
         break;
@@ -1347,11 +1367,11 @@ export class Sim {
       case 'swap': {
         // trade what you're holding (used up or not) for what's in the chest
         const cs = S.chests[a.id]; if (!cs || !cs.it) break;
-        const mine = { k: p.item, n: p.item === 'trap' ? p.traps : p.item === 'taser' ? p.tasers : p.flash };
+        const mine = { k: p.item, n: p.item === 'trap' ? p.traps : p.item === 'taser' ? p.tasers : p.item === 'pepper' ? p.pepper : p.flash };
         const got = cs.it;
         // a new item out of the chest gets your add-ons for it (more battery, an extra taser shot)
         const gm = addonMods(p.addons, got.k), gn = got.fresh ? (got.k === 'flashlight' ? got.n * gm.battery : got.k === 'taser' ? got.n + gm.shots : got.n) : got.n;
-        p.item = got.k; p.flash = got.k === 'flashlight' ? gn : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? gn : 0;
+        p.item = got.k; p.flash = got.k === 'flashlight' ? gn : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? gn : 0; p.pepper = got.k === 'pepper' ? gn : 0;
         if (got.k === 'flashlight') p.flashMax = Math.max(gn, RULES.flashBattery * gm.battery);
         p.flashOn = false;
         cs.it = mine;
@@ -1734,6 +1754,7 @@ export class Sim {
   updateTeddy(dt) {
     const S = this.S, M = this.M, T = ITEMS.teddy;
     for (const K of S.players) if (K.pacified > 0) K.pacified = Math.max(0, K.pacified - dt);
+    for (const K of S.players) if (K.peppered > 0) K.peppered = Math.max(0, K.peppered - dt); // (Pepper Spray)
     for (const p of S.players) {
       if (p.role !== 'survivor') continue;
       if (p.tedCd > 0) p.tedCd = Math.max(0, p.tedCd - dt);

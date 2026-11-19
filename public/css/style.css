@@ -1122,3 +1122,24 @@ html:not(.mobile) .mobile-only { display: none !important; }
 #loading .ls-flick { position: absolute; inset: 0; background: radial-gradient(ellipse at 52% 40%, rgba(255,190,120,.16), transparent 55%); will-change: opacity; animation: lsflick 3.2s steps(1, end) infinite; }
 @keyframes lsdrift { 0% { transform: scale(1) translate(0, 0); } 100% { transform: scale(1.06) translate(-1.2%, -0.8%); } }
 @keyframes lsflick { 0%, 100% { opacity: 1; } 6% { opacity: .2; } 8% { opacity: 1; } 47% { opacity: .85; } 49% { opacity: .1; } 51% { opacity: .9; } 80% { opacity: 1; } }
+.cd-list { max-height: 260px; overflow-y: auto; padding-right: 4px; }
+
+/* 1.5.1: pepper-sprayed killer (eyes streaming: a hot blur with a small clear patch in the middle) */
+#pepperov { position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0;
+  background: radial-gradient(ellipse 22% 18% at 50% 50%, rgba(255,120,40,.15), rgba(200,70,20,.82) 55%, rgba(90,20,5,.97) 100%);
+  backdrop-filter: blur(9px) saturate(1.6); -webkit-backdrop-filter: blur(9px) saturate(1.6); }
+
+/* 1.5.1: the season card on the main menu */
+.season-card { top: 128px; width: 270px; font: inherit; color: inherit; border-color: rgba(255,176,60,.45); background: linear-gradient(180deg, #140b04, #070403); transition: transform .15s, box-shadow .15s; }
+.season-card .nc-txt { background: none; padding: 10px 14px 12px; }
+.season-card span { color: #ffb040; font-size: 11px; }
+.season-card b { font-size: 22px; display: block; margin: 2px 0 6px; }
+.season-card small { display: block; font-family: var(--cond); font-size: 12px; letter-spacing: .08em; color: var(--dim); margin-top: 6px; }
+.season-card .sc-bar { height: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+.season-card .sc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #c0261c, #ffb040); }
+#menu.panel-open .season-card, html.ls-up .season-card { display: none; }
+/* results: what you earned stands out */
+.res.me { box-shadow: inset 3px 0 0 var(--gold, #e8b04a); background: rgba(232,176,74,.06); }
+.res.me .res-tot { font-size: 36px; text-shadow: 0 0 18px rgba(232,176,74,.35); }
+/* buttons: a clearer pressed state everywhere */
+.btn:active, .mainnav button:active { transform: translateY(1px); filter: brightness(1.15); }

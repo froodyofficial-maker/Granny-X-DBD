@@ -14,19 +14,56 @@ import { photoMaterial } from './pbr.js';
 
 // ---------- aura material ----------
 const auraMats = new Map();
+// 1.5.1 (Ommm's suggestion): one continuous outline round the whole silhouette instead of a glow on every body part.
+// Each aura mesh gets two children (auraParts): a mask that writes the silhouette into the stencil buffer (drawn with the
+// opaque objects, so always first) and a faint fill inside it; the aura mesh itself is pushed out along its normals by a
+// fixed number of pixels and only drawn where the mask isn't: what's left is the rim. Seen through walls like before.
+export const AURA_W = 0.0075; // outline width, in NDC (about 2.7 px on a 720 px tall screen)
+export const OUTLINE_VS = `
+  vec4 outlineClip(vec4 mv, vec3 viewN) {
+    vec4 clip = projectionMatrix * mv;
+    vec2 d = (projectionMatrix * vec4(viewN, 0.0)).xy; float l = length(d);
+    if (l > 1e-5) d /= l;
+    d.x *= projectionMatrix[0][0] / projectionMatrix[1][1];
+    clip.xy += d * ${AURA_W.toFixed(5)} * 2.0 * clip.w;
+    return clip;
+  }`;
+export const OUTLINE_FS = `uniform vec3 color; uniform float opacity; uniform float time;
+  void main(){ gl_FragColor = vec4(color * (1.15 + 0.15 * sin(time * 3.0)), 0.95 * opacity); }`;
+export const STENCIL_OUT = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc, stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp };
+export const AURA_T = { value: 0 }; // (shared clock for the pulse)
 export function auraMat(color) {
   const key = color;
   if (auraMats.has(key)) return auraMats.get(key);
   const m = new THREE.ShaderMaterial({
-    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 } },
-    vertexShader: `varying vec3 vN; varying vec3 vV;
-      void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: `uniform vec3 color; uniform float opacity; varying vec3 vN; varying vec3 vV;
-      void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); f = 0.18 + pow(f, 1.6)*1.1; gl_FragColor = vec4(color*f, f*opacity); }`,
-    transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 }, time: AURA_T },
+    vertexShader: OUTLINE_VS + `
+      void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = outlineClip(mv, normalize(normalMatrix * normal)); }`,
+    fragmentShader: OUTLINE_FS,
+    transparent: true, depthTest: false, depthWrite: false, ...STENCIL_OUT,
   });
   auraMats.set(key, m);
   return m;
+}
+const maskMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthTest: false, depthWrite: false, stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilFail: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilZPass: THREE.ReplaceStencilOp });
+const fillMats = new Map();
+const fillMat = color => { if (!fillMats.has(color)) fillMats.set(color, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.13, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, stencilWrite: true, stencilRef: 1, stencilFunc: THREE.EqualStencilFunc, stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp })); return fillMats.get(color); };
+// give an aura mesh its mask + fill children (once), and colour the fill like the outline. Children follow the aura's
+// visibility, so the rest of the game keeps switching auras on and off exactly as before.
+export function auraParts(a) {
+  if (!a || !a.material || !a.material.uniforms || !a.material.uniforms.color) return;
+  if (!a.userData.auraMask) {
+    const mk = (mat, order) => {
+      let o;
+      if (a.isSkinnedMesh) { o = new THREE.SkinnedMesh(a.geometry, mat); o.bind(a.skeleton, a.bindMatrix); o.bindMode = a.bindMode; }
+      else o = new THREE.Mesh(a.geometry, mat);
+      o.frustumCulled = false; o.renderOrder = order; o.castShadow = false; o.receiveShadow = false; a.add(o); return o;
+    };
+    a.userData.auraMask = mk(maskMat, 9);
+    a.userData.auraFill = mk(fillMat(0xffffff), 10);
+  }
+  const col = a.material.uniforms.color.value.getHex();
+  if (a.userData.auraFillCol !== col) { a.userData.auraFillCol = col; a.userData.auraFill.material = fillMat(col); }
 }
 
 const stdCache = new Map();

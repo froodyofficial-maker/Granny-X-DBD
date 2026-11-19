@@ -75,6 +75,15 @@ ipcMain.on('gdbd-save', (e, k, v) => {
   try { fs.mkdirSync(saveDir, { recursive: true }); const f = path.join(saveDir, k + '.json'); fs.writeFileSync(f + '.tmp', v); fs.renameSync(f + '.tmp', f); } catch (err) { log('save failed:', err && err.message); }
 });
 
+// 1.5.1: the backup code in Documents\Granny x DBD\Granny x DBD backup.txt, outside the app and its AppData folder: a
+// fresh start with no save finds it there and loads it
+const backupFile = () => path.join(app.getPath('documents'), 'Granny x DBD', 'Granny x DBD backup.txt');
+ipcMain.on('gdbd-backup', (e, v) => {
+  if (typeof v !== 'string' || !/^GDBD1:/.test(v)) return;
+  try { const f = backupFile(); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', v); fs.renameSync(f + '.tmp', f); } catch (err) { log('backup failed:', err && err.message); }
+});
+ipcMain.on('gdbd-backup-load', e => { try { e.returnValue = fs.readFileSync(backupFile(), 'utf8'); } catch { e.returnValue = null; } });
+
 // One copy at a time, but a NEWER version always wins: an older copy that is still open (maybe minimised) closes itself
 // when a different version starts, instead of being brought to the front (which looked like the update hadn't worked).
 const myVersion = app.getVersion();

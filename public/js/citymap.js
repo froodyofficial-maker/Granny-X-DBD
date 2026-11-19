@@ -162,8 +162,8 @@ export const cityTheme = {
       && [...M.spawns.survivors, M.spawns.killer].every(s => Math.hypot(x - s.x, z - s.z) > 8) && spots.every(s => Math.hypot(x - s.x, z - s.z) > 14);
     const cand = [];
     for (const X of ROADS) for (const zc of CITY.xs) for (const side of [-1, 1]) {
-      cand.push({ x: X + side * 2.1, z: zc + R.range(-4, 4), yaw: side > 0 ? 0 : Math.PI });
-      cand.push({ x: zc + R.range(-4, 4), z: X + side * 2.1, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2 });
+      cand.push({ x: X + side * 2.5, z: zc + R.range(-4, 4), yaw: side > 0 ? 0 : Math.PI });
+      cand.push({ x: zc + R.range(-4, 4), z: X + side * 2.5, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2 });
     }
     R.shuffle(cand);
     for (const s of cand) { if (spots.length >= 14) break; if (okSpot(s.x, s.z)) spots.push(s); }

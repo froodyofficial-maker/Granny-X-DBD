@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 15;
+export const NET_PROTOCOL = 16;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -19,6 +19,9 @@ export const ITEMS = {
   // Season 2: the Teddy. Bought for one season (it's gone when the season ends). Hold it up (RMB): every killer who
   // sees you holding it is pacified (stunned) for 10s; it works once more, for 5s, then it's spent.
   teddy: { name: 'Teddy', price: 6000, uses: [10, 5], range: 24, cone: 0.62, hold: 1.4, cooldown: 3, desc: "Hold RMB to hold the Teddy up. Every killer who sees you holding it is pacified (stunned) for 10s. It works a second time, for 5s, then it's spent. Only for the season you buy it in." },
+  // 1.5.1 (Ommm's idea): found in chests. Spray it in the killer's face: blinded for 25s (they can still move), and nothing
+  // shows them survivors' outlines while it lasts
+  pepper: { name: 'Pepper Spray', uses: 3, range: 3.6, cone: 0.5, time: 25, chance: 0.2, desc: "Click RMB to spray where you're looking (3.6m). The killer is blinded for 25s: they can still move, but they can barely see, and no aura or perk shows them a survivor's outline. 3 sprays. Only found in chests." },
   taser: { name: 'Taser', shots: 3, stun: 3, range: 9, chance: 0.2, desc: 'Click RMB to fire: a killer you hit is electrocuted and frozen for 3s. 3 shots. Only found in chests.' },
 };
 // 1.4.3: item add-ons, Dead by Daylight style (the idea, and the UV Torch, are by Ommm and WolfSpider). Bought once in
@@ -495,10 +498,24 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.5.0';
+export const VERSION = '1.5.1';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd151', version: '1.5.1', date: 'Nov 2026', title: 'Community update', tag: 'Update',
+    body: [
+      "City Mode: the Victim's Cars drive again. A car that got wedged against something (often a pedestrian's car passing through it) could never move again; now it can always drive or back out. You can also get in from the bumpers, and pedestrians drive clear of the parked cars.",
+      'New item in chests: Pepper Spray (3 sprays). Spray the killer in the face: they are blinded for 25 seconds, and nothing shows them a survivor\'s outline until it wears off. Idea by Ommm.',
+      'Outlines are now one clean line round the whole character instead of a glow on every body part. Idea by Ommm.',
+      'Sounds vary a little every time they play. Idea by Ommm.',
+      'Backup file: your progress is also kept in a file outside the game (Windows: Documents\\Granny x DBD, loaded by itself after a reinstall; Android: Download/Granny x DBD, Profile > Load backup file). Idea by Ommm.',
+      'When nobody is left free to unhook them, hooked survivors are sacrificed right away instead of after minutes of waiting. Generators keep pumping faster the more they are repaired, and a kicked generator throws sparks while it loses progress. Ideas by WolfSpider.',
+      'Background music in the menus (Settings > Music volume).',
+      'Embers: up to 4,000 for a very good match (less for a weaker one).',
+      'Gift codes: every code you buy stays in your list (older ones used to drop off it).',
+    ],
+  },
   {
     id: 'gdbd-s2', version: '1.5.0', date: '1 Dec 2026', title: "Season 2: The Faceless Father", tag: 'New Season', from: Date.UTC(2026, 11, 1),
     body: [

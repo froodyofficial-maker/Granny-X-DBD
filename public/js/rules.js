@@ -94,13 +94,18 @@ export function speedOf(p, S, sprint, crouch) {
 
 // What can this player interact with (hold E)?
 // what a survivor's item has left: battery seconds, traps, taser shots
-export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : p.item === 'teddy' ? (p.teddy || 0) : (p.flash || 0); }
+// 1.5.1: Embers for a match: the score scaled for the role (a killer's score runs about twice a survivor's), at most
+// 4,000 for a really good match
+export const EMBER_CAP = 4000;
+export function embersOf(p) { const s = p.score.a + p.score.b + p.score.c + p.score.d; return Math.max(0, Math.min(EMBER_CAP, Math.round(s / (p.role === 'killer' ? 4.5 : 2)))); }
+export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : p.item === 'teddy' ? (p.teddy || 0) : p.item === 'pepper' ? (p.pepper || 0) : (p.flash || 0); }
 export function itemLabel(k, n) {
   const name = (ITEMS[k] || ITEMS.flashlight).name;
   if (n != null && n <= 0.05) return name + ' (empty)';
   if (k === 'trap') return name + ' ×' + n;
   if (k === 'taser') return name + ' (' + n + ' shot' + (n === 1 ? '' : 's') + ')';
   if (k === 'teddy') return name + ' (' + n + ' use' + (n === 1 ? '' : 's') + ' left)';
+  if (k === 'pepper') return name + ' (' + n + ' spray' + (n === 1 ? '' : 's') + ')';
   return name;
 }
 // City Mode: getting out of a car / a hiding spot is all you can do there; otherwise the city's own things (cars,

@@ -5,4 +5,7 @@ const KEYS = new Set(['profile', 'settings']);
 contextBridge.exposeInMainWorld('gdbdDisk', {
   load: k => (KEYS.has(k) ? ipcRenderer.sendSync('gdbd-load', k) : null),
   save: (k, v) => { if (KEYS.has(k) && typeof v === 'string' && v.length < 4e6) ipcRenderer.send('gdbd-save', k, v); },
+  // 1.5.1: the backup code also kept in Documents\Granny x DBD (survives deleting the app and its AppData)
+  backup: v => { if (typeof v === 'string' && /^GDBD1:/.test(v) && v.length < 4e6) ipcRenderer.send('gdbd-backup', v); },
+  loadBackup: () => ipcRenderer.sendSync('gdbd-backup-load'),
 });

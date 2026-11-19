@@ -27,6 +27,7 @@ import { initTouch, MOBILE, mobileText, openTouchEditor } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
 import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
+import { embersOf } from './rules.js';
 import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS, modeOpen, nowMs, skinOf, INBOX as INBOX_ALL } from './config.js';
 const INBOX = INBOX_ALL.filter(m => !m.from || nowMs() >= m.from); // (a season's message shows up when it starts)
 import { readCode, makeGift } from './codes.js';
@@ -139,7 +140,7 @@ const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
 const perkFits = (k, char) => { const P = SURV_PERKS[k] || KILLER_PERKS[k]; return !P || !P.only || P.only === char; };
 const charName0 = id => (KILLERS[id] || SURVIVORS[id] || {}).name || id;
 const saveSettings = () => store.set('settings', settings);
-const saveProfile = () => { profile._sv = (profile._sv | 0) + 1; store.set('profile', profile); };
+const saveProfile = () => { profile._sv = (profile._sv | 0) + 1; store.set('profile', profile); try { autoBackup(); } catch {} };
 saveSettings();
 sound.vol = settings.vol; sound.music = settings.music;
 
@@ -350,6 +351,18 @@ function renderEventBtn() {
   b.querySelector('small').textContent = (m.season ? m.season + ' · ' : 'Season 1 event · ') + (m.until ? (left <= 1 ? 'last day!' : left + ' days left') : 'new this season');
 }
 renderEventBtn();
+// 1.5.1: the season at a glance on the main menu (opens Progress)
+function renderSeasonCard() {
+  const el = $('season-card'); if (!el) return;
+  const P = progOf(profile), tier = seasonTier(P.season.xp || 0), left = Math.max(0, Math.ceil((seasonEnds() - nowMs()) / 864e5));
+  const ev = eventMode(), [sn, ...rest] = SEASON.name.split(': ');
+  el.innerHTML = `<div class="nc-txt"><span>${esc(sn)} · ${left} day${left === 1 ? '' : 's'} left</span><b>${esc(rest.join(': '))}</b>
+    <div class="sc-bar"><i style="width:${Math.round(tier / SEASON.tiers.length * 100)}%"></i></div>
+    <small>Pass tier ${tier} / ${SEASON.tiers.length}${P.season.prem ? ' · Premium' : ''}${ev ? ' · ' + esc(MODES[ev].name) + ' is on' : ''}</small></div>`;
+  el.classList.remove('hidden');
+}
+renderSeasonCard();
+$('season-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-pass', 'Progress', true); });
 for (const b of $('mainnav').children) {
   b.addEventListener('mouseenter', () => { sound.init(); sound.play('hover'); if (b.dataset.scene) setScene(b.dataset.scene); });
   b.addEventListener('click', () => {
@@ -359,6 +372,9 @@ for (const b of $('mainnav').children) {
   });
 }
 document.addEventListener('pointerdown', () => sound.init(), { once: true });
+// 1.5.1: menu music. Plays in the menus, the lobby and on the results screen; fades out when a match begins
+setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown); }, 500);
+document.addEventListener('keydown', () => sound.init(), { once: true });
 
 function seg(id, onChange) {
   const el = $(id);
@@ -751,7 +767,7 @@ function codesHTML() {
   if (!chars.includes(giftChar)) giftChar = chars[0];
   const skins = giftable(giftChar); if (!skins.some(k => k.id === giftSkin)) giftSkin = skins[0] ? skins[0].id : '';
   const sk = skins.find(k => k.id === giftSkin);
-  const mine = (profile.gifts || []).slice(-8).reverse();
+  const mine = (profile.gifts || []).slice().reverse(); // (all of them, newest first: nothing drops off the list)
   return `<div class="cd-wrap">
     <div class="cd-card cd-hero"><h3>Redeem a code</h3><p>Type or paste your code here and press Redeem.</p>
       <div class="cd-row"><input id="cd-in" maxlength="4000" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" value="${esc(codeTyped)}"><button class="btn primary" id="cd-go">Redeem</button></div><p class="cd-msg ${codeMsg ? (codeMsg.ok ? 'ok' : 'bad') : ''}" id="cd-msg">${codeMsg ? esc(codeMsg.t) : ''}</p></div>
@@ -1307,11 +1323,12 @@ function onMatchEnd(S, me, sess) {
     profile.stats.matches++;
     (profile.played ||= {})[me.char] = (profile.played[me.char] || 0) + 1;
     awards.record(me, S);
-    const tot = me.score.a + me.score.b + me.score.c + me.score.d;
+    const tot = embersOf(me); // (1.5.1: at most 4,000 a match)
     profile.stats.embers += tot;
     if (me.role === 'survivor' && me.outcome === 'escaped') profile.stats.escapes++;
     if (me.role === 'killer') profile.stats.kills += S.players.filter(p => p.role === 'survivor' && p.outcome !== 'escaped').length;
     saveProfile();
+    try { renderSeasonCard(); } catch {}
   }
   const A = $('results-actions');
   A.innerHTML = '';
@@ -1794,6 +1811,7 @@ function renderProfile() {
     <div class="field"><label>Character levels</label><div class="pf-lvls">${levels}</div></div>
     <div class="field"><label>Backup <span class="hint-inline">(keep your progress: copy the code somewhere safe, or paste it on another device)</span></label>
       <div class="pf-bk"><button class="btn small" id="pf-copy">Copy backup code</button><button class="btn small" id="pf-show">Show code</button><button class="btn small" id="pf-restore">Restore from a code…</button></div>
+      <div class="pf-bk"><button class="btn small" id="pf-fsave">Save backup file</button><button class="btn small" id="pf-fload">Load backup file…</button><span class="hint">${esc(backupWhere())}</span></div>
       <textarea id="pf-code" class="hidden" rows="3" spellcheck="false"></textarea><div class="pf-bk hidden" id="pf-apply-row"><button class="btn small primary" id="pf-apply">Restore this backup</button><span class="hint">Replaces everything on this device with the backup.</span></div></div>`;
   const B = $('profile-body');
   $('pf-name').oninput = e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); $('set-name').value = settings.name; renderShowcase(); B.querySelector('.pf-name').textContent = settings.name; };
@@ -1808,15 +1826,53 @@ function renderProfile() {
     catch { code.classList.remove('hidden'); code.readOnly = true; code.value = c; code.focus(); code.select(); try { document.execCommand('copy'); toast('Backup code copied.'); } catch { toast('Select the code and copy it.'); } }
   };
   $('pf-restore').onclick = () => { code.classList.remove('hidden'); code.readOnly = false; code.value = ''; code.placeholder = 'Paste a backup code (GDBD1:...)'; code.focus(); $('pf-apply-row').classList.remove('hidden'); };
-  $('pf-apply').onclick = () => {
-    const o = readBackup(code.value);
-    if (!o) { toast("That isn't a Granny x DBD backup code."); return; }
-    if (!confirm(`Restore this backup? (${(o.p.stats.embers | 0).toLocaleString()} Embers, ${o.p.stats.matches | 0} matches.) It replaces the progress on this device.`)) return;
-    for (const k of Object.keys(profile)) delete profile[k];
-    Object.assign(profile, o.p); profile._sv = Math.max(profile._sv | 0, 0);
-    if (o.n) { settings.name = String(o.n).slice(0, 16); saveSettings(); }
-    saveProfile(); toast('Backup restored.'); setTimeout(() => location.reload(), 600);
-  };
+  $('pf-apply').onclick = () => restoreBackup(code.value, true);
+  $('pf-fsave').onclick = () => { sound.play('click'); saveBackupFile(true); };
+  $('pf-fload').onclick = () => { sound.play('click'); loadBackupFile(); };
+}
+function restoreBackup(text, ask) {
+  const o = readBackup(text);
+  if (!o) { toast("That isn't a Granny x DBD backup."); return false; }
+  if (ask && !confirm(`Restore this backup? (${(o.p.stats.embers | 0).toLocaleString()} Embers, ${o.p.stats.matches | 0} matches.) It replaces the progress on this device.`)) return false;
+  for (const k of Object.keys(profile)) delete profile[k];
+  Object.assign(profile, o.p); profile._sv = Math.max(profile._sv | 0, 0);
+  if (o.n) { settings.name = String(o.n).slice(0, 16); saveSettings(); }
+  saveProfile(); toast('Backup restored.'); setTimeout(() => location.reload(), 600);
+  return true;
+}
+// 1.5.1 (Ommm's idea): a backup FILE outside the game, kept up to date by itself, so deleting and downloading the game again
+// doesn't lose anything. Windows app: Documents\Granny x DBD (found and loaded by itself on a fresh start). Android:
+// Download/Granny x DBD (Android only lets a reinstalled app read it once you pick it: Load backup file). Browser: a
+// download, when asked.
+const backupWhere = () => window.gdbdDisk && window.gdbdDisk.backup ? 'Kept up to date by itself in Documents\\Granny x DBD.'
+  : window.GameStore && window.GameStore.writeBackup ? 'Kept up to date by itself in Download/Granny x DBD on this phone.' : 'Saves a small text file you can load later.';
+let backupT = 0;
+function autoBackup(force) {
+  const now = Date.now();
+  if (!force && now - backupT < 60000) return;
+  if (!(profile.stats && profile.stats.matches > 0)) return; // (nothing worth keeping yet)
+  backupT = now;
+  try { if (window.gdbdDisk && window.gdbdDisk.backup) window.gdbdDisk.backup(backupCode()); else if (window.GameStore && window.GameStore.writeBackup) window.GameStore.writeBackup(backupCode()); } catch (e) { console.warn('backup', e); }
+}
+function saveBackupFile(say) {
+  if ((window.gdbdDisk && window.gdbdDisk.backup) || (window.GameStore && window.GameStore.writeBackup)) { autoBackup(true); if (say) toast('Backup saved: ' + backupWhere().replace('Kept up to date by itself in ', '').replace(/\.$/, '')); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([backupCode()], { type: 'text/plain' })); a.download = 'Granny x DBD backup.txt'; document.body.appendChild(a); a.click(); a.remove();
+  if (say) toast('Backup file saved to your downloads.');
+}
+function loadBackupFile() {
+  if (window.GameStore && window.GameStore.pickBackup) { window.GameStore.pickBackup(); return; } // (answers through __gdbdBackupFile)
+  const i = document.createElement('input'); i.type = 'file'; i.accept = '.txt,text/plain';
+  i.onchange = () => { const f = i.files && i.files[0]; if (!f) return; f.text().then(t => restoreBackup(t, true)); };
+  i.click();
+}
+window.__gdbdBackupFile = text => restoreBackup(text, true);
+// a fresh start (nothing played on this device) with a backup file from before: bring it back
+{
+  const fresh = !(profile.stats && profile.stats.matches > 0);
+  const old = fresh && window.gdbdDisk && window.gdbdDisk.loadBackup ? window.gdbdDisk.loadBackup() : null;
+  const o = old && readBackup(old);
+  if (o && o.p.stats.matches > 0) { setTimeout(() => { toast(`Found your backup (${o.p.stats.matches} matches). Restoring it…`, 4000); restoreBackup(old, false); }, 1200); }
+  else if (fresh && window.GameStore && window.GameStore.pickBackup) setTimeout(() => toast('Played before? Profile > Load backup file brings your progress back from Download/Granny x DBD.', 7000), 4000);
 }
 $('profile').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-profile', 'Profile', true); });
 $('set-backup').addEventListener('click', () => { sound.play('click'); openPanel('p-profile', 'Profile', true); const b = $('pf-copy'); if (b) b.scrollIntoView({ block: 'center' }); });

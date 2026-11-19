@@ -1,7 +1,7 @@
 // Synthesized audio (WebAudio), plus a few recorded voice clips for sidekicks.
 import { b64buf } from './heavy.js';
 export class Sound {
-  constructor() { this.ctx = null; this.vol = 0.8; this.music = 0.7; this.lx = 0; this.lz = 0; this.lyaw = 0; }
+  constructor() { this.ctx = null; this.vol = 0.8; this.music = 0.7; this.lx = 0; this.lz = 0; this.lyaw = 0; this.vf = 1; this.vv = 1; }
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -16,6 +16,35 @@ export class Sound {
     this.noiseBuf = buf;
     this.loops = {};
     this.nextBeat = 0;
+  }
+  // 1.5.1: background music in the menus (public/audio/menu.mp3; the offline builds carry it in #nb-music-mp3). Fades in
+  // and out; follows the Music volume setting (it goes through musicBus).
+  async loadMusic() {
+    if (this.musicBuf || this.musicLoading || !this.ctx) return this.musicBuf;
+    this.musicLoading = true;
+    try {
+      const el = document.getElementById('nb-music-mp3');
+      let ab = el && el.textContent.trim() ? await b64buf(el.textContent.trim()) : null;
+      if (!ab) for (const u of ['audio/menu.mp3', 'public/audio/menu.mp3']) { try { const r = await fetch(u); if (r.ok) { ab = await r.arrayBuffer(); break; } } catch {} }
+      if (ab) this.musicBuf = await this.ctx.decodeAudioData(ab);
+    } catch (e) { console.warn('music', e); }
+    this.musicLoading = false;
+    return this.musicBuf;
+  }
+  menuMusic(on) {
+    this.wantMenu = on;
+    if (!this.ok) return;
+    const c = this.ctx, t = c.currentTime;
+    if (on && !this.menuSrc) {
+      if (!this.musicBuf) { this.loadMusic().then(() => { if (this.wantMenu && !this.menuSrc && this.musicBuf) this.menuMusic(true); }); return; }
+      const src = c.createBufferSource(); src.buffer = this.musicBuf; src.loop = true;
+      const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + 2.5);
+      src.connect(g); g.connect(this.musicBus); src.start(); this.menuSrc = src; this.menuGain = g;
+    } else if (!on && this.menuSrc) {
+      const src = this.menuSrc, g = this.menuGain; this.menuSrc = null;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      src.stop(t + 1.3);
+    }
   }
   setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = v; }
   setMusic(v) { this.music = v; if (this.musicBus) this.musicBus.gain.value = v; }
@@ -47,20 +76,29 @@ export class Sound {
   noise(dest, t0, dur, type, f0, f1, q = 1, vol = 1, attack = 0.005) {
     if (!dest) return;
     const c = this.ctx, src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    f0 *= this.vf; if (f1) f1 *= this.vf; vol *= this.vv; // (1.5.1: this sound's own pitch / loudness)
     const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t0); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur); f.Q.value = q;
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(f); f.connect(g); g.connect(dest); src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
   }
   tone(dest, t0, dur, type, f0, f1, vol = 1, attack = 0.005) {
     if (!dest) return null;
+    f0 *= this.vf; if (f1) f1 *= this.vf; vol *= this.vv;
     const c = this.ctx, o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05);
     return o;
   }
 
+  // 1.5.1 (Ommm's suggestion): no two plays of a sound are quite alike: each gets its own pitch (about +-10%) and
+  // loudness (+-15%), applied to every tone, noise and voice it is built from. Menu clicks stay exact.
   play(name, x, z, opt = {}) {
     if (!this.ok) return;
+    const ui = name === 'click' || name === 'hover';
+    this.vf = ui ? 1 : 0.9 + Math.random() * 0.2; this.vv = ui ? 1 : 0.85 + Math.random() * 0.3;
+    try { this.playOne(name, x, z, opt); } finally { this.vf = 1; this.vv = 1; }
+  }
+  playOne(name, x, z, opt = {}) {
     const c = this.ctx, t = c.currentTime;
     const o = (ref = 4, max = 45) => this.out(x, z, ref, max);
     let d;
@@ -160,6 +198,7 @@ export class Sound {
     }
   }
   scream(dest, t, pitch, len, vol = 0.6) {
+    pitch *= this.vf; vol *= this.vv; len *= 0.92 + Math.random() * 0.16; // (every voice a little different)
     const c = this.ctx;
     const o = c.createOscillator(); o.type = 'sawtooth';
     const base = 420 * pitch;

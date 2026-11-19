@@ -443,8 +443,11 @@ export function updateWorld(W, M, S, t, dt, follow) {
   if (!S) return;
   for (let i = 0; i < M.gens.length; i++) {
     const o = W.gens[i].userData, gs = S.gens[i];
-    const running = gs.n > 0 || gs.done;
-    o.pistons.forEach((p, k) => { p.position.y = 1.02 + (running ? Math.sin(t * (gs.done ? 18 : 11) + k * 1.6) * 0.05 : 0); });
+    // 1.5.1 (WolfSpider): the pistons keep pumping once a generator has any progress, faster the further along it is,
+    // so the killer can read it at a glance (each piston keeps its own phase so the speed can change smoothly)
+    const running = gs.p > 0.005 || gs.done;
+    const ud = W.gens[i].userData; ud.ph = (ud.ph || 0) + dt * (gs.done ? 18 : running ? 3 + gs.p * 15 : 0);
+    o.pistons.forEach((p, k) => { p.position.y = 1.02 + (running ? Math.sin(ud.ph + k * 1.6) * 0.05 * (gs.n > 0 || gs.done ? 1 : 0.7) : 0); });
     const lit = gs.done ? 3 : Math.floor(gs.p * 3 + 0.0001);
     o.bulbs.forEach((b, k) => { b.material.emissiveIntensity = (k < lit ? (gs.done ? 3.5 : 1.6 + Math.sin(t * 30 + k) * 0.6) : 0) * (1 - (W.darkK || 0) * 0.95); });
     const L = W.genLights[i];
