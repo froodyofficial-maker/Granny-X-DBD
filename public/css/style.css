@@ -1261,12 +1261,12 @@ html.theme-vi .logo-imgs .x-mark { color: #ff2d95; }
 #loading .vl { display: none; }
 #loading.vi-ls .vl { display: block; position: absolute; inset: 0; z-index: 20; overflow: hidden; background: #12041c; }
 #loading.vi-ls > :not(.vl) { visibility: hidden; }
-.vl-art i { position: absolute; inset: -4%; background-size: cover; background-position: center; opacity: 0; animation: vlPan 24s linear infinite; will-change: opacity, transform; }
+.vl-art i { position: absolute; inset: -1.5%; background-size: cover; background-position: center; opacity: 0; animation: vlPan 24s linear infinite; will-change: opacity, transform; }
 .vl-art .a1 { background-image: url(../img/ls/granny.jpg); animation-delay: 0s; }
 .vl-art .a2 { background-image: url(../img/ls/grandpa.jpg); animation-delay: 6s; }
 .vl-art .a3 { background-image: url(../img/ls/slendrina.jpg); animation-delay: 12s; }
 .vl-art .a4 { background-image: url(../img/ls/nosferatu.jpg); animation-delay: 18s; }
-@keyframes vlPan { 0% { opacity: 0; transform: scale(1.12) translate(2%, 1%); } 4% { opacity: 1; } 25% { opacity: 1; } 29% { opacity: 0; transform: scale(1.0) translate(-2%, -1%); } 100% { opacity: 0; transform: scale(1.0) translate(-2%, -1%); } }
+@keyframes vlPan { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 4% { opacity: 1; } 25% { opacity: 1; } 29% { opacity: 0; transform: scale(1.0) translateX(-.8%); } 100% { opacity: 0; transform: scale(1.0) translateX(-.8%); } }
 .vl-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,2,18,.55) 0%, rgba(10,2,18,0) 22%, rgba(10,2,18,0) 70%, rgba(10,2,18,.85) 100%); }
 .vl-logos { position: absolute; left: 4vw; top: 4vh; display: flex; align-items: center; gap: 12px; }
 .vl-logos .lg-granny { display: block; height: clamp(36px, 5vw, 70px); aspect-ratio: 447 / 195; background: url(../img/granny-logo.png) center / contain no-repeat; filter: drop-shadow(0 0 10px rgba(255,45,149,.8)) drop-shadow(0 3px 0 #000); }

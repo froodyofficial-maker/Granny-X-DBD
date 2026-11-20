@@ -231,8 +231,9 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
 - Main-menu title = the real logos (owner: "use the official Granny and DBD font"): `h1.logo-imgs` with img/granny-logo.png × img/dbd-logo.png
   (the Dead by Daylight logo the owner sent, cut out of its checkerboard), no line under it.
 - **GTA-style loading screen** while Vice Nights runs (`html.theme-vi`): loadscreen.js adds `#vl` to #loading and `#loading.vi-ls`; four comic
-  panels (public/img/ls/{granny,grandpa,slendrina,nosferatu}.jpg, from tools/test/lsart-page.js renders + lsart.py: flat colours, ink lines,
-  sunset sky) cross-fade with a slow CSS pan, logos top-left, GTA VI logo top-right, GTA tips (`VI_TIPS`) + spinner at the bottom. All CSS (keeps
+  illustrations (public/img/ls/{granny,grandpa,slendrina,nosferatu}.jpg, 1920x1080, tools/test/lsart-page.js: the killer rendered sharp
+  on a transparent background with sunset rim light + ink outline over a painted backdrop drawn in 2D: sunset sky, sun, clouds, skyline, palms,
+  gas station / pier / rooftop billboard; lsart.py only saves them; owner wanted GTA V's crisp illustrated look, not filtered screenshots) cross-fade with a gentle CSS drift, logos top-left, GTA VI logo top-right, GTA tips (`VI_TIPS`) + spinner at the bottom. All CSS (keeps
   moving while the match builds); the 3D reel isn't started under it (`shownAt` is still set, startup waits on it).
 - Menu: Redeem Code left the main menu (Store tab "Redeem Code", gold); the Vice Nights sky is calmer (small sun high up, two small palms on
   the right, hidden while a panel is open) so it no longer covers the characters.
