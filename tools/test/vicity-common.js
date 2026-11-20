@@ -61,3 +61,25 @@ export function neonText(x, text, X, Y, font, fill = '#fff0f8', glow = '#ff2d95'
   x.shadowBlur = blur; x.fillText(text, X, Y); x.shadowBlur = blur * 0.4; x.fillText(text, X, Y);
   x.restore();
 }
+export const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+// GRANNY × [Dead by Daylight logo], centred on cx, h = the Granny logo's height
+export function logoRow(x, granny, dbd, cx, y, h, glow = 'rgba(255,45,149,.7)') {
+  const gw = h * granny.width / granny.height, dh = h * 0.66, dw = dh * dbd.width / dbd.height, gap = h * 0.16;
+  x.save(); x.font = `${Math.round(h * 0.6)}px "IM Fell English SC"`; x.textBaseline = 'middle'; const xw = x.measureText('×').width;
+  const x0 = cx - (gw + gap + xw + gap + dw) / 2;
+  x.shadowColor = glow; x.shadowBlur = h * 0.28;
+  x.drawImage(granny, x0, y, gw, h);
+  x.fillStyle = '#ff2d95'; x.fillText('×', x0 + gw + gap, y + h * 0.5);
+  x.drawImage(dbd, x0 + gw + gap + xw + gap, y + (h - dh) / 2, dw, dh);
+  x.restore();
+}
+// the GTA VI logo with a soft pink glow, centred on cx, h tall
+export function gtaLogo(x, img, cx, y, h) {
+  const w = h * img.width / img.height;
+  x.save(); x.shadowColor = 'rgba(255,60,160,.75)'; x.shadowBlur = h * 0.12; x.drawImage(img, cx - w / 2, y, w, h); x.shadowBlur = 0; x.drawImage(img, cx - w / 2, y, w, h); x.restore();
+}
+export function eventLine(x, text, cx, y, px) {
+  x.save(); x.font = `${px}px "Bebas Neue"`; x.letterSpacing = `${Math.round(px * 0.22)}px`; x.textAlign = 'center';
+  x.fillStyle = '#eafcff'; x.shadowColor = 'rgba(31,209,217,.95)'; x.shadowBlur = px * 0.45; x.fillText(text, cx + px * 0.11, y);
+  x.shadowBlur = px * 0.15; x.fillText(text, cx + px * 0.11, y); x.restore();
+}

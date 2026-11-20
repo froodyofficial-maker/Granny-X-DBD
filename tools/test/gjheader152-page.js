@@ -1,5 +1,5 @@
-// Game Jolt page header for Vice Nights (2000x400 at 1.5x = 3000x600): a Midnight City street at a neon sunset, the logo and
-// VICE NIGHTS in the middle over a striped sun, Granny + Grandpa on the left, Slendrina + Angeline on the right, palms at the
+// Game Jolt page header for Vice Nights (2000x400 at 1.5x = 3000x600): a Midnight City street at a neon sunset, GRANNY × DBD,
+// the GTA VI logo and LIMITED TIME EVENT in the middle over a striped sun, Granny + Grandpa on the left, Slendrina + Angeline on the right, palms at the
 // edges. Everything important stays in the middle ~60% (Game Jolt crops the sides on narrow screens).
 // PAGE=gjheader152-page.js OUT=gjheader152.png node render-devlog.mjs
 import * as THREE from 'three';
@@ -7,10 +7,10 @@ import { makeKiller, animate } from './js/models.js';
 import { buildMap } from './js/map.js';
 import { buildWorld } from './js/world.js';
 import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline } from './js/grannyGlb.js';
-import { palm, badge, grade, sun, neonText } from './__vicity-common.js';
+import { palm, grade, sun, loadImg, logoRow, gtaLogo, eventLine } from './__vicity-common.js';
 
 const W = 2000, H = 400, SS = 1.5;
-let R, sc, cam, logo, A = {};
+let R, sc, cam, logo, dbd, gta, A = {};
 window.setup = async () => {
   await Promise.all([loadGranny(), loadGrandpa(), loadSlendrina(), loadAngeline()]);
   const M = buildMap(11, 'city');
@@ -28,7 +28,7 @@ window.setup = async () => {
   R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(W * SS, H * SS);
   R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.55; R.outputColorSpace = THREE.SRGBColorSpace;
   cam = new THREE.PerspectiveCamera(24, W / H, 0.05, 400);
-  logo = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.src = 'img/granny-logo.png'; });
+  [logo, dbd, gta] = await Promise.all([loadImg('img/granny-logo.png'), loadImg('__art/dbd.png'), loadImg('__art/gta6.png')]);
   await document.fonts.load('100px "Bebas Neue"'); await document.fonts.load('italic 100px "Bebas Neue"'); await document.fonts.load('100px "IM Fell English SC"'); await document.fonts.load('600 40px "Barlow Condensed"');
   return true;
 };
@@ -44,24 +44,16 @@ window.frame = (mode) => {
   const c = document.createElement('canvas'); c.width = W * SS; c.height = H * SS; const x = c.getContext('2d'); x.scale(SS, SS);
   x.imageSmoothingQuality = 'high'; x.drawImage(R.domElement, 0, 0, W, H);
   grade(x, W, H, H * 0.62);
-  sun(x, W / 2, H * 0.47, 165, 0.6);
+  sun(x, W / 2, H * 0.52, 175, 0.5);
   // a darker band behind the words so they read, fading out to the characters
   const mid = x.createRadialGradient(W / 2, H * 0.5, 40, W / 2, H * 0.5, W * 0.3); mid.addColorStop(0, 'rgba(14,2,24,.62)'); mid.addColorStop(1, 'rgba(14,2,24,0)'); x.fillStyle = mid; x.fillRect(0, 0, W, H);
   const vg = x.createLinearGradient(0, 0, W, 0); vg.addColorStop(0, 'rgba(8,0,16,.75)'); vg.addColorStop(0.18, 'rgba(8,0,16,0)'); vg.addColorStop(0.82, 'rgba(8,0,16,0)'); vg.addColorStop(1, 'rgba(8,0,16,.75)'); x.fillStyle = vg; x.fillRect(0, 0, W, H);
   palm(x, 70, H + 30, 470, { flip: true, tilt: 0.05, color: '#0a0212' }); palm(x, 230, H + 40, 330, { tilt: -0.08, color: '#0d0318' });
   palm(x, W - 70, H + 30, 480, { tilt: -0.05, color: '#0a0212' }); palm(x, W - 240, H + 40, 320, { flip: true, tilt: 0.08, color: '#0d0318' });
-  // the logo, centred
-  const lw = 330, lh = lw * logo.height / logo.width;
-  x.font = '86px "IM Fell English SC"'; const xw = x.measureText('×').width, dw = x.measureText('DBD').width, tot = lw + 22 + xw + 22 + dw, x0 = (W - tot) / 2, ly = 52;
-  x.save(); x.shadowColor = 'rgba(255,45,149,.75)'; x.shadowBlur = 22; x.drawImage(logo, x0, ly, lw, lh);
-  x.fillStyle = '#ff2d95'; x.fillText('×', x0 + lw + 22, ly + lh * 0.82); x.fillStyle = '#fff0f8'; x.fillText('DBD', x0 + lw + 22 + xw + 22, ly + lh * 0.82); x.restore();
-  // VICE NIGHTS + badge
-  x.save(); x.font = 'italic 104px "Bebas Neue"'; const vw = x.measureText('VICE NIGHTS').width; x.restore();
-  const bs = 84, gap = 22, row = bs + gap + vw, rx = (W - row) / 2, ry = 290;
-  badge(x, rx + bs / 2, ry - 36, bs);
-  x.save(); x.transform(1, 0, -0.12, 1, 0.12 * ry, 0); neonText(x, 'VICE NIGHTS', rx + bs + gap, ry, 'italic 104px "Bebas Neue"', '#fff0f8', '#ff2d95', 30); x.restore();
-  x.font = '600 24px "Barlow Condensed"'; x.letterSpacing = '7px'; x.textAlign = 'center'; x.fillStyle = '#6fe7ee'; x.shadowColor = 'rgba(31,209,217,.8)'; x.shadowBlur = 10;
-  x.fillText('LIMITED EVENT · EARN THE VI BADGE BEFORE 14 DECEMBER', W / 2 + 4, 350); x.shadowBlur = 0; x.letterSpacing = '0px'; x.textAlign = 'left';
+  // GRANNY × DBD, the GTA VI logo, LIMITED TIME EVENT (art/*.png = the official logos the owner sent; not committed)
+  logoRow(x, logo, dbd, W / 2, 16, 62);
+  gtaLogo(x, gta, W / 2, 92, 246);
+  eventLine(x, 'LIMITED TIME EVENT', W / 2, 382, 34);
   return c.toDataURL('image/png');
 };
 window.ready = true;

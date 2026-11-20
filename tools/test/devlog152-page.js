@@ -1,15 +1,15 @@
 // Devlog banner for 1.5.2 (1280x720 at 2x): Vice Nights. Granny and Grandpa on a Midnight City street lit pink and teal by
-// neon, a Victim's Car, the sky graded into a sunset with a striped sun, palm silhouettes, the VI badge. Text on the left.
+// neon, a Victim's Car, the sky graded into a sunset with a striped sun, palm silhouettes. Left: GRANNY × DBD, the GTA VI logo, LIMITED TIME EVENT.
 // PAGE=devlog152-page.js OUT=devlog152.png node render-devlog.mjs   (window.frame('raw') = the 3D render alone)
 import * as THREE from 'three';
 import { makeKiller, animate } from './js/models.js';
 import { buildMap } from './js/map.js';
 import { buildWorld } from './js/world.js';
 import { loadGranny, loadGrandpa, loadVictimCar, makeVictimCar } from './js/grannyGlb.js';
-import { palm, badge, grade, sun, neonText } from './__vicity-common.js';
+import { palm, grade, sun, loadImg, logoRow, gtaLogo, eventLine } from './__vicity-common.js';
 
 const W = 1280, H = 720, SS = 2;
-let R, sc, cam, logo, A = {};
+let R, sc, cam, logo, dbd, gta, A = {};
 window.setup = async () => {
   await Promise.all([loadGranny(), loadGrandpa(), loadVictimCar()]);
   const M = buildMap(11, 'city');
@@ -28,7 +28,7 @@ window.setup = async () => {
   R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(W * SS, H * SS);
   R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.5; R.outputColorSpace = THREE.SRGBColorSpace;
   cam = new THREE.PerspectiveCamera(38, W / H, 0.05, 300);
-  logo = await new Promise(res => { const i = new Image(); i.onload = () => res(i); i.src = 'img/granny-logo.png'; });
+  [logo, dbd, gta] = await Promise.all([loadImg('img/granny-logo.png'), loadImg('__art/dbd.png'), loadImg('__art/gta6.png')]);
   await document.fonts.load('100px "Bebas Neue"'); await document.fonts.load('italic 100px "Bebas Neue"'); await document.fonts.load('100px "IM Fell English SC"'); await document.fonts.load('600 40px "Barlow Condensed"');
   return true;
 };
@@ -47,20 +47,10 @@ window.frame = (mode) => {
   const g1 = x.createLinearGradient(0, 0, W * 0.6, 0); g1.addColorStop(0, 'rgba(10,2,18,.92)'); g1.addColorStop(0.7, 'rgba(10,2,18,.45)'); g1.addColorStop(1, 'rgba(10,2,18,0)'); x.fillStyle = g1; x.fillRect(0, 0, W, H);
   const vg = x.createRadialGradient(W * 0.66, H * 0.5, H * 0.3, W * 0.66, H * 0.5, W * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(8,0,16,.6)'); x.fillStyle = vg; x.fillRect(0, 0, W, H);
   palm(x, -30, H + 10, 420, { flip: true, tilt: 0.05, color: '#0a0212' });
-  // logo
-  x.save(); x.shadowColor = 'rgba(255,45,149,.6)'; x.shadowBlur = 18;
-  const lw = 240, lh = lw * logo.height / logo.width; x.drawImage(logo, 56, 40, lw, lh);
-  x.font = '64px "IM Fell English SC"'; x.fillStyle = '#ff2d95'; x.fillText('×', 56 + lw + 14, 40 + lh * 0.82); x.fillStyle = '#fff0f8'; x.fillText('DBD', 56 + lw + 56, 40 + lh * 0.82); x.restore();
-  // headline
-  x.font = '600 25px "Barlow Condensed"'; x.letterSpacing = '6px'; x.fillStyle = '#6fe7ee'; x.shadowColor = 'rgba(31,209,217,.7)'; x.shadowBlur = 10; x.fillText('UPDATE 1.5.2 · LIMITED EVENT', 60, 238); x.shadowBlur = 0; x.letterSpacing = '0px';
-  x.save(); x.transform(1, 0, -0.12, 1, 40, 0); neonText(x, 'VICE NIGHTS', 52, 372, 'italic 140px "Bebas Neue"', '#fff0f8', '#ff2d95', 34); x.restore();
-  badge(x, 60 + 50, 440, 92);
-  x.font = '40px "Bebas Neue"'; x.fillStyle = '#ffc04d'; x.shadowColor = 'rgba(255,150,40,.6)'; x.shadowBlur = 14; x.fillText('EARN THE VI BADGE', 172, 432); x.shadowBlur = 0;
-  x.font = '600 21px "Barlow Condensed"'; x.letterSpacing = '2px'; x.fillStyle = '#f0d8ea'; x.fillText('BEFORE 14 DECEMBER · THEN IT\'S GONE FOREVER', 174, 462); x.letterSpacing = '0px';
-  const items = ['Neon sunset theme for the menus', '25 escapes + 60 kills = the VI badge', 'Vice Legend title · badge shows online', 'Fixed: hiding spots in City Mode'];
-  x.font = '600 24px "Barlow Condensed"'; x.letterSpacing = '1px';
-  items.forEach((s, i) => { const y = 538 + i * 36; x.fillStyle = i === 3 ? '#6fe7ee' : '#ff2d95'; x.shadowColor = x.fillStyle; x.shadowBlur = 8; x.fillRect(60, y - 13, 9, 9); x.shadowBlur = 0; x.fillStyle = '#efe0ea'; x.fillText(s.toUpperCase(), 82, y); });
-  x.letterSpacing = '0px';
+  // GRANNY × DBD, the GTA VI logo, LIMITED TIME EVENT (art/*.png = the official logos the owner sent; not committed)
+  logoRow(x, logo, dbd, 300, 40, 84);
+  gtaLogo(x, gta, 300, 158, 418);
+  eventLine(x, 'LIMITED TIME EVENT', 300, 652, 52);
   return c.toDataURL('image/png');
 };
 window.ready = true;

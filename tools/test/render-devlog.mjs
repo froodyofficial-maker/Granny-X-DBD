@@ -8,7 +8,7 @@ const page0 = `<!doctype html><html><head><meta charset="utf-8"><link rel="style
 const srv = http.createServer(async (q, r) => {
   const u = decodeURIComponent(q.url.split('?')[0]);
   if (u === '/public/__p.html') { r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return r.end(page0); }
-  if (u.startsWith('/public/__') && u !== '/public/__p.js' && u !== '/public/__p.html') { try { r.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); return r.end(await readFile(join(HERE, u.slice('/public/__'.length)))); } catch { r.writeHead(404); return r.end(); } } // helpers next to the pages (import './__x.js')
+  if (u.startsWith('/public/__') && u !== '/public/__p.js' && u !== '/public/__p.html') { try { const f = u.slice('/public/__'.length); r.writeHead(200, { 'content-type': f.endsWith('.png') ? 'image/png' : 'text/javascript; charset=utf-8' }); return r.end(await readFile(join(HERE, f))); } catch { r.writeHead(404); return r.end(); } } // helpers next to the pages (import './__x.js')
   if (u === '/public/__p.js') { r.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }); return r.end(await readFile(join(HERE, process.env.PAGE || 'devlog13-page.js'))); }
   try { const b = await readFile(join(ROOT, u)); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.png': 'image/png' }[extname(u)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); }
 }).listen(0);
