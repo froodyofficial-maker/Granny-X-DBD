@@ -98,13 +98,14 @@ export function speedOf(p, S, sprint, crouch) {
 // 4,000 for a really good match
 export const EMBER_CAP = 4000;
 export function embersOf(p) { const s = p.score.a + p.score.b + p.score.c + p.score.d; return Math.max(0, Math.min(EMBER_CAP, Math.round(s / (p.role === 'killer' ? 4.5 : 2)))); }
-export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : p.item === 'teddy' ? (p.teddy || 0) : p.item === 'pepper' ? (p.pepper || 0) : (p.flash || 0); }
+export function itemCharge(p) { return p.item === 'trap' ? (p.traps || 0) : p.item === 'taser' ? (p.tasers || 0) : p.item === 'teddy' ? (p.teddy || 0) : p.item === 'gtaps' ? (p.gtaps || 0) : p.item === 'pepper' ? (p.pepper || 0) : (p.flash || 0); }
 export function itemLabel(k, n) {
   const name = (ITEMS[k] || ITEMS.flashlight).name;
   if (n != null && n <= 0.05) return name + ' (empty)';
   if (k === 'trap') return name + ' ×' + n;
   if (k === 'taser') return name + ' (' + n + ' shot' + (n === 1 ? '' : 's') + ')';
   if (k === 'teddy') return name + ' (' + n + ' use' + (n === 1 ? '' : 's') + ' left)';
+  if (k === 'gtaps') return name + ' (' + n + ' throw' + (n === 1 ? '' : 's') + ' left)';
   if (k === 'pepper') return name + ' (' + n + ' spray' + (n === 1 ? '' : 's') + ')';
   return name;
 }
@@ -153,7 +154,7 @@ function baseInteraction(M, S, p) {
       const cs = S.chests && S.chests[c.id], d = dist(p, c);
       if (!cs || d > 1.5) continue;
       if (!cs.open) consider('chest', c.id, 'Search the chest', 1, d);
-      else if (cs.it && p.item !== 'teddy') consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
+      else if (cs.it && p.item !== 'teddy' && p.item !== 'gtaps') consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
     }
     if (!best && p.hp === 1 && has(p, 'medic')) return { k: 'self', id: p.id, label: 'Heal yourself' };
     return best;

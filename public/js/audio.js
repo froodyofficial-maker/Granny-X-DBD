@@ -46,6 +46,35 @@ export class Sound {
       src.stop(t + 1.3);
     }
   }
+  // 1.5.3: Granny's House background music during a match there (public/audio/granny3.mp3, offline: #nb-granny3-mp3)
+  async loadTrack(id) {
+    this.tracks ||= {};
+    if (this.tracks[id] !== undefined || !this.ctx) return this.tracks[id];
+    this.tracks[id] = null;
+    try {
+      const el = document.getElementById('nb-' + id + '-mp3');
+      let ab = el && el.textContent.trim() ? await b64buf(el.textContent.trim()) : null;
+      if (!ab) for (const u of [`audio/${id}.mp3`, `public/audio/${id}.mp3`]) { try { const r = await fetch(u); if (r.ok) { ab = await r.arrayBuffer(); break; } } catch {} }
+      if (ab) this.tracks[id] = await this.ctx.decodeAudioData(ab);
+    } catch (e) { console.warn('track', id, e); }
+    return this.tracks[id];
+  }
+  mapMusic(on, id = 'granny3', vol = 0.42) {
+    this.wantMap = on;
+    if (!this.ok) return;
+    const c = this.ctx, t = c.currentTime;
+    if (on && !this.mapSrc) {
+      const buf = this.tracks && this.tracks[id];
+      if (!buf) { if (!this.tracks || this.tracks[id] === undefined) this.loadTrack(id).then(() => { if (this.wantMap && !this.mapSrc) this.mapMusic(true, id, vol); }); return; }
+      const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+      const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 3);
+      src.connect(g); g.connect(this.musicBus); src.start(); this.mapSrc = src; this.mapGain = g;
+    } else if (!on && this.mapSrc) {
+      const src = this.mapSrc, g = this.mapGain; this.mapSrc = null;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+      src.stop(t + 1.6);
+    }
+  }
   setVolume(v) { this.vol = v; if (this.master) this.master.gain.value = v; }
   setMusic(v) { this.music = v; if (this.musicBus) this.musicBus.gain.value = v; }
   get ok() { return !!this.ctx && this.ctx.state === 'running'; }

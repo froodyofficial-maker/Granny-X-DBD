@@ -41,13 +41,15 @@ html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, () => `<sty
 html = html.replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, '');
 const peer = (await readFile(join(pub, 'vendor/peerjs.min.js'), 'utf8')).replace(/<\/script/gi, '<\\/script');
 // the Foreman's rigged model as base64 in an inert tag placed before the game script (read by foremanGlb.js)
-const extraGlb = ['ghosttrap', 'granny_map', 'granny1_map', 'slendrina', 'angeline', 'nosferatu', 'forest_map', 'freddy', 'grandpa_thug', 'victim_car', 'slenderman', 'teddy', 'granny', 'granny_anims', 'grandpa', 'spidermom', 'slendrina_child', 'beartrap', 'taser'].filter(n => existsSync(join(pub, 'models/' + n + '.glb'))).map(n => `<script id="nb-${n}-glb" type="application/octet-stream">${readFileSync(join(pub, 'models/' + n + '.glb')).toString('base64')}</script>\n`).join('');
+const extraGlb = ['ghosttrap', 'granny_map', 'granny1_map', 'slendrina', 'angeline', 'nosferatu', 'forest_map', 'freddy', 'grandpa_thug', 'victim_car', 'slenderman', 'teddy', 'granny', 'granny_anims', 'grandpa', 'spidermom', 'slendrina_child', 'beartrap', 'taser', 'monster_can', 'phone_case'].filter(n => existsSync(join(pub, 'models/' + n + '.glb'))).map(n => `<script id="nb-${n}-glb" type="application/octet-stream">${readFileSync(join(pub, 'models/' + n + '.glb')).toString('base64')}</script>\n`).join('');
 // 1.5.1: the menu music (audio.js reads #nb-music-mp3 when there is no audio/ folder next to the page)
 const musicTag = existsSync(join(pub, 'audio/menu.mp3')) ? `<script id="nb-music-mp3" type="application/octet-stream">${readFileSync(join(pub, 'audio/menu.mp3')).toString('base64')}</script>\n` : '';
+// 1.5.3: Granny's House background music (#nb-granny3-mp3)
+const musicTag2 = existsSync(join(pub, 'audio/granny3.mp3')) ? `<script id="nb-granny3-mp3" type="application/octet-stream">${readFileSync(join(pub, 'audio/granny3.mp3')).toString('base64')}</script>\n` : '';
 // the map vote cards' pictures (the exe / apk have no img/ folder next to the page)
 const mapImgs = Object.fromEntries(['granny', 'granny1', 'forest'].filter(n => existsSync(join(pub, 'img/maps/' + n + '.jpg'))).map(n => [n, 'data:image/jpeg;base64,' + readFileSync(join(pub, 'img/maps/' + n + '.jpg')).toString('base64')]));
 const mapImgTag = `<script>window.__MAPIMG=${JSON.stringify(mapImgs)}</script>\n`;
-const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}${musicTag}${mapImgTag}<script>${peer}</script>\n<script>${js}</script>`);
+const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}${musicTag}${musicTag2}${mapImgTag}<script>${peer}</script>\n<script>${js}</script>`);
 // the web build stays small: it fetches public/models/foreman.glb instead of embedding it
 const web = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script>${peer}</script>\n<script>${js}</script>`);
 const note = `<title>Granny x DBD</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->\n  <script>window.__NB_BUILT__=${Date.now()}</script>`;

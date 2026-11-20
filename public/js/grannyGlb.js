@@ -29,7 +29,8 @@ async function bytes(name) {
 const SPEC = { granny: { h: 1.82, yaw: 0 }, granny_anims: { anim: true }, grandpa: { h: 1.86, yaw: 0 }, spidermom: { h: 1.15, yaw: 0 }, slendrina: { h: 1.95, yaw: 0 }, slendrina_child: { h: 0.62, yaw: 0 }, angeline: { h: 1.88, yaw: Math.PI }, nosferatu: { h: 1.98, yaw: Math.PI },
   // 1.4.4 outfits (their own meshes on Granny's / Grandpa's rig): bind = how to straighten the file's skeleton first
   grandpa_thug: { mesh: true }, victim_car: { mesh: true },
-  slenderman: { mesh: true }, teddy: { mesh: true } };
+  slenderman: { mesh: true }, teddy: { mesh: true },
+  monster_can: { mesh: true }, phone_case: { mesh: true } }; // (1.5.3: collectables, GTA VI (PlayStation))
 function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => heavy(() => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej)))).then(g => {
@@ -632,6 +633,7 @@ export function makeVictimCar() {
 }
 export const loadSkinModel = name => load(name);
 export const skinModelReady = name => !!M[name];
+export const glbScene = name => M[name] ? M[name].g.scene : null; // (1.5.3: static props, vice.js)
 // An outfit model moved onto the game's own rig (Granny's / Grandpa's), so it plays exactly their animations: the outfit is
 // taken as it stands in its own rest pose (Sigma Grandpa's Thug mesh has no skeleton at all; Bloody / Nightmare / Witch
 // Granny's skeletons are straightened by toBindPose), fitted over the rig's body (same height, feet and middle), and every

@@ -35,6 +35,7 @@ import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
 import { VI, viOpen, viDaysLeft, viOf, viHas, viRecord, viBadge, applyViTheme } from './vi.js';
+import { addColl, collShelfHTML, showcaseHTML, bindShelf, boardEntry, publishMe, unpublishMe, openBoard, closeBoard } from './collect.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
 window.__nbBooted = true;
@@ -285,7 +286,7 @@ function renderShowcase() {
 }
 
 // ---------- side panel ----------
-const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends', 'p-profile', 'p-vi'];
+const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends', 'p-profile', 'p-vi', 'p-lb'];
 let openSection = null;
 function openPanel(id, title, wide = false) {
   for (const p of SECTIONS) $(p).classList.toggle('hidden', p !== id);
@@ -305,6 +306,7 @@ function openPanel(id, title, wide = false) {
   if (id === 'p-pass') renderPass();
   if (id === 'p-profile') renderProfile();
   if (id === 'p-vi') renderViPanel();
+  if (id === 'p-lb') { publishMe(profile, myEntry, true); openBoard($('lb-body'), profile.fid, viBadge); } else closeBoard();
   if (id === 'p-friends') renderFriends();
 }
 function closePanel(byPlayer) {
@@ -316,6 +318,7 @@ function closePanel(byPlayer) {
   $('menu').classList.remove('panel-open');
   if (openSection === 'p-loadout' && menu) { menu.setMode(menuMode); menu.showFor = null; }
   $('panel').classList.remove('loadout');
+  if (openSection === 'p-lb') closeBoard();
   openSection = null;
   if (menu) menu.setShift(false);
   for (const b of $('mainnav').children) b.classList.remove('on');
@@ -379,9 +382,31 @@ function renderViPanel() {
   const v = viOf(profile), G = VI.goals, on = viOpen(), d = viDaysLeft(), end = new Date(VI.until - 1).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
   const bar = (n, g, lbl) => `<div class="vi-row"><span>${lbl}</span><div class="bar"><div style="width:${Math.min(100, n / g * 100).toFixed(1)}%"></div></div><b>${Math.min(n, g)} / ${g}</b></div>`;
   $('vi-body').innerHTML = `<div class="vi-head">${viBadge(110)}<div><small>${on ? `Limited event · ends ${esc(end)} · ${d} day${d === 1 ? '' : 's'} left` : 'The event is over'}</small><h3>Vice Nights</h3>
-    <p>To celebrate the release of GTA VI, the fog turns neon for a few weeks. Finish the challenge before the event ends to earn the <b>VI badge</b>: it shows next to your name, on your profile and in online lobbies, and comes with the <b>Vice Legend</b> title.</p>
+    <p>To celebrate the release of GTA VI, the fog turns neon until 30 November. Finish the challenge before the event ends to earn the <b>VI badge</b>: it shows next to your name, on your profile and in online lobbies, and comes with the <b>Vice Legend</b> title.</p>
     <p class="hint">The badge can only be earned while the event runs. When it ends, nobody can get it any more, but if you have it, it's yours for good.</p></div></div>
+    ${on ? viPassHTML() : ''}
     ${v.got ? `<div class="vi-done">${viBadge(40)}<b>You earned the VI badge</b><span>${esc(new Date(v.got).toLocaleDateString())}</span></div>` : on ? `<div class="vi-goals"><h4>The challenge</h4>${bar(v.esc, G.esc, 'Escape as a survivor')}${bar(v.kills, G.kills, 'Kill survivors as a killer')}<p class="hint">Bot matches on Normal or Hard and online matches count; Easy doesn't. Kills = survivors sacrificed or killed in your matches as the killer.</p></div>` : '<p class="hint">The challenge is closed.</p>'}`;
+  bindViPass($('vi-body'));
+}
+// 1.5.3: the GTA VI Pass: 50,000 Embers for everything GTA VI (the item, the VI badge + title, both GTA VI collectables)
+const hasViPass = () => !!viOf(profile).pass;
+function viPassHTML() {
+  const own = hasViPass();
+  return `<div class="vi-pass ${own ? 'own' : ''}">${viBadge(64)}<div class="vp-b"><small>GTA VI Pass · until 30 November</small><b>Everything GTA VI</b>
+    <ul><li><span class="gtaps-art"></span> GTA VI (PlayStation) item</li><li>${viBadge(18)} VI badge + Vice Legend title</li><li>★ GTA VI Monster Can (collectable)</li><li>★ GTA VI Game Case (collectable)</li></ul></div>
+    <div class="vp-buy">${own ? '<span class="of-p eq">Owned</span>' : `<span class="ch-price">${price(VI.passPrice)}</span><button class="btn primary" data-vipass>Buy the pass</button>`}</div></div>`;
+}
+function bindViPass(root) {
+  root.querySelectorAll('[data-vipass]').forEach(b => b.onclick = () => {
+    if (hasViPass() || !viOpen()) return;
+    if (!spend(VI.passPrice, 'GTA VI Pass')) return;
+    const v = viOf(profile), now = Date.now();
+    v.pass = now; v.got ||= nowMs(); profile.gtaps = true; profile.survivor.item = 'gtaps';
+    addColl(profile, 'monster'); addColl(profile, 'gtacase');
+    saveProfile(); publishMe(profile, myEntry, true); sound.play('escaped');
+    toast('GTA VI Pass: the PlayStation item, the VI badge and two GTA VI collectables are yours!', 6000);
+    try { renderViPanel(); } catch {} try { renderViCard(); } catch {} try { if (!$('store').classList.contains('hidden')) renderStore(); } catch {} try { renderShowcase(); } catch {}
+  });
 }
 $('vi-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-vi', 'Vice Nights', true); });
 applyViTheme(settings); renderViCard();
@@ -396,7 +421,7 @@ for (const b of $('mainnav').children) {
 }
 document.addEventListener('pointerdown', () => sound.init(), { once: true });
 // 1.5.1: menu music. Plays in the menus, the lobby and on the results screen; fades out when a match begins
-setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown); }, 500);
+setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown); sound.mapMusic(!!g && !g.endShown && session.map === 'granny'); }, 500); // (1.5.3: Granny's House has its own music)
 document.addEventListener('keydown', () => sound.init(), { once: true });
 
 function seg(id, onChange) {
@@ -451,13 +476,14 @@ function bindLevel(container, role, char, rerender) {
 // Season 2: the Teddy. Bought for the season it's bought in (profile.teddy = that season's id); gone after
 const teddyOut = () => nowMs() >= Date.UTC(2026, 11, 1);
 const ownsTeddy = () => teddyOut() && profile.teddy === SEASON.id;
-const myItem = () => profile.survivor.item === 'teddy' && ownsTeddy() ? 'teddy' : 'flashlight';
+const ownsPS = () => !!profile.gtaps && viOpen(); // 1.5.3: GTA VI (PlayStation), bought (or from the GTA VI Pass); only until the event ends
+const myItem = () => profile.survivor.item === 'teddy' && ownsTeddy() ? 'teddy' : profile.survivor.item === 'gtaps' && ownsPS() ? 'gtaps' : 'flashlight';
 function itemRowHTML() {
-  if (!teddyOut()) return '';
+  if (!teddyOut() && !ownsPS()) return '';
   const it = myItem();
   return `<div class="lo2-row it-row"><span class="lo2-lbl">Item</span><div class="it-pick">
     <button class="it-opt ${it === 'flashlight' ? 'on' : ''}" data-item="flashlight">${icon('flashlight')}<span>Flashlight</span></button>
-    <button class="it-opt ${it === 'teddy' ? 'on' : ''}" ${ownsTeddy() ? 'data-item="teddy"' : 'data-teddystore'} title="${esc(ITEMS.teddy.desc)}"><span class="teddy-art"></span><span>Teddy${ownsTeddy() ? '' : ' · in the Store'}</span></button></div></div>`;
+    ${teddyOut() ? `<button class="it-opt ${it === 'teddy' ? 'on' : ''}" ${ownsTeddy() ? 'data-item="teddy"' : 'data-teddystore'} title="${esc(ITEMS.teddy.desc)}"><span class="teddy-art"></span><span>Teddy${ownsTeddy() ? '' : ' · in the Store'}</span></button>` : ''}${ownsPS() ? `<button class="it-opt ${it === 'gtaps' ? 'on' : ''}" data-item="gtaps" title="${esc(ITEMS.gtaps.desc)}"><span class="gtaps-art"></span><span>GTA VI (PS)</span></button>` : ''}</div></div>`;
 }
 // 1.4.3 item add-ons: two slots on the survivor's flashlight (taser ones work if you find a taser in a chest)
 const RAR = { common: 'common', uncommon: 'uncommon', rare: 'rare', 'very rare': 'veryrare' };
@@ -604,6 +630,8 @@ $('set-dynres').addEventListener('change', e => { settings.dynres = e.target.che
 $('set-fps').addEventListener('change', e => { settings.showFps = e.target.checked; saveSettings(); });
 $('set-vi-row').classList.toggle('hidden', !viOpen()); $('set-vi').checked = settings.viTheme !== false;
 $('set-vi').addEventListener('change', e => { settings.viTheme = e.target.checked; saveSettings(); applyViTheme(settings); });
+$('set-lb').checked = settings.lb !== false;
+$('set-lb').addEventListener('change', e => { settings.lb = e.target.checked; saveSettings(); if (settings.lb) publishMe(profile, myEntry, true); else unpublishMe(profile); });
 $('set-bright').addEventListener('input', e => { settings.brightness = +e.target.value; saveSettings(); $('set-bright-v').textContent = Math.round(settings.brightness * 100) + '%'; if (renderer) renderer.toneMappingExposure = 1.35 * settings.brightness; if (session && session.game && session.game.W) session.game.W.base = null; });
 $('set-sens').addEventListener('input', e => { settings.sens = +e.target.value; $('set-sens-v').textContent = settings.sens.toFixed(2); saveSettings(); });
 $('set-fov').addEventListener('input', e => { settings.fov = +e.target.value; $('set-fov-v').textContent = settings.fov; saveSettings(); });
@@ -781,7 +809,10 @@ function addonsHTML() {
   const T = ITEMS.teddy, tOwn = ownsTeddy();
   const teddy = teddyOut() ? `<div class="ad-card teddy-card veryrare"><span class="teddy-art big"></span><div class="ad-b"><small>Season 2 item · ${esc(SEASON.name)}</small><b>Teddy</b><p>${esc(T.desc)}</p><em class="hint">Yours until the end of this season.</em></div>
       <div class="ad-buy">${tOwn ? `<button class="btn ${myItem() === 'teddy' ? '' : 'primary'}" data-teddyeq>${myItem() === 'teddy' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(T.price)}</span><button class="btn primary" data-teddybuy>Buy</button>`}</div></div>` : '';
-  return `${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
+  const G = ITEMS.gtaps, gOwn = ownsPS();
+  const ps = !viOpen() ? '' : viPassHTML() + `<div class="ad-card gtaps-card legendary"><span class="gtaps-art big"></span><div class="ad-b"><small>Vice Nights · survivor item</small><b>${esc(G.name)}</b><p>${esc(G.desc)}</p><em class="hint">Yours until the event ends (30 November). Carry it from the survivor Loadout (Item). Also in the GTA VI Pass.</em></div>
+      <div class="ad-buy">${gOwn ? `<button class="btn ${myItem() === 'gtaps' ? '' : 'primary'}" data-pseq>${myItem() === 'gtaps' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(G.price)}</span><button class="btn primary" data-psbuy>Buy</button>`}</div></div>`;
+  return `${ps}${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
     <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
 }
 // ---------- codes (1.3.2, back in 1.4.4 with its own main-menu button): secret codes, gift codes, backup codes ----------
@@ -866,6 +897,9 @@ function sidekicksHTML() {
 function bindStore(body) {
   bindCodes(body);
   body.querySelectorAll('[data-teddybuy]').forEach(b => b.onclick = () => { if (ownsTeddy() || !spend(ITEMS.teddy.price, 'Teddy (' + SEASON.name + ')')) return; profile.teddy = SEASON.id; profile.survivor.item = 'teddy'; saveProfile(); sound.play('escaped'); toast('The Teddy is yours for the rest of ' + SEASON.name + '. Hold it up with RMB.'); renderStore(); });
+  bindViPass(body);
+  body.querySelectorAll('[data-psbuy]').forEach(b => b.onclick = () => { if (ownsPS() || !spend(ITEMS.gtaps.price, ITEMS.gtaps.name)) return; profile.gtaps = true; profile.survivor.item = 'gtaps'; saveProfile(); sound.play('escaped'); toast('GTA VI (PlayStation) is yours. Throw it at the killer with RMB.'); renderStore(); });
+  body.querySelectorAll('[data-pseq]').forEach(b => b.onclick = () => { profile.survivor.item = myItem() === 'gtaps' ? 'flashlight' : 'gtaps'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-teddyeq]').forEach(b => b.onclick = () => { profile.survivor.item = myItem() === 'teddy' ? 'flashlight' : 'teddy'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-adbuy]').forEach(b => b.onclick = () => { const k = b.dataset.adbuy, A = ADDONS[k]; if (profile.addons[k] || !spend(A.price, A.name)) return; profile.addons[k] = true; const L = profile.survivor.addons = cleanAddons(profile.survivor.addons); if (L.length < ADDON_SLOTS) L.push(k); saveProfile(); sound.play('escaped'); renderStore(); });
   body.querySelectorAll('[data-adeq]').forEach(b => b.onclick = () => { const k = b.dataset.adeq, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); renderStore(); });
@@ -1004,7 +1038,7 @@ function botSurvivor(i, used) {
   const free = PLAY_S.filter(c => !used.includes(c));
   const char = free.length ? free[Math.floor(Math.random() * free.length)] : PLAY_S[i % 4];
   used.push(char);
-  const item = teddyOut() && Math.random() < 0.2 ? 'teddy' : 'flashlight'; // (Season 2: a bot brings a Teddy now and then)
+  const r = Math.random(), item = teddyOut() && r < 0.2 ? 'teddy' : r > 0.85 && viOpen() ? 'gtaps' : 'flashlight'; // (Season 2: a bot brings a Teddy now and then; 1.5.3: GTA VI (PlayStation))
   used.names ||= [];
   const pool = BOT_NAMES.filter(n => !used.names.includes(n));
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
@@ -1276,7 +1310,7 @@ class HostSession {
 
 class ClientSession {
   get tickWhileLoading() { return !this.game; }
-  constructor(net, start, myId) { this.net = net; this.myId = myId; this.isHost = false; this.M = buildMap(start.seed, start.map); this.S = null; this.game = null; this.queued = []; this.reader = new SnapReader(); }
+  constructor(net, start, myId) { this.net = net; this.myId = myId; this.isHost = false; this.map = start.map; this.M = buildMap(start.seed, start.map); this.S = null; this.game = null; this.queued = []; this.reader = new SnapReader(); }
   onMsg(m) {
     if (m.t === 's') { const s = this.reader.read(m.s); if (s) this.S = s; }
     // events arrive separately (reliably); they still count before the first keyframe
@@ -1363,6 +1397,7 @@ function onMatchEnd(S, me, sess) {
       if (vr.earned) { sound.play('escaped'); toast('You earned the VI badge!', 6000); }
     }
     saveProfile();
+    publishMe(profile, myEntry, true); // 1.5.3: the leaderboard
     try { renderViCard(); } catch {}
     try { renderSeasonCard(); } catch {}
   }
@@ -1555,7 +1590,7 @@ function applyLoadout(p, m) {
   if (role === 'survivor' && p.role !== 'survivor' && lobby.players.filter(x => x.role === 'survivor').length >= cap.s) role = p.role;
   if (m.loadouts) p.loadouts = m.loadouts;
   const lo = sanitizeLoadout(role, m.char ?? p.loadouts?.[role]?.char, m.perks ?? p.loadouts?.[role]?.perks);
-  p.item = m.item === 'teddy' && role === 'survivor' ? 'teddy' : 'flashlight'; // (Season 2: the Teddy)
+  p.item = (m.item === 'teddy' || m.item === 'gtaps') && role === 'survivor' ? m.item : 'flashlight'; // (Season 2: the Teddy; 1.5.3: GTA VI)
   p.role = role; p.char = lo.char; p.perks = lo.perks; p.skin = cleanSkin(lo.char, m.skin ?? p.loadouts?.[role]?.skin);
   p.pet = '';
 }
@@ -1840,10 +1875,11 @@ function renderProfile() {
   const titles = titlesList().map(t => `<button class="pf-title ${(profile.title || '') === t.id ? 'on' : ''} ${t.ok ? '' : 'locked'}" ${t.ok ? `data-title="${esc(t.id)}"` : 'disabled'} title="${t.ok ? '' : 'Unlock: ' + esc(t.need)}">${esc(t.label)}${t.ok ? '' : `<small>${esc(t.need)}</small>`}</button>`).join('');
   const levels = chars.map(c => `<span><b>${esc(charName0(c).replace(/^The /, ''))}</b> ${charLv(charOf(profile, c).xp).lvl}</span>`).join('');
   $('profile-body').innerHTML = `
-    <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}${viHas(profile) ? ' ' + viBadge(28) : ''}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span><span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
+    <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}${viHas(profile) ? ' ' + viBadge(28) : ''}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span>${showcaseHTML(profile)}<span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
     <div class="field"><label>Name <span class="hint-inline">(what other players see online)</span></label><input id="pf-name" maxlength="16" value="${esc(settings.name)}" autocomplete="off" spellcheck="false"></div>
     <div class="field"><label>Avatar</label><div class="pf-avs">${chars.map(c => `<button class="pf-av ${av === c ? 'on' : ''}" data-av="${c}" title="${esc(charName0(c))}"><img alt="" src="${art('portrait', c, skinId(c), 96, 96)}"></button>`).join('')}</div></div>
     <div class="field"><label>Title</label><div class="pf-titles">${titles}</div></div>
+    ${collShelfHTML(profile)}
     <div class="field"><label>Name colour</label><div class="pf-accs">${ACCENTS.map(a => `<button class="pf-acc ${(profile.accent || ACCENTS[0]) === a ? 'on' : ''}" data-acc="${a}" style="background:${a}"></button>`).join('')}</div></div>
     <div class="field"><label>Character levels</label><div class="pf-lvls">${levels}</div></div>
     <div class="field"><label>Backup <span class="hint-inline">(keep your progress: copy the code somewhere safe, or paste it on another device)</span></label>
@@ -1851,6 +1887,7 @@ function renderProfile() {
       <div class="pf-bk"><button class="btn small" id="pf-fsave">Save backup file</button><button class="btn small" id="pf-fload">Load backup file…</button><span class="hint">${esc(backupWhere())}</span></div>
       <textarea id="pf-code" class="hidden" rows="3" spellcheck="false"></textarea><div class="pf-bk hidden" id="pf-apply-row"><button class="btn small primary" id="pf-apply">Restore this backup</button><span class="hint">Replaces everything on this device with the backup.</span></div></div>`;
   const B = $('profile-body');
+  bindShelf(B, profile, saveProfile, renderProfile);
   $('pf-name').oninput = e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); $('set-name').value = settings.name; renderShowcase(); B.querySelector('.pf-name').textContent = settings.name; };
   B.querySelectorAll('[data-av]').forEach(b => b.onclick = () => { profile.avatar = b.dataset.av; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
   B.querySelectorAll('[data-title]').forEach(b => b.onclick = () => { profile.title = b.dataset.title; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
@@ -1996,6 +2033,11 @@ friends.on('invite', (id, name, code) => {
   clearTimeout(c.hideT); c.hideT = setTimeout(() => c.classList.add('hidden'), 30000);
 });
 $('friends-btn').onclick = () => { sound.init(); sound.play('click'); openPanel('p-friends', 'Friends'); };
+// 1.5.3: the leaderboard (trophy button) and collectables found in a match
+function myEntry() { return settings.lb === false ? null : boardEntry(profile, settings.name, levelOf(progOf(profile).xp).lvl, viHas(profile)); }
+$('lb-btn').onclick = () => { sound.init(); sound.play('click'); openPanel('p-lb', 'Leaderboard', true); };
+addEventListener('gdbd-coll', e => { const id = e.detail && e.detail.c; if (addColl(profile, id)) toast('New collectable! See it in 3D on your Profile.'); saveProfile(); publishMe(profile, myEntry, true); });
+setTimeout(() => { if (settings.lb !== false) publishMe(profile, myEntry, true); }, 8000);
 // ---------- weekly awards: Best Survivor and Best Killer of the whole player base ----------
 const awards = new Awards(profile, saveProfile, friends);
 function awardsHTML() {

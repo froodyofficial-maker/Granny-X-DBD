@@ -17,6 +17,17 @@ const pg = await br.newPage({ viewport: { width: 640, height: 360 } });
 pg.on('pageerror', e => console.log('err', e.message)); pg.on('console', m => { if (m.type() === 'error') console.log('console', m.text()); });
 await pg.goto(`http://localhost:${srv.address().port}/public/__p.html`); await pg.waitForFunction(() => window.ready, null, { timeout: 60000 });
 await pg.evaluate(() => window.setup());
-const d = await pg.evaluate(() => window.frame(0));
-await writeFile(join(HERE, process.env.OUT || 'devlog13.png'), Buffer.from(d.split(',')[1], 'base64'));
+if (process.env.FRAMES) {
+  // a video: FRAMES=n [FROM=k] OUTDIR=dir: window.frame(i) for each frame (the page turns i into a time), saved as f0000.jpg...
+  const { mkdirSync } = await import('node:fs'); const dir = process.env.OUTDIR || 'frames'; mkdirSync(dir, { recursive: true });
+  const list = process.env.LIST ? process.env.LIST.split(',').map(Number) : Array.from({ length: +process.env.FRAMES - +(process.env.FROM || 0) }, (_, k) => k + +(process.env.FROM || 0));
+  for (const i of list) {
+    const d = await pg.evaluate(i => window.frame(i), i);
+    await writeFile(join(dir, 'f' + String(i).padStart(4, '0') + '.jpg'), Buffer.from(d.split(',')[1], 'base64'));
+    if (i % 24 === 0) console.log('frame', i);
+  }
+} else {
+  const d = await pg.evaluate(() => window.frame(0));
+  await writeFile(join(HERE, process.env.OUT || 'devlog13.png'), Buffer.from(d.split(',')[1], 'base64'));
+}
 await br.close(); srv.close();

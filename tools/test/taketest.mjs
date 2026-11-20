@@ -1,0 +1,21 @@
+// takeover: die as a survivor in a bot match, press T, check that you play on as a bot's survivor. node taketest.mjs
+import { chromium } from 'playwright';
+import http from 'node:http'; import { readFile } from 'node:fs/promises'; import { join, extname } from 'node:path';
+const ROOT = '/home/user/granny-x-dbd';
+const srv = http.createServer(async (q, r) => { let u = decodeURIComponent(q.url.split('?')[0]); try { const b = await readFile(join(ROOT, u)); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' }[extname(u)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
+const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+const ctx = await br.newContext({ viewport: { width: 1280, height: 720 } });
+await ctx.addInitScript(() => { localStorage.setItem('gdbd_profile', JSON.stringify({ seen: { intro: true, help: true, tut: true }, killer: { char: 'granny', perks: [] }, survivor: { char: 'mara', perks: [] }, stats: { embers: 1000, matches: 3, escapes: 1, kills: 2 }, readInbox: { gdbd153: true, gdbd152: true, gdbd151: true } })); localStorage.setItem('gdbd_settings', JSON.stringify({ quality: 'low', name: 'Tester', lb: false })); });
+const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.goto(`http://localhost:${srv.address().port}/public/index.html`);
+await pg.waitForFunction(() => window.__nb && document.querySelector('#mainnav button'), null, { timeout: 120000 });
+await pg.waitForTimeout(5000); await pg.click('#mainnav button[data-act="play-survivor"]', { force: true }); await pg.waitForTimeout(500);
+await pg.evaluate(() => document.getElementById('btn-bots-start').click());
+await pg.waitForFunction(() => window.__nb.session && window.__nb.session.game && window.__nb.session.sim && window.__nb.session.sim.S.t > 2, null, { timeout: 240000 });
+const r1 = await pg.evaluate(() => { const s = window.__nb.session, S = s.sim.S, me = S.players.find(p => p.id === s.game.myId); s.sim.kill(me, 'sacrificed'); return { st: me.st, id: me.id }; });
+await pg.waitForTimeout(2500);
+const before = await pg.evaluate(() => { const g = window.__nb.session.game, t = g.takeoverTarget(); return { target: t && t.id, hint: (document.querySelector('.takeover') || {}).textContent || null }; });
+await pg.keyboard.press('KeyT'); await pg.waitForTimeout(2500);
+const after = await pg.evaluate(() => { const s = window.__nb.session, g = s.game, me = s.sim.S.players.find(p => p.id === g.myId); return { myId: g.myId, st: me && me.st, bot: me && me.bot, name: me && me.name }; });
+console.log(JSON.stringify({ r1, before, after }), 'errors', errs);
+await br.close(); srv.close();

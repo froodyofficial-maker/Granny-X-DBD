@@ -9,7 +9,11 @@ export const MOBILE = isTouch();
 if (MOBILE && typeof document !== 'undefined') document.documentElement.classList.add('mobile');
 const R_BTN = { granny: 'HEAR', grandpa: 'TRAP', slendrina: 'GAZE', angeline: 'LULLABY', nosferatu: 'NIGHTFALL', father: 'STEP' };
 let ctxRole = 'survivor', ctxChar = 'mara';
-export function setTouchCtx(role, char) { ctxRole = role || ctxRole; ctxChar = char || ctxChar; }
+let ctxItem = 'flashlight';
+// the survivor's RMB button, by item (1.5.3: it said LIGHT with a flashlight on it whatever you carried)
+const ITEM_BTN = { flashlight: ['LIGHT', 'flashlight'], pepper: ['SPRAY', 'pepper'], taser: ['TASER', 'taser'], teddy: ['TEDDY', 'flashlight'], gtaps: ['THROW', 'throwcase'] };
+const itemBtn = () => ITEM_BTN[ctxItem] || ITEM_BTN.flashlight;
+export function setTouchCtx(role, char, item) { ctxRole = role || ctxRole; ctxChar = char || ctxChar; if (item) ctxItem = item; }
 // an action (keybind id, or 'LMB' / 'RMB' / 'V') -> the name of the on-screen button that does it
 export function touchName(id) {
   switch (id) {
@@ -18,7 +22,7 @@ export function touchName(id) {
     case 'item': return 'CREEP'; case 'ability2': return R_BTN[ctxChar] || 'POWER 2'; case 'drop': return 'DROP';
     case 'execute': return ctxRole === 'killer' ? 'EXECUTE' : 'NEXT'; case 'takeover': return 'TAKE OVER'; case 'status': return 'STATUS';
     case 'emotes': return 'EMOTE'; case 'shoulder': return 'CAMERA';
-    case 'LMB': return 'ATTACK'; case 'RMB': return ctxRole === 'killer' ? 'POWER' : 'LIGHT'; case 'V': return 'SWAP';
+    case 'LMB': return 'ATTACK'; case 'RMB': return ctxRole === 'killer' ? 'POWER' : itemBtn()[0]; case 'V': return 'SWAP';
   }
   return id;
 }
@@ -29,7 +33,7 @@ export function mobileText(s, char) {
   return s.replace(/\b(Hold|hold|Press|press|Tap|tap) ([GVRFQET])\b/g, (m, v, k) => `${/^[Pp]/.test(v) ? (v[0] === 'P' ? 'Tap' : 'tap') : v} ${key[k]}`)
     .replace(/\brelease ([GVR])\b/g, (m, k) => 'release ' + key[k])
     .replace(/\b([Cc])lick/g, (m, c) => c === 'C' ? 'Tap' : 'tap')
-    .replace(/\bRMB\b/g, R_BTN[char] ? 'POWER' : 'LIGHT').replace(/\bLMB\b/g, 'ATTACK');
+    .replace(/\bRMB\b/g, R_BTN[char] ? 'POWER' : itemBtn()[0]).replace(/\bLMB\b/g, 'ATTACK');
 }
 
 import { icon } from './icons.js';
@@ -277,8 +281,9 @@ export function initTouch() {
     ui.classList.toggle('hidden', !on);
     if (!on) return;
     const me = g.mine && g.mine();
-    if (me) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char);
+    if (me) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char, me.item);
     layout(!me || me.st === 'dead' || me.st === 'out' || me.st === 'ghost' ? 'dead' : me.role === 'killer' ? (LAYOUT['killer-' + me.char] ? 'killer-' + me.char : 'killer') : 'survivor');
+    { const lb = ui.querySelector('[data-b=light]'), [lt, li] = itemBtn(); if (lb && lb.dataset.it !== ctxItem) { lb.dataset.it = ctxItem; lb.querySelector('.tc-lb').textContent = lt; lb.querySelector('.tc-ic').innerHTML = icon(li); } }
     const jb = ui.querySelector('[data-b=jump]'), skill = $('skill') && !$('skill').classList.contains('hidden');
     const jl = jb && jb.querySelector('.tc-lb'); if (jl) jl.textContent = skill ? 'HIT!' : 'VAULT';
     if (useLatched && !working() && !(g.skill) && Date.now() - latchT > 1200) unlatch(); // (a moment for the action to start)

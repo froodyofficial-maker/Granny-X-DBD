@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 16`, `VERSION = '1.5.2'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 17`, `VERSION = '1.5.3'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,7 +205,50 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.5.2 (current; APK versionCode 26, Windows 1.5.2, NET_PROTOCOL 16):
+1.5.3 (current; APK versionCode 27, Windows 1.5.3, NET_PROTOCOL 17):
+- **Everything GTA VI ends 1 Dec 2026** (`VI.until` = Date.UTC(2026, 11, 1), owner's request): theme, Vice Nights card, the item, the pass and the
+  two GTA VI collectables' spawning (`COLLECTABLES[].until`). Earned badges and found collectables stay on profiles.
+- The VI badge is the official GTA VI logo (owner's choice): `viBadge(size)` = a `<span class="vi-badge">` with public/img/gta6.png through
+  the stylesheet (inlined in the offline builds). vice.js `gtaLogo()` reads that same CSS url to paint the in-game monitor.
+- **GTA VI (PlayStation)** (`ITEMS.gtaps`, 7,500 Embers in Store > Add-ons, `profile.gtaps`, Loadout item 'gtaps'; `ownsPS()` = owned AND
+  `viOpen()`): RMB throws the game case (vicesim.js `viceAct`, `S.cases`, arc, 20 m); a killer hit is stunned 5 s with `K.gamed` and is drawn
+  sitting at a desk (vice.js `makeGameDesk`: table with panels to the floor that hide the legs, monitor with the GTA VI logo, console, gaming
+  chair; root lowered `SEAT_DROP` 0.4; first-person camera lowered too). 3 throws a match. Bots carry it 15% of the time during the event.
+  Model public/models/phone_case.glb (the owner's upload, really a GTA VI PS5 case; cover faces -x). Store art public/img/gtaps.png
+  (tools/test/propshot.mjs renders a GLB to a transparent PNG).
+- **GTA VI Pass** (`VI.passPrice` 50,000 Embers, Vice Nights panel + Store > Add-ons, `profile.vi.pass`): gives the item, the VI badge (+ Vice
+  Legend title) and both GTA VI collectables at once.
+- **Collectables** (`COLLECTABLES` in config.js, each with a chance 10-70%): monster (GTA VI Monster Can, monster_can.glb, 10%), gtacase
+  (phone_case.glb, 18%), goldted (teddy.glb tinted gold), page / key / bulb (made in code). vicesim.js `viceInit` places the ones that roll on
+  a random reachable spot (`S.colls`); first player within 1 m gets it (event 'coll' -> game.js dispatches `gdbd-coll` -> main.js `addColl`).
+  collect.js: `profile.colls {id: {n, at}}`, `profile.showcase` (max 3, ★ on the shelf), Profile panel shelf + showcase, thumbnails rendered
+  once with a throwaway renderer (`makeThumbs`), 3D viewer modal (`openCollView` -> vice.js `openViewer`, its own renderer, drag to turn).
+- **Leaderboard** (trophy button `#lb-btn` top right, panel `p-lb`): every player's entry is a retained MQTT message on
+  `grannydbd/v1/lb/<profile.fid>` on every relay (net.js `publishBoard` / `watchBoard`), sent at startup and after each match; tabs
+  Collectables / Kills / Escapes / Level. Settings toggle `settings.lb` (off clears the entry). Classes are `ldb-*` (`.lb-*` = lobby browser).
+- Granny's House music: public/audio/granny3.mp3 (owner's "Background Noise Inside"), `sound.mapMusic(on)` while a match on map 'granny'
+  runs (main.js 0.5 s interval; `session.map`, also set on ClientSession); offline builds embed it as `#nb-granny3-mp3`.
+- Main-menu title = the real logos (owner: "use the official Granny and DBD font"): `h1.logo-imgs` with img/granny-logo.png × img/dbd-logo.png
+  (the Dead by Daylight logo the owner sent, cut out of its checkerboard), no line under it.
+- **GTA-style loading screen** while Vice Nights runs (`html.theme-vi`): loadscreen.js adds `#vl` to #loading and `#loading.vi-ls`; four comic
+  panels (public/img/ls/{granny,grandpa,slendrina,nosferatu}.jpg, from tools/test/lsart-page.js renders + lsart.py: flat colours, ink lines,
+  sunset sky) cross-fade with a slow CSS pan, logos top-left, GTA VI logo top-right, GTA tips (`VI_TIPS`) + spinner at the bottom. All CSS (keeps
+  moving while the match builds); the 3D reel isn't started under it (`shownAt` is still set, startup waits on it).
+- Menu: Redeem Code left the main menu (Store tab "Redeem Code", gold); the Vice Nights sky is calmer (small sun high up, two small palms on
+  the right, hidden while a panel is open) so it no longer covers the characters.
+- Fixes: online players were turned into bots when their game was busy loading for 15 s (host `seen` timeout, now 45 s): their survivor was then
+  driven by a bot and Take Over (T) did nothing for them. Pepper Spray / Taser / Teddy / GTA VI no longer draw a flashlight or beam (sim
+  `flashOn` and game.js require item 'flashlight'); the HUD item card shows each item; the phone RMB button is SPRAY / TASER / TEDDY / THROW
+  with its own icon (touch.js `ITEM_BTN`, `setTouchCtx(role, char, item)`).
+- Freddy: freddy.glb is still missing here (Sketchfab Standard licence, kept out of the public repo): builds made in the cloud show him as Granny.
+  Put the file in public/models/ before building.
+- Tests: `vicelook.mjs` (desk, case, collectables in a match), `ui153.mjs` (menus with the date faked, buying the pass, after 1 Dec),
+  `taketest.mjs` (take over in a bot match), `takeonline.mjs` (client takes over through a local relay), simtest `ITEM=gtaps`.
+  Trailer: `trailer153-page.js` (FRAMES=480 OUTDIR=... render-devlog.mjs, 24 fps) + `trailer153-music.py` (synthesized synthwave);
+  thumbnails `thumb153-page.js` (YouTube) and `devlog153-page.js`. render-devlog.mjs: FRAMES / FROM / LIST / OUTDIR for videos, serves
+  tools/test files as `__name` (pngs too); the official logo cut-outs live in tools/test/art/ (gitignored).
+
+1.5.2 (APK versionCode 26, Windows 1.5.2, NET_PROTOCOL 16):
 - City Mode hiding spots: climbing out left the slats (`#hideov`) on the screen. The overlay was only switched inside
   `cityCamera`, which stops being called once you're out; now `hideOverlay()` runs at the top of `updateCamera` every frame.
   Test: tools/test/hidetest.mjs (hide in a dumpster, climb out, check the overlay).

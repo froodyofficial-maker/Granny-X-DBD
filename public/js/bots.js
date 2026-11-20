@@ -395,6 +395,8 @@ export class Bots {
       if (p.item === 'pepper' && p.pepper > 0 && vis && kd < 3.2 && !(K.peppered > 0) && Math.random() < dt * 3) this.sim.onMsg(p.id, { t: 'act', a: 'pepper', yaw: Math.atan2(K.x - p.x, K.z - p.z) });
       // the Teddy: up it goes when the killer is about to catch us and is looking our way
       if (p.item === 'teddy' && p.teddy > 0 && !(p.tedT > 0) && !(p.tedCd > 0) && vis && kd < 9 && K.stun <= 0 && (p.x - K.x) * Math.sin(K.yaw) + (p.z - K.z) * Math.cos(K.yaw) > kd * 0.85 && Math.random() < dt * 1.5) this.sim.onMsg(p.id, { t: 'act', a: 'teddy' });
+      // GTA VI (PlayStation): thrown at a killer closing in (they sit down and play for 5s)
+      if (p.item === 'gtaps' && p.gtaps > 0 && !(p.psCd > 0) && vis && kd > 2.5 && kd < 11 && K.stun <= 0 && (closing || kd < 5) && Math.random() < dt * 1.2) this.sim.onMsg(p.id, { t: 'act', a: 'gtaps', yaw: Math.atan2(K.x - p.x, K.z - p.z), pitch: 0.05 });
       if (K.char === 'angeline' && K.aim && vis && kd < 18) { const kf = fwd(K.yaw), toMe = ((p.x - K.x) * kf.x + (p.z - K.z) * kf.z) / (kd || 1); if (toMe > 0.9) { threat = true; b.juke = true; } }
       // Slendrina's eyes are open: don't stand there looking at her
       if (K.char === 'slendrina' && K.gaze > 0 && vis && kd < 26) threat = true;

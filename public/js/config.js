@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 16;
+export const NET_PROTOCOL = 17;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -22,6 +22,9 @@ export const ITEMS = {
   // 1.5.1 (Ommm's idea): found in chests. Spray it in the killer's face: blinded for 25s (they can still move), and nothing
   // shows them survivors' outlines while it lasts
   pepper: { name: 'Pepper Spray', uses: 3, range: 3.6, cone: 0.5, time: 25, chance: 0.2, desc: "Click RMB to spray where you're looking (3.6m). The killer is blinded for 25s: they can still move, but they can barely see, and no aura or perk shows them a survivor's outline. 3 sprays. Only found in chests." },
+  // 1.5.3 (Vice Nights): GTA VI on PlayStation. Thrown at the killer (RMB): the one it hits sits down at a desk in front of a
+  // monitor and plays GTA VI for 5s (frozen). 3 throws a match. Bought once in Store > Add-ons, carried as the survivor's item.
+  gtaps: { name: 'GTA VI (PlayStation)', price: 7500, uses: 3, freeze: 5, speed: 17, range: 20, cooldown: 1.2, desc: "Click RMB to throw it where you're looking. A killer it hits sits down and plays GTA VI for 5s: frozen at the desk until they put the controller down. 3 throws a match." },
   taser: { name: 'Taser', shots: 3, stun: 3, range: 9, chance: 0.2, desc: 'Click RMB to fire: a killer you hit is electrocuted and frozen for 3s. 3 shots. Only found in chests.' },
 };
 // 1.4.3: item add-ons, Dead by Daylight style (the idea, and the UV Torch, are by Ommm and WolfSpider). Bought once in
@@ -498,14 +501,39 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.5.2';
+export const VERSION = '1.5.3';
+// 1.5.3: collectables. Each one may turn up somewhere on the map at the start of a match (its chance), lying in a random
+// spot; whoever walks over it first keeps it (it counts on their profile, can be shown in 3D, and goes on the leaderboard).
+// glb: a model in public/models; else made in code (collect.js)
+export const COLLECTABLES = [
+  { id: 'monster', name: 'GTA VI Monster Can', chance: 0.10, until: Date.UTC(2026, 11, 1), rarity: 'legendary', glb: 'monster_can', h: 0.5, desc: 'A Monster Energy can in the GTA VI design. Only one match in ten has one, hidden somewhere on the map.' },
+  { id: 'gtacase', name: 'GTA VI Game Case', chance: 0.18, until: Date.UTC(2026, 11, 1), rarity: 'veryrare', glb: 'phone_case', h: 0.42, desc: 'A PlayStation copy of GTA VI. Someone left it lying around.' },
+  { id: 'goldted', name: 'Golden Teddy', chance: 0.30, rarity: 'rare', glb: 'teddy', h: 0.42, tint: 0xd9a63a, desc: "Granny's teddy, dipped in gold." },
+  { id: 'page', name: "Slendrina's Page", chance: 0.45, rarity: 'uncommon', h: 0.4, desc: 'A torn page with a scribbled warning: SHE IS WATCHING.' },
+  { id: 'key', name: 'Rusty Padlock Key', chance: 0.60, rarity: 'common', h: 0.32, desc: "A key to one of Granny's padlocks. Nobody remembers which one." },
+  { id: 'bulb', name: 'Basement Bulb', chance: 0.70, rarity: 'common', h: 0.34, desc: 'The swinging bulb from the loading screen. Still warm.' },
+];
+export const RARITY = { common: '#b8b0a4', uncommon: '#6fcf6a', rare: '#5aa7ff', veryrare: '#b469ff', legendary: '#ffb42e' };
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
   {
+    id: 'gdbd153', version: '1.5.3', date: 'Nov 2026', title: 'GTA VI on PlayStation, collectables, leaderboard', tag: 'Update', from: Date.UTC(2026, 10, 20),
+    body: [
+      'New item: GTA VI (PlayStation), in Store > Add-ons (7,500 Embers). Throw it at the killer (RMB): they sit down at a desk and play GTA VI for 5 seconds. 3 throws a match.',
+      'The GTA VI Pass (50,000 Embers, in the Vice Nights card and the Store): everything GTA VI at once: the GTA VI (PlayStation) item, the VI badge with the Vice Legend title, the GTA VI Monster Can and the GTA VI Game Case.',
+      'Everything GTA VI is only around until 30 November: on 1 December the theme, the item, the pass and the GTA VI collectables are gone. Badges and collectables you already have stay on your profile.',
+      'Collectables: six of them can turn up in a match, from a common Basement Bulb (70% of matches) to the GTA VI Monster Can (10%). Walk over one to keep it. Show them off on your profile and look at them in 3D.',
+      'Leaderboard (the trophy button at the top right): collectables, kills, escapes and level of everyone who has played a match. You can leave it in Settings.',
+      'Fixed: online players whose game took long to load were turned into bots (so they couldn\'t take over a bot after dying). Fixed: a Pepper Spray (or any other item) from a chest still showed a flashlight; the item card and the phone button now show the real item.',
+      "Granny's House has its own background music now.",
+      'The VI badge is now the GTA VI logo. Redeem Code moved into the Store (gold tab). The neon menu no longer covers the characters.',
+    ],
+  },
+  {
     id: 'gdbd152', version: '1.5.2', date: 'Nov 2026', title: 'Vice Nights: the VI badge', tag: 'Event', from: Date.UTC(2026, 10, 20),
     body: [
-      'Limited event, until 14 December: Vice Nights, to celebrate the release of GTA VI. The menus go neon (turn it off in Settings if you like).',
+      'Limited event, until 30 November: Vice Nights, to celebrate the release of GTA VI. The menus go neon (turn it off in Settings if you like).',
       'The VI badge: escape 25 times as a survivor and kill 60 survivors as a killer before the event ends (Normal, Hard or online matches). It shows next to your name, on your profile and in online lobbies, with the Vice Legend title. Once the event is over it can never be earned again.',
       'Fixed: climbing out of a hiding spot in City Mode left the slats on your screen.',
     ],

@@ -13,6 +13,7 @@ import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
+import { updateVice, SEAT_DROP, COLL } from './vice.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady, fatherReady, makeTeddy } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
@@ -671,6 +672,10 @@ export class Game {
       // Pepper Spray: click to spray where you're looking
       if (down && me.st === 'ok' && !me.act && me.pepper > 0) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'pepper', yaw: this.camYaw }); }
       else if (down && me.st === 'ok' && !(me.pepper > 0)) this.feed('Your Pepper Spray is empty.');
+    } else if (e.button === 2 && me.item === 'gtaps') {
+      // GTA VI (PlayStation): click to throw it where you're looking
+      if (down && me.st === 'ok' && !me.act && me.gtaps > 0 && !(me.psCd > 0)) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'gtaps', yaw: this.camYaw, pitch: -this.camPitch + 0.25 }); }
+      else if (down && me.st === 'ok' && !(me.gtaps > 0)) this.feed('No GTA VI left to throw.');
     } else if (e.button === 2 && me.item === 'teddy') {
       // the Teddy: hold it up (killers who see it are pacified)
       if (down && me.st === 'ok' && !me.act) { if (me.teddy > 0 && !(me.tedT > 0) && !(me.tedCd > 0)) { me.yaw = this.camYaw; this.send({ t: 'act', a: 'teddy' }); } else if (!(me.teddy > 0)) this.feed('Your Teddy is spent.'); }
@@ -822,6 +827,7 @@ export class Game {
     this.updateSlime(S);
     this.updateSpears(dt, S);
     this.updateSaws(dt, S);
+    updateVice(this, S, dt); // 1.5.3: collectables, GTA VI cases, desks
     this.updateDolls(S);
     this.updateChains(S);
     this.updateLanterns(dt, S, me);
@@ -1084,7 +1090,7 @@ export class Game {
         anim = vaulting ? 'vault' : (c.spd > 0.3 || (!local && p.mv >= 1 && p.mv <= 2)) ? 'walk' : 'idle';
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
-        st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0; st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
+        st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0 && !(p.gamed > 0); st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
         if (p.char === 'slendrina') { st.gaze = p.gaze > 0; st.speed = c.spd; }
         if (p.char === 'nosferatu' || p.char === 'father') st.speed = c.spd;
         if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
@@ -1096,12 +1102,13 @@ export class Game {
         c.st = st;
       }
       st.anim = anim;
-      const flashOn = p.role === 'survivor' && p.st === 'ok' && !p.act && p.flash > 0 && (local ? !!this.flashHeld : p.flashOn);
+      const flashOn = p.role === 'survivor' && p.st === 'ok' && !p.act && p.flash > 0 && (p.item || 'flashlight') === 'flashlight' && (local ? !!this.flashHeld : p.flashOn);
       st.flash = flashOn;
       animate(R, st, dt);
       // placement
       R.root.position.set(c.x, y + c.lift + c.h, c.z);
       R.root.rotation.set(0, c.yaw, 0);
+      if (p.gamed > 0 && lookRole(p) === 'killer') { const d = this.viceDesk && this.viceDesk.get(p.id); R.root.position.y -= SEAT_DROP; if (d) R.root.rotation.y = d.userData.yaw; }
       if (anim === 'carried') {
         const CK = playerById(S, p.carriedBy) || K;
         const kc = CK && this.chars.get(CK.id);
@@ -1461,8 +1468,8 @@ export class Game {
       const bob = Math.sin(this.t * 8) * 0.035 * Math.min(1, (c?.spd || 0) / 4);
       let vy = 0;
       if (me.vault) { const v = me.vault; vy = Math.sin(Math.min(1, v.t / v.d) * Math.PI) * 0.4; }
-      const stunTilt = me.stun > 0 ? Math.sin(this.t * 6) * 0.08 : 0;
-      const lift = (this.chars.get(me.id) || {}).lift || 0;
+      const stunTilt = me.stun > 0 && !(me.gamed > 0) ? Math.sin(this.t * 6) * 0.08 : 0;
+      const lift = ((this.chars.get(me.id) || {}).lift || 0) - (me.gamed > 0 ? SEAT_DROP : 0); // (1.5.3: sat at the GTA VI desk)
       cam.position.set(me.x, eye + bob + vy + lift + ((c && c.h) || 0), me.z);
       cam.rotation.set(me.pitch + sy, me.yaw + Math.PI + sx, stunTilt);
       cam.fov = (this.settings.fov || 75) + (me.char === 'butcher' && me.ab === 1 ? 14 : 0) + (me.atk === 1 ? 4 : 0);
@@ -2379,6 +2386,24 @@ export class Game {
           break;
         }
         case 'teddygone': if (e.id === this.myId) this.feed('Your Teddy is spent for this match.'); break;
+        // 1.5.3: GTA VI (PlayStation), collectables
+        case 'psthrow': sound.play('throw', e.x, e.z, { pitch: 1.3 }); break;
+        case 'psland': sound.play('thunk', e.x, e.z); break;
+        case 'psgone': if (e.id === this.myId) this.feed('No GTA VI left to throw this match.'); break;
+        case 'gamed': {
+          if (e.id === this.myId) { this.feed('GTA VI! You sit down to play for 5s…', 'big'); this.shake = 0.25; }
+          else if (e.by === this.myId) this.feed(`Direct hit! ${name(e.id)} is playing GTA VI for 5s.`, 'big');
+          else this.feed(`${name(e.id)} sat down to play GTA VI (${name(e.by)}).`);
+          sound.play('stun', e.x, e.z); sound.play('escaped', e.x, e.z, { vol: 0.5 });
+          break;
+        }
+        case 'coll': {
+          const C = COLL[e.c], nm = C ? C.name : 'a collectable';
+          if (e.by === this.myId) { this.feed(`You found ${nm}! (Profile > Collectables)`, 'big'); sound.play('escaped'); try { dispatchEvent(new CustomEvent('gdbd-coll', { detail: { c: e.c } })); } catch {} }
+          else if (C && C.rarity === 'legendary') this.feed(`${name(e.by)} found ${nm}!`);
+          else sound.play('pickup', e.x, e.z, { pitch: 1.5 });
+          break;
+        }
         case 'page': {
           sound.play('whisper', this.M.gens[e.id].x, this.M.gens[e.id].z, { pitch: 0.7 });
           this.feed(`${e.n} / ${e.of} pages${e.n >= e.of ? ': the gates have power!' : ''}`, 'big');
@@ -2682,22 +2707,26 @@ export class Game {
   }
   itemHTML(me) {
     const web = me.char === 'spiderman' ? `<div class="keyl web-l">${kbd('ability2')} Web Shooters <b id="webn">×${me.webs || 0}</b> · ${kbd('execute')} Web Swing</div>` : '';
+    const cnt = (n, w) => `<span id="trapn">×${n || 0}</span>`;
+    if (me.item === 'pepper') return `<div class="iti">${icon('pepper')}</div><div class="itt"><div class="itn">Pepper Spray ${cnt(me.pepper)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> spray the killer's face (3.6m)</div>${web}</div>`;
+    if (me.item === 'gtaps') return `<div class="iti"><span class="gtaps-art"></span></div><div class="itt"><div class="itn">GTA VI (PlayStation) ${cnt(me.gtaps)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> throw it at the killer (5s)</div>${web}</div>`;
+    if (me.item === 'teddy') return `<div class="iti"><span class="teddy-art"></span></div><div class="itt"><div class="itn">Teddy ${cnt(me.teddy)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> hold it up to the killer</div>${web}</div>`;
     if (me.item === 'taser') return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser <span id="trapn"></span></div><div class="keyl"><kbd>${B('RMB')}</kbd> fire at the killer (3s stun)</div>${web}</div>`;
     return me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn"><span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div>${web}</div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>${B('RMB')}</kbd> hold to blind the killer</div>${web}</div>`;
   }
   updateHUD(dt, S, me) {
     if (!me) return;
-    if (MOBILE) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char);
+    if (MOBILE) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char, me.item);
     if (me.role === 'survivor' && me.item !== this.hudItem) this.renderItemHUD(me);
     // flashlight battery, and the killer's view whiting out when a torch is in his eyes
     if (me.role === 'survivor') {
       const bar = $('item').querySelector('.itb div');
       if (bar) bar.style.width = (Math.max(0, me.flash) / (me.flashMax || RULES.flashBattery) * 100).toFixed(1) + '%';
       $('item').classList.toggle('active', !!this.flashHeld && me.flash > 0);
-      $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.flash <= 0);
+      $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.item === 'pepper' ? !(me.pepper > 0) : me.item === 'gtaps' ? !(me.gtaps > 0) : me.item === 'teddy' ? !(me.teddy > 0) : me.flash <= 0);
       const wn = document.getElementById('webn'); if (wn) wn.textContent = '×' + (me.webs || 0);
-      const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + ((me.item === 'taser' ? me.tasers : me.traps) || 0);
+      const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + ((me.item === 'taser' ? me.tasers : me.item === 'pepper' ? me.pepper : me.item === 'gtaps' ? me.gtaps : me.item === 'teddy' ? me.teddy : me.traps) || 0);
       $('crosshair').classList.toggle('hidden', !((this.flashHeld && me.flash > 0) || (me.item === 'taser' && me.tasers > 0 && me.st === 'ok') || (me.char === 'spiderman' && me.webs > 0 && me.st === 'ok')));
     }
     const glare = me.role === 'killer' ? Math.max((me.glare || 0) * 0.75, me.blind > 0 ? Math.min(1, me.blind / 1.2) : 0) : 0;

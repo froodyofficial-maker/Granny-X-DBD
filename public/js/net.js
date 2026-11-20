@@ -183,6 +183,41 @@ export function watchLobbies(onList) {
   return () => { stopped = true; for (const m of socks) m.close(); };
 }
 
+// 1.5.3: the leaderboard. Every player's entry is a retained message on grannydbd/v1/lb/<their friend id>, on every relay
+// (whichever relays someone can reach, they see the board). publishBoard sends ours; watchBoard reads everyone's.
+const LB_TOPIC = 'grannydbd/v1/lb/';
+export function publishBoard(id, entry) {
+  const txt = entry ? JSON.stringify({ ...entry, t: Date.now() }) : '';
+  for (const url of MQTT_BROKERS) {
+    const m = new Mqtt(url);
+    m.connect(6000).then(() => { m.publish(LB_TOPIC + id, txt, false, true); setTimeout(() => m.close(), 1500); }).catch(() => {});
+  }
+}
+export function watchBoard(onList) {
+  const found = new Map(), socks = []; let stopped = false, t = 0;
+  const push = () => { if (!stopped) onList([...found.values()]); };
+  const soon = () => { if (!t) t = setTimeout(() => { t = 0; push(); }, 250); };
+  for (const url of MQTT_BROKERS) {
+    const m = new Mqtt(url);
+    m.connect(6000).then(() => {
+      if (stopped) { m.close(); return; }
+      socks.push(m);
+      m.on('message', (topic, text) => {
+        if (!topic.startsWith(LB_TOPIC)) return;
+        const id = topic.slice(LB_TOPIC.length).slice(0, 12);
+        let E = null; try { E = text ? JSON.parse(text) : null; } catch {}
+        if (!E || typeof E !== 'object') { found.delete(id); soon(); return; }
+        const old = found.get(id);
+        if (old && old.t >= (+E.t || 0)) return; // (the newest copy from any relay wins)
+        found.set(id, { id, ...E, t: +E.t || 0 }); soon();
+      });
+      m.subscribe(LB_TOPIC + '+');
+    }).catch(() => {});
+  }
+  setTimeout(push, 3000);
+  return () => { stopped = true; for (const m of socks) m.close(); };
+}
+
 // ---------------- HOST ----------------
 export async function hostRoom(mode) {
   const H = new Emitter();
@@ -272,7 +307,8 @@ export async function hostRoom(mode) {
       seen.set(id, Date.now());
       if (m.op === 'd') H.emit('msg', id, m.d);
     });
-    H.mqTimer = setInterval(() => { const now = Date.now(); for (const [id, t] of seen) if (now - t > 15000 && route.get(id) === 'mq') { seen.delete(id); route.delete(id); H.emit('leave', id); } }, 3000);
+    // (45s: a phone loading a match can be too busy to send anything for a while; 15s used to turn players into bots)
+    H.mqTimer = setInterval(() => { const now = Date.now(); for (const [id, t] of seen) if (now - t > 45000 && route.get(id) === 'mq') { seen.delete(id); route.delete(id); H.emit('leave', id); } }, 3000);
     mq.on('closed', () => H.emit('closed', 'Lost the connection to the online relay'));
   }
   // fast = true: high-frequency state that may be dropped (newer data follows right behind)

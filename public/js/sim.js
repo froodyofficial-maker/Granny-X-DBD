@@ -1,6 +1,7 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
 import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS, cleanAddons, addonMods } from './config.js';
 import { cityInit, cityUpdate, cityFinish, cityKillerHit, cityOnDamage } from './city.js';
+import { viceInit, viceAct, viceUpdate } from './vicesim.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt, levelStep, overlaps, floorUnder } from './map.js';
 import {
   has, fwd, dist, killerOf, killersOf, nearestKiller, anyKillerHas, playerById, findInteraction, actionTime, terrorRadius, inExit, findSpace, vaultDuration, findExecute, angDiff,
@@ -57,6 +58,7 @@ export class Sim {
     }
     this.possessionOn = POSSESSION;
     cityInit(this); // City Mode: cars, pedestrians
+    viceInit(this); // 1.5.3: GTA VI (PlayStation) throws, collectables
   }
 
   makePlayer(r, sp, mode = this.mode) {
@@ -72,7 +74,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.role === 'survivor' && r.item === 'teddy' ? 'teddy' : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' && r.item !== 'teddy' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
+        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.role === 'survivor' && (r.item === 'teddy' || r.item === 'gtaps') ? r.item : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' && r.item !== 'teddy' && r.item !== 'gtaps' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
@@ -80,7 +82,9 @@ export class Sim {
         stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : '',
         addons: r.role === 'survivor' ? cleanAddons(r.addons) : [],
         hide: -1, car: -1, hg: -1, // City Mode
-        teddy: r.role === 'survivor' && r.item === 'teddy' && mode !== 'bloodmoon' ? ITEMS.teddy.uses.length : 0, tedT: 0, tedCd: 0, // Season 2: the Teddy (uses left, held up, cooldown): in a hiding spot / at the wheel of a car
+        teddy: r.role === 'survivor' && r.item === 'teddy' && mode !== 'bloodmoon' ? ITEMS.teddy.uses.length : 0, tedT: 0, tedCd: 0,
+        gtaps: r.role === 'survivor' && r.item === 'gtaps' && mode !== 'bloodmoon' ? ITEMS.gtaps.uses : 0, psCd: 0, gamed: 0, // 1.5.3: GTA VI (PlayStation) throws left; a killer playing it
+        // Season 2: the Teddy (uses left, held up, cooldown): in a hiding spot / at the wheel of a car
       });
     }
   }
@@ -123,7 +127,7 @@ export class Sim {
         const inp = this.inputs.get(id);
         inp.e = !!m.e;
         if (!inp.e) inp.latch = false;
-        if ('flash' in m && p.role === 'survivor') p.flashOn = !!m.flash && p.flash > 0 && p.st === 'ok' && !p.act && !p.vault;
+        if ('flash' in m && p.role === 'survivor') p.flashOn = !!m.flash && p.flash > 0 && p.st === 'ok' && !p.act && !p.vault && (p.item || 'flashlight') === 'flashlight'; // (1.5.3: a Pepper Spray / Taser / Teddy / GTA VI from a chest doesn't shine)
         if (p.role === 'killer' && p.char === 'foreman') p.aim = !!m.aim && p.abCd <= 0 && !p.pull && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'harrower') p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0;
         if (p.role === 'killer' && p.char === 'bateman') { const was = p.aim; p.aim = !!m.aim && p.abCd <= 0 && p.ammo > 0 && p.carry == null && !p.act && p.stun <= 0 && !p.atk; if (p.aim && !was) p.abT = 0; }
@@ -268,6 +272,7 @@ export class Sim {
         }
         break;
       }
+      case 'gtaps': viceAct(this, p, m); break;
       case 'teddy': {
         // hold the Teddy up: every killer who sees it in the next moment is pacified
         if (p.role !== 'survivor' || p.st !== 'ok' || p.item !== 'teddy' || !(p.teddy > 0) || p.tedT > 0 || p.tedCd > 0 || p.act) return;
@@ -793,6 +798,7 @@ export class Sim {
     this.updateAngeline(dt);
     this.updateFather(dt);
     this.updateTeddy(dt);
+    viceUpdate(this, dt);
     this.updateKids(dt);
 
     // 1.5.1 (WolfSpider): nobody left free to unhook them: whoever is on a hook is sacrificed now, not after minutes of waiting

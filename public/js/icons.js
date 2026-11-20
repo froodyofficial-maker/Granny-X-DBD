@@ -43,6 +43,8 @@ const I = {
   stunless: `<path d="M10 44c10 0 14-24 26-24h12"/><path d="M42 12l10 8-10 8"/><path d="M8 52h48" stroke-dasharray="4 5"/>`,
   extreme: `<path d="M18 32c0-7 5-12 11-12 9 0 15 24 24 24 6 0 11-5 11-12s-5-12-11-12c-9 0-15 24-24 24-6 0-11-5-11-12z" transform="translate(-3 0)"/>`,
   irongrip: `<path d="M14 40V26a5 5 0 0 1 10 0v-4a5 5 0 0 1 10 0v2a5 5 0 0 1 10 0v4a5 5 0 0 1 10 0v12c0 10-8 16-20 16S14 50 14 40z"/><path d="M24 26v8M34 24v10M44 28v6"/>`,
+  pepper: `<path d="M22 22h16v34H22z"/><path d="M25 22v-6h10v6M28 16v-5h8"/><path d="M40 10l8-3M40 13h9M40 16l8 3" stroke-dasharray="2 3"/><path d="M22 32h16"/>`,
+  throwcase: `<path d="M14 14h24v34H14z" transform="rotate(-14 26 31)"/><path d="M18 22h14" transform="rotate(-14 26 31)"/><path d="M44 14c6 4 9 10 9 18M48 44c3-3 5-7 5-12" stroke-dasharray="3 4"/>`,
   taser: `<path d="M8 20h30l6 4v8H30l-4 14H16l4-14H8z"/><path d="M46 18l6-6M48 26h8M46 34l6 6"/><path d="M33 23l-4 5h4l-3 5"/>`,
   flashlight: `<path d="M6 26h20l8-6v24l-8-6H6z"/><path d="M40 22l14-8M40 32h16M40 42l14 8"/>`,
   stalker: `<path d="M40 8a24 24 0 1 0 16 32A19 19 0 0 1 40 8z"/><circle cx="34" cy="34" r="3" fill="currentColor"/>`,

@@ -50,7 +50,10 @@ function ui() {
   el.innerHTML = `<div class="ls-3d" id="ls-3d"></div><div class="ls-still" id="ls-still"><canvas></canvas><i class="ls-flick"></i></div><div class="ls-vig"></div><div class="ls-grain"></div>
     <div class="ls-top"><div class="ls-logo"><span class="ls-granny"></span><i>×</i><b>DBD</b></div></div>
     <div class="ls-card" id="ls-card"><div class="ls-kname" id="ls-kname"></div><div class="ls-kpow" id="ls-kpow"></div></div>
-    <div class="ls-hud"><div class="ls-msg" id="ls-msg"></div><div class="ls-bar"><i></i></div><div class="ls-tip" id="ls-tip"></div></div>`;
+    <div class="ls-hud"><div class="ls-msg" id="ls-msg"></div><div class="ls-bar"><i></i></div><div class="ls-tip" id="ls-tip"></div></div>
+    <div class="vl" id="vl"><div class="vl-art"><i class="a1"></i><i class="a2"></i><i class="a3"></i><i class="a4"></i></div><div class="vl-shade"></div>
+      <div class="vl-logos"><span class="lg-granny"></span><i>×</i><span class="lg-dbd"></span></div><span class="vl-gta"></span>
+      <div class="vl-foot"><div class="vl-tip" id="vl-tip"></div><div class="vl-load"><span id="vl-msg">Loading</span><i class="vl-spin"></i></div></div></div>`;
   return el;
 }
 
@@ -182,21 +185,36 @@ function frame(now) {
 }
 
 let tipT = 0, tipI = Math.floor(Math.random() * TIPS.length);
-function tip() { const el = $('ls-tip'); if (el) el.textContent = TIPS[tipI++ % TIPS.length]; }
+function tip() { const el = $('ls-tip'); if (el) el.textContent = TIPS[tipI++ % TIPS.length]; const v = $('vl-tip'); if (v) v.textContent = VI_TIPS[tipI % VI_TIPS.length]; }
+// 1.5.3: the GTA-style loading screen while Vice Nights runs (html.theme-vi): comic panels of the killers (img/ls/*.jpg,
+// through the stylesheet) cross-fading with a slow pan, the logos, a tip and a spinner. All CSS, so it keeps moving while
+// the page is busy building the match; the 3D reel isn't started under it.
+const VI_TIPS = [
+  'Throw GTA VI (PlayStation) at the killer: they sit down and play for 5 seconds.',
+  'The GTA VI Monster Can turns up in one match in ten. Walk over it to keep it.',
+  'The GTA VI Pass gives you everything GTA VI at once. Only until 30 November.',
+  'Show off up to three collectables on your Profile, and look at them in 3D.',
+  'The leaderboard (trophy button) ranks everyone by collectables, kills, escapes and level.',
+  'Granny hears everything. Even the controller clicking.',
+  'Earn the VI badge before 1 December: after that, nobody can.',
+];
 
 export function showLoading(on, msg, isLite, rendererOf) {
   if (rendererOf) getR = rendererOf;
   const el = ui();
   if (msg) text = msg;
   $('ls-msg').textContent = text;
+  const vm = $('vl-msg'); if (vm) vm.textContent = text || 'Loading';
   if (on === want) return;
   want = on;
   el.classList.toggle('hidden', !on);
+  const gta = on && document.documentElement.classList.contains('theme-vi'); el.classList.toggle('vi-ls', gta);
   // the loading screen is see-through over the 3D canvas it draws on: hide the menu / HUD in between
   document.documentElement.classList.toggle('ls-up', on);
   if (!on) { clearInterval(tipT); holdLoading(false); return; }
   tip(); clearInterval(tipT); tipT = setInterval(tip, 6000);
   lite = !!isLite;
+  if (gta) { shownAt ||= Date.now(); return; } // (the GTA-style screen covers everything: no 3D reel under it)
   try { if (!L) { L = build(); loadScene('granny_map'); loadGranny(); loadGrandpa(); loadSlendrina(); loadAngeline(); loadNosferatu(); loadSpiderMom(); } } catch (e) { console.warn('loading scene unavailable', e); return; }
   L.last = performance.now();
   if (!L.raf) L.raf = requestAnimationFrame(frame);
