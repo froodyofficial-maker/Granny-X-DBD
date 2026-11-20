@@ -5,10 +5,10 @@
 import * as THREE from 'three';
 import { makeKiller, animate } from './js/models.js';
 import { loadGranny, loadGrandpa, loadSlendrina, loadNosferatu, loadVictimCar, makeVictimCar } from './js/grannyGlb.js';
-import { PALM } from './__vicity-common.js';
+import { PALM, loadImg, logoRow, gtaLogo as drawGta, eventLine } from './__vicity-common.js';
 
 const W = 1920, H = 1080, SS = 1.5;
-let R, sc, cam, car, ground;
+let R, sc, cam, car, ground, logo, dbd, gta;
 const A = {};
 // per panel: the killer, its pose, where it stands in the picture (camera), the backdrop
 const SHOTS = [
@@ -16,6 +16,8 @@ const SHOTS = [
   { id: 'grandpa', st: { anim: 'idle', speed: 0, aim: true }, frames: 40, yaw: -0.35, cam: [-0.2, 0.7, 3.0], at: [0.75, 1.15, 0], scene: 'street', car: true },
   { id: 'slendrina', st: { anim: 'idle', speed: 0, gaze: true }, frames: 40, yaw: 0.35, cam: [0.2, 0.7, 2.9], at: [-0.7, 1.15, 0], scene: 'pier' },
   { id: 'nosferatu', st: { anim: 'idle', speed: 0 }, frames: 40, yaw: -0.45, cam: [-0.3, 0.75, 3.9], at: [0.95, 1.15, 0], scene: 'roof' },
+  // 4: the Game Jolt thumbnail (Vice Nights): Granny on the right, the logos on the left
+  { id: 'granny', st: { anim: 'idle', speed: 0, aim: true }, frames: 18, yaw: -0.15, cam: [-0.35, 0.65, 3.3], at: [-1.15, 1.2, 0], scene: 'gas', thumb: true },
 ];
 window.setup = async () => {
   await Promise.all([loadGranny(), loadGrandpa(), loadSlendrina(), loadNosferatu(), loadVictimCar()]);
@@ -30,6 +32,8 @@ window.setup = async () => {
   Object.assign(sunL.shadow.camera, { left: -4, right: 4, top: 4, bottom: -2, near: 0.5, far: 20 }); sc.add(sunL);
   const rim = new THREE.DirectionalLight(0xff3c9a, 3.2); rim.position.set(5, 2.5, -3); sc.add(rim);
   const key = new THREE.DirectionalLight(0xffd8c0, 1.7); key.position.set(1.5, 2.2, 4); sc.add(key);
+  [logo, dbd, gta] = await Promise.all([loadImg('img/granny-logo.png'), loadImg('__art/dbd.png'), loadImg('__art/gta6.png')]);
+  await document.fonts.load('100px "Bebas Neue"');
   R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); R.setSize(W * SS, H * SS); R.setClearColor(0x000000, 0);
   R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.35; R.outputColorSpace = THREE.SRGBColorSpace;
   cam = new THREE.PerspectiveCamera(30, W / H, 0.05, 100);
@@ -135,7 +139,7 @@ function inked(x, img) {
   x.save(); x.filter = 'saturate(1.25) contrast(1.12)'; x.drawImage(c, 0, 0); x.restore();
 }
 window.frame = (i) => {
-  const s = SHOTS[i % SHOTS.length];
+  const s = SHOTS[i % SHOTS.length]; for (const k in A) A[k].root.visible = false;
   for (const k in A) A[k].root.visible = k === s.id;
   const r = A[s.id]; r.root.position.set(0, 0, 0); r.root.rotation.y = s.yaw;
   for (let k = 0; k < s.frames; k++) animate(r, s.st, 1 / 30);
@@ -146,6 +150,12 @@ window.frame = (i) => {
   backdrop(x, s.scene);
   inked(x, R.domElement);
   // a light vignette for the printed look
+  if (s.thumb) { // darker left side so the logos read, then the logos and one line
+    const g = x.createLinearGradient(0, 0, W * 0.6, 0); g.addColorStop(0, 'rgba(14,3,26,.82)'); g.addColorStop(0.75, 'rgba(14,3,26,.35)'); g.addColorStop(1, 'rgba(14,3,26,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    logoRow(x, logo, dbd, W * 0.26, 70, 120);
+    drawGta(x, gta, W * 0.26, 240, 590);
+    eventLine(x, 'LIMITED TIME EVENT', W * 0.26, 960, 64);
+  }
   const v = x.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.72); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(20,4,30,.45)'); x.fillStyle = v; x.fillRect(0, 0, W, H);
   return c.toDataURL('image/png');
 };

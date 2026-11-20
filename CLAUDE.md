@@ -60,7 +60,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
   check (prints any key names left in the HUD); `lobbytest.mjs` 3 players vs a local relay (`node broker.mjs` first:
   aedes@0.51.3 + aedes-server-factory@0.2.1) for public/private lobbies; `angview.mjs` / `rigview.mjs` character poses;
   `rawglb.mjs file.glb prefix` plays a GLB's own clips with plain three.js; `render-devlog.mjs` + `devlog13-page.js` /
-  `devlog14-page.js` / `devlog143-page.js` / `devlog152-page.js` the devlog banners (Vice Nights: `gjheader152-page.js` = Game Jolt header 3000x600, shared art in `vicity-common.js`, served as `__vicity-common.js`) (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
+  `devlog14-page.js` / `devlog143-page.js` / `devlog152-page.js` the devlog banners (Vice Nights: `gjheader152-page.js` = Game Jolt header 3000x600, Game Jolt thumbnail = `lsart-page.js` frame 4 (LIST=4), shared art in `vicity-common.js`, served as `__vicity-common.js`) (in-engine, 2560x1440); `ui14.mjs` Loadout/Store/Progress screenshots;
   `match14.mjs` a 2v8 match as Angeline with the Child (`GM=classic K=granny` to change). simtest takes `MODE=duo` and
   `KID=1`. `offline141.mjs` runs the offline single file (Store picture, Profile panel, save mirror with a fake disk;
   `MOBILE=1` for phone size); `offkid.mjs` checks the Child loads in a match in the offline file. Playwright resolves through `tools/test/node_modules` -> `$(npm root -g)` (a symlink, not committed: recreate it).
