@@ -1412,6 +1412,9 @@ export class Game {
   updateCamera(dt, S, me) {
     const cam = this.camera;
     if (!me) return;
+    // the hiding-spot overlay (slats over the screen) follows the hiding state every frame: it used to be switched only
+    // from cityCamera, which stops running the moment you climb out, so the slats stayed on the screen
+    this.hideOverlay(!!(S && S.cars) && me.hide >= 0 && me.st === 'ok');
     let target = me;
     if (me.role === 'survivor' && (me.st === 'dead' || me.st === 'out')) {
       if (!this.spectate || !['ok', 'down', 'carried', 'caged'].includes(this.spectate.st)) this.cycleSpectate(true);
@@ -1578,12 +1581,15 @@ export class Game {
     this.scene.add(m); (this.lashes ||= []).push({ m, t: 0 });
   }
 
+  hideOverlay(on) {
+    if (!on && !this.hideOvOn) return;
+    let ov = document.getElementById('hideov');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'hideov'; document.body.appendChild(ov); }
+    ov.classList.toggle('on', on); this.hideOvOn = on;
+  }
   // City Mode: a chase camera behind the car; from inside a hiding spot, a peek out through the gap
   cityCamera(dt, S, me, target, sx, sy) {
     const cam = this.camera, C = this.W.city, mine = target === me;
-    let ov = document.getElementById('hideov');
-    if (!ov) { ov = document.createElement('div'); ov.id = 'hideov'; document.body.appendChild(ov); }
-    ov.classList.toggle('on', mine && target.hide >= 0);
     if (mine && this.t - (this.mouseT || 0) > 1.6) this.carOrbit = (this.carOrbit || 0) * Math.exp(-dt * 2.2);
     const orbit = mine ? this.carOrbit || 0 : 0, pitch = mine ? this.carPitch ?? 0.22 : 0.22;
     if (target.car >= 0) {

@@ -34,6 +34,7 @@ import { readCode, makeGift } from './codes.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
+import { VI, viOpen, viDaysLeft, viOf, viHas, viRecord, viBadge, applyViTheme } from './vi.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
 window.__nbBooted = true;
@@ -280,11 +281,11 @@ function renderShowcase() {
   const lv = levelOf((profile.prog || {}).xp || 0), rk = rankOf(((profile.prog || {}).ranks || {})[menuMode === 'killer' ? 'killer' : 'survivor'] || 0);
   const tl = titleOf();
   $('profile').style.setProperty('--acc', profile.accent || '#efe6d6');
-  $('profile').innerHTML = `<div class="pn">${avatarHTML(36)}<span class="pname">${esc(settings.name)}</span></div>${tl ? `<div class="ptitle">${esc(tl)}</div>` : ''}<div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
+  $('profile').innerHTML = `<div class="pn">${avatarHTML(36)}<span class="pname">${esc(settings.name)}</span>${viHas(profile) ? viBadge(22) : ''}</div>${tl ? `<div class="ptitle">${esc(tl)}</div>` : ''}<div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
 }
 
 // ---------- side panel ----------
-const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends', 'p-profile'];
+const SECTIONS = ['p-test', 'p-play', 'p-online', 'p-lobby', 'p-loadout', 'p-settings', 'p-help', 'p-inbox', 'p-pass', 'p-friends', 'p-profile', 'p-vi'];
 let openSection = null;
 function openPanel(id, title, wide = false) {
   for (const p of SECTIONS) $(p).classList.toggle('hidden', p !== id);
@@ -303,6 +304,7 @@ function openPanel(id, title, wide = false) {
   if (id === 'p-inbox') renderInbox();
   if (id === 'p-pass') renderPass();
   if (id === 'p-profile') renderProfile();
+  if (id === 'p-vi') renderViPanel();
   if (id === 'p-friends') renderFriends();
 }
 function closePanel(byPlayer) {
@@ -362,6 +364,27 @@ function renderSeasonCard() {
   el.classList.remove('hidden');
 }
 renderSeasonCard();
+// ---------- Vice Nights (limited event): theme, the menu card, the VI badge challenge ----------
+function renderViCard() {
+  const el = $('vi-card'); if (!el) return;
+  const on = viOpen(), v = viOf(profile);
+  if (!on && !viHas(profile)) { el.classList.add('hidden'); return; }
+  if (!on) { el.classList.add('hidden'); return; }
+  const G = VI.goals, d = viDaysLeft();
+  el.innerHTML = `<div class="vi-c">${viBadge(46)}<div class="nc-txt"><span>Limited event · ${d} day${d === 1 ? '' : 's'} left</span><b>Vice Nights</b>
+    ${v.got ? '<small class="vi-got">VI badge earned</small>' : `<div class="vi-bars"><i style="width:${Math.min(100, v.esc / G.esc * 100).toFixed(0)}%"></i><i style="width:${Math.min(100, v.kills / G.kills * 100).toFixed(0)}%"></i></div><small>${Math.min(v.esc, G.esc)}/${G.esc} escapes · ${Math.min(v.kills, G.kills)}/${G.kills} kills</small>`}</div></div>`;
+  el.classList.remove('hidden');
+}
+function renderViPanel() {
+  const v = viOf(profile), G = VI.goals, on = viOpen(), d = viDaysLeft(), end = new Date(VI.until - 1).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  const bar = (n, g, lbl) => `<div class="vi-row"><span>${lbl}</span><div class="bar"><div style="width:${Math.min(100, n / g * 100).toFixed(1)}%"></div></div><b>${Math.min(n, g)} / ${g}</b></div>`;
+  $('vi-body').innerHTML = `<div class="vi-head">${viBadge(110)}<div><small>${on ? `Limited event · ends ${esc(end)} · ${d} day${d === 1 ? '' : 's'} left` : 'The event is over'}</small><h3>Vice Nights</h3>
+    <p>To celebrate the release of GTA VI, the fog turns neon for a few weeks. Finish the challenge before the event ends to earn the <b>VI badge</b>: it shows next to your name, on your profile and in online lobbies, and comes with the <b>Vice Legend</b> title.</p>
+    <p class="hint">The badge can only be earned while the event runs. When it ends, nobody can get it any more, but if you have it, it's yours for good.</p></div></div>
+    ${v.got ? `<div class="vi-done">${viBadge(40)}<b>You earned the VI badge</b><span>${esc(new Date(v.got).toLocaleDateString())}</span></div>` : on ? `<div class="vi-goals"><h4>The challenge</h4>${bar(v.esc, G.esc, 'Escape as a survivor')}${bar(v.kills, G.kills, 'Kill survivors as a killer')}<p class="hint">Bot matches on Normal or Hard and online matches count; Easy doesn't. Kills = survivors sacrificed or killed in your matches as the killer.</p></div>` : '<p class="hint">The challenge is closed.</p>'}`;
+}
+$('vi-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-vi', 'Vice Nights', true); });
+applyViTheme(settings); renderViCard();
 $('season-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-pass', 'Progress', true); });
 for (const b of $('mainnav').children) {
   b.addEventListener('mouseenter', () => { sound.init(); sound.play('hover'); if (b.dataset.scene) setScene(b.dataset.scene); });
@@ -579,6 +602,8 @@ seg('set-style', v => { settings.style = v; saveSettings(); $('set-style-hint').
 seg('set-quality', v => { settings.quality = v; saveSettings(); $('set-quality-hint').textContent = QHINT[v]; stopBG(); makeRenderer(); startBG(); });
 $('set-dynres').addEventListener('change', e => { settings.dynres = e.target.checked; saveSettings(); });
 $('set-fps').addEventListener('change', e => { settings.showFps = e.target.checked; saveSettings(); });
+$('set-vi-row').classList.toggle('hidden', !viOpen()); $('set-vi').checked = settings.viTheme !== false;
+$('set-vi').addEventListener('change', e => { settings.viTheme = e.target.checked; saveSettings(); applyViTheme(settings); });
 $('set-bright').addEventListener('input', e => { settings.brightness = +e.target.value; saveSettings(); $('set-bright-v').textContent = Math.round(settings.brightness * 100) + '%'; if (renderer) renderer.toneMappingExposure = 1.35 * settings.brightness; if (session && session.game && session.game.W) session.game.W.base = null; });
 $('set-sens').addEventListener('input', e => { settings.sens = +e.target.value; $('set-sens-v').textContent = settings.sens.toFixed(2); saveSettings(); });
 $('set-fov').addEventListener('input', e => { settings.fov = +e.target.value; $('set-fov-v').textContent = settings.fov; saveSettings(); });
@@ -1327,7 +1352,18 @@ function onMatchEnd(S, me, sess) {
     profile.stats.embers += tot;
     if (me.role === 'survivor' && me.outcome === 'escaped') profile.stats.escapes++;
     if (me.role === 'killer') profile.stats.kills += S.players.filter(p => p.role === 'survivor' && p.outcome !== 'escaped').length;
+    // Vice Nights: the VI badge challenge (only while the event runs, not on Easy)
+    const vr = viRecord(profile, S, me, sess.opts && sess.opts.difficulty);
+    if (vr) {
+      const G = VI.goals;
+      $('results-list').insertAdjacentHTML('beforeend', vr.earned
+        ? `<div class="prog-sum vi-sum">${viBadge(44)}<div><b>VI badge earned!</b><span>Vice Nights: you finished the challenge. The badge and the Vice Legend title are yours for good.</span></div></div>`
+        : vr.skipped ? `<div class="prog-sum vi-sum">${viBadge(30)}<div><b>Vice Nights</b><span>Easy matches don't count towards the VI badge.</span></div></div>`
+        : `<div class="prog-sum vi-sum">${viBadge(30)}<div><b>Vice Nights</b><span>${Math.min(vr.esc, G.esc)}/${G.esc} escapes · ${Math.min(vr.kills, G.kills)}/${G.kills} kills</span></div></div>`);
+      if (vr.earned) { sound.play('escaped'); toast('You earned the VI badge!', 6000); }
+    }
     saveProfile();
+    try { renderViCard(); } catch {}
     try { renderSeasonCard(); } catch {}
   }
   const A = $('results-actions');
@@ -1377,7 +1413,7 @@ $('btn-host').addEventListener('click', async () => {
     const net = await hostRoom(mode);
     lobby = { isHost: true, net, code: net.code, mode, myId: 'host', players: [], fill: true, diff: 'normal', gm: 'classic', inGame: false, chat: [], vis: hostVis }; lobby.map = 'granny';
     const lo = profile.survivor;
-    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), pet: petOf('survivor'), host: true, loadouts: myLoadouts() });
+    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), pet: petOf('survivor'), host: true, loadouts: myLoadouts(), vi: viHas(profile) });
     net.on('msg', (id, m) => hostMsg(id, m));
     net.on('leave', id => {
       const p = lobby && lobby.players.find(x => x.id === id);
@@ -1474,7 +1510,7 @@ function hostMsg(id, m) {
     let role = m.role === 'killer' && !killerTaken ? 'killer' : 'survivor';
     if (role === 'survivor' && survCount >= cap.s) role = 'killer';
     const lo = sanitizeLoadout(role, m.loadouts?.[role]?.char, m.loadouts?.[role]?.perks);
-    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), pet: '', loadouts: m.loadouts || {} });
+    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), pet: '', loadouts: m.loadouts || {}, vi: m.vi === true });
     lobby.net.send(id, { t: 'welcome', id });
     addChat(null, String(m.name || 'Player').slice(0, 16) + ' joined.');
     broadcastLobby();
@@ -1544,7 +1580,7 @@ async function doJoin(code) {
     net.on('msg', m => clientMsg(m));
     net.on('closed', r => { toast(r); leaveOnline(true); });
     const role = 'survivor';
-    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts(), proto: NET_PROTOCOL, ver: VERSION });
+    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts(), proto: NET_PROTOCOL, ver: VERSION, vi: viHas(profile) });
     showLobby();
   } catch (e) { console.error(e); toast(e.message || String(e)); }
   loading(false);
@@ -1616,7 +1652,7 @@ function renderLobby() {
   $('lobby-gm-desc').innerHTML = `<b>${esc(MODES[lobby.gm || 'classic'].name)}:</b> ${esc(gmDesc(lobby.gm))}`;
   const charName = p => (p.role === 'killer' ? KILLERS[p.char] : SURVIVORS[p.char])?.name || '';
   const slot = (p, role) => p
-    ? `<div class="slot ${role}"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
+    ? `<div class="slot ${role}"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.vi === true ? ' ' + viBadge(18) : ''}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
     : `<div class="slot ${role} empty"><span class="si">${icon(role === 'killer' ? 'warrant' : 'healthy')}</span><span class="nm">${lobby.fill ? (role === 'killer' ? 'Bot killer' : 'Bot survivor') : 'Empty slot'}</span></div>`;
   let html = '';
   for (let i = 0; i < cap.k; i++) html += slot(killers[i], 'killer');
@@ -1781,6 +1817,7 @@ function titlesList() {
     { id: 'child', label: "The Child's Keeper", ok: !!profile.pets.child, need: 'own The Child of Slendrina' },
     { id: 'pass', label: 'Season Pass Holder', ok: !!P.season.prem, need: 'the premium Season Pass' },
   ];
+  if (viHas(profile) || viOpen()) T.push({ id: 'vi', label: 'Vice Legend', ok: viHas(profile), need: 'the VI badge (Vice Nights)' });
   for (const b of Object.keys(P.badges || {})) T.push({ id: 'b:' + b, label: /-final$/.test(b) ? `Season ${b.replace(/^s|-.*$/g, '')} Finisher` : `Season ${b.replace(/^s|-.*$/g, '')} Veteran`, ok: true });
   return T;
 }
@@ -1803,7 +1840,7 @@ function renderProfile() {
   const titles = titlesList().map(t => `<button class="pf-title ${(profile.title || '') === t.id ? 'on' : ''} ${t.ok ? '' : 'locked'}" ${t.ok ? `data-title="${esc(t.id)}"` : 'disabled'} title="${t.ok ? '' : 'Unlock: ' + esc(t.need)}">${esc(t.label)}${t.ok ? '' : `<small>${esc(t.need)}</small>`}</button>`).join('');
   const levels = chars.map(c => `<span><b>${esc(charName0(c).replace(/^The /, ''))}</b> ${charLv(charOf(profile, c).xp).lvl}</span>`).join('');
   $('profile-body').innerHTML = `
-    <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span><span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
+    <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}${viHas(profile) ? ' ' + viBadge(28) : ''}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span><span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
     <div class="field"><label>Name <span class="hint-inline">(what other players see online)</span></label><input id="pf-name" maxlength="16" value="${esc(settings.name)}" autocomplete="off" spellcheck="false"></div>
     <div class="field"><label>Avatar</label><div class="pf-avs">${chars.map(c => `<button class="pf-av ${av === c ? 'on' : ''}" data-av="${c}" title="${esc(charName0(c))}"><img alt="" src="${art('portrait', c, skinId(c), 96, 96)}"></button>`).join('')}</div></div>
     <div class="field"><label>Title</label><div class="pf-titles">${titles}</div></div>

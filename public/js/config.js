@@ -498,10 +498,18 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.5.1';
+export const VERSION = '1.5.2';
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd152', version: '1.5.2', date: 'Nov 2026', title: 'Vice Nights: the VI badge', tag: 'Event', from: Date.UTC(2026, 10, 20),
+    body: [
+      'Limited event, until 14 December: Vice Nights, to celebrate the release of GTA VI. The menus go neon (turn it off in Settings if you like).',
+      'The VI badge: escape 25 times as a survivor and kill 60 survivors as a killer before the event ends (Normal, Hard or online matches). It shows next to your name, on your profile and in online lobbies, with the Vice Legend title. Once the event is over it can never be earned again.',
+      'Fixed: climbing out of a hiding spot in City Mode left the slats on your screen.',
+    ],
+  },
   {
     id: 'gdbd151', version: '1.5.1', date: 'Nov 2026', title: 'Community update', tag: 'Update',
     body: [

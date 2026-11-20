@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 16`, `VERSION = '1.5.1'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 16`, `VERSION = '1.5.2'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,7 +205,21 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.5.1 (current; APK versionCode 25, Windows 1.5.1, NET_PROTOCOL 16): the community update (credited in How to Play + inbox:
+1.5.2 (current; APK versionCode 26, Windows 1.5.2, NET_PROTOCOL 16):
+- City Mode hiding spots: climbing out left the slats (`#hideov`) on the screen. The overlay was only switched inside
+  `cityCamera`, which stops being called once you're out; now `hideOverlay()` runs at the top of `updateCamera` every frame.
+  Test: tools/test/hidetest.mjs (hide in a dumpster, climb out, check the overlay).
+- **Vice Nights** (limited event celebrating GTA VI, vi.js): `VI.from` 20 Nov 2026 .. `VI.until` 15 Dec 2026 (UTC). While open:
+  `html.theme-vi` (neon sunset: `#vi-sky` glow/striped sun/perspective grid/palm silhouettes in the menu, pink accents via the
+  CSS variables, neon logo, loading bar), Settings toggle `settings.viTheme` (row only shown during the event), main-menu card
+  `#vi-card` -> panel `p-vi` (`renderViPanel`). The **VI badge** (`viBadge(size)`, our own SVG, no Rockstar art): `profile.vi =
+  {esc, kills, got}`; `viRecord` in onMatchEnd counts escapes / kills inside the window, not on Easy (`sess.opts.difficulty`),
+  goals `VI.goals` 25 escapes + 60 kills; `got` = timestamp, kept forever, can't be earned after `until`. Shown by the name in the
+  top-right chip, in the Profile panel, as the title "Vice Legend", and in online lobbies (`hello.vi` -> lobby player `vi`).
+  Inbox `gdbd152` (from 20 Nov). Test: tools/test/vitest.mjs (fakes the date: during / after, with / without the badge).
+- freddy.glb isn't in the repo (gitignored): builds made without it show Freddy owners as plain Granny.
+
+1.5.1 ( APK versionCode 25, Windows 1.5.1, NET_PROTOCOL 16): the community update (credited in How to Play + inbox:
 Ommm = outlines, sound variety, backup file, Pepper Spray; WolfSpider = instant sacrifice, generator pistons/sparks).
 - City Mode cars: `carBlocked(..., from)` = `carDepth` (penetration) may not grow, so a wedged car can always drive/back out (the
   "can't drive" reports: ped cars passed through parked ones and left them stuck forever); enter range 3.5 m from the centre;

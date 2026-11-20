@@ -29,3 +29,4 @@ tools/test/node_modules
 
 # builds and banners handed to the owner (sent as files, never committed)
 deliverables/
+tools/node_modules

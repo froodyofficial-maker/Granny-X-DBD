@@ -1143,3 +1143,52 @@ html:not(.mobile) .mobile-only { display: none !important; }
 .res.me .res-tot { font-size: 36px; text-shadow: 0 0 18px rgba(232,176,74,.35); }
 /* buttons: a clearer pressed state everywhere */
 .btn:active, .mainnav button:active { transform: translateY(1px); filter: brightness(1.15); }
+
+/* ---------- Vice Nights (limited event, 1.5.2): neon sunset theme + the VI badge ---------- */
+html.theme-vi { --red: #ff2d95; --red2: #ff5ab0; --gold: #ffc04d; --blood: #6a0a4a; }
+#vi-sky { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+#vi-sky .vi-glow { position: absolute; inset: 0; mix-blend-mode: screen;
+  background: linear-gradient(180deg, rgba(70,12,110,.55) 0%, rgba(160,20,120,.38) 30%, rgba(255,45,149,.32) 48%, rgba(255,140,60,.26) 60%, rgba(0,0,0,0) 74%),
+    radial-gradient(ellipse 45% 30% at 74% 58%, rgba(255,120,80,.35), rgba(0,0,0,0) 70%); }
+#vi-sky .vi-sun { position: absolute; right: 9%; top: 36%; width: min(30vw, 380px); aspect-ratio: 1; border-radius: 50%; mix-blend-mode: screen; opacity: .42;
+  background: linear-gradient(180deg, #ffe066 0%, #ff8a3c 45%, #ff2d95 100%);
+  -webkit-mask: linear-gradient(180deg, #000 0 52%, transparent 52% 56%, #000 56% 63%, transparent 63% 68%, #000 68% 74%, transparent 74% 81%, #000 81% 86%, transparent 86%);
+          mask: linear-gradient(180deg, #000 0 52%, transparent 52% 56%, #000 56% 63%, transparent 63% 68%, #000 68% 74%, transparent 74% 81%, #000 81% 86%, transparent 86%); }
+#vi-sky .vi-grid { position: absolute; left: -20%; right: -20%; bottom: -8%; height: 34%; transform: perspective(380px) rotateX(62deg); transform-origin: 50% 100%; opacity: .45; mix-blend-mode: screen;
+  background: repeating-linear-gradient(90deg, rgba(31,209,217,.75) 0 2px, transparent 2px 70px), repeating-linear-gradient(180deg, rgba(31,209,217,.75) 0 2px, transparent 2px 48px);
+  -webkit-mask: linear-gradient(180deg, transparent, #000 45%); mask: linear-gradient(180deg, transparent, #000 45%); }
+#vi-sky .vi-palm { position: absolute; bottom: -2%; height: 74vh; color: #12041c; opacity: .92; filter: drop-shadow(0 0 14px rgba(255,45,149,.35)); }
+#vi-sky .vi-palm.l { left: -3vw; transform: scaleX(-1) rotate(-4deg); }
+#vi-sky .vi-palm.r { right: 4vw; height: 62vh; transform: rotate(5deg); }
+#vi-sky .vi-palm.r2 { right: -4vw; height: 82vh; transform: rotate(-3deg); }
+html.theme-vi .logo h1 { color: #fff0f8; text-shadow: 0 0 10px rgba(255,45,149,.9), 0 0 30px rgba(255,45,149,.55), 0 0 60px rgba(255,120,60,.35); }
+html.theme-vi .logo h1::after { background: linear-gradient(90deg, #ff2d95, #ff9a3c 60%, transparent) !important; }
+html.theme-vi .logo p { color: #6fe7ee; text-shadow: 0 0 8px rgba(31,209,217,.6); }
+html.theme-vi .mainnav button:hover, html.theme-vi .mainnav button.on { color: #fff; text-shadow: 0 0 12px #ff2d95; }
+html.theme-vi .news-card { border-color: rgba(255,45,149,.6); box-shadow: 0 0 30px rgba(255,45,149,.25); }
+html.theme-vi #loading .ls-vig { background: radial-gradient(ellipse at 50% 40%, rgba(255,45,149,.08), rgba(20,4,30,.75) 75%); }
+html.theme-vi #loading .ls-bar i { background: linear-gradient(90deg, transparent, #ff2d95, #6fe7ee); box-shadow: 0 0 14px #ff2d95; }
+/* the event card under the season card */
+.vi-card { top: 232px; width: 270px; font: inherit; color: inherit; border-color: rgba(255,45,149,.65) !important; background: linear-gradient(135deg, #1d0626, #0a0410) !important; box-shadow: 0 0 26px rgba(255,45,149,.3) !important; }
+.vi-card .vi-c { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.vi-card .nc-txt { background: none; padding: 0; flex: 1; }
+.vi-card span { color: #6fe7ee; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.vi-card b { display: block; font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: .05em; color: #fff0f8; text-shadow: 0 0 10px rgba(255,45,149,.7); }
+.vi-card small { font-size: 11px; color: #e8c8de; } .vi-card .vi-got { color: #ffc04d; }
+.vi-card .vi-bars { display: flex; flex-direction: column; gap: 3px; margin: 3px 0 4px; }
+.vi-card .vi-bars i { display: block; height: 4px; background: linear-gradient(90deg, #ff2d95, #ff9a3c); box-shadow: 0 0 8px rgba(255,45,149,.7); min-width: 2px; }
+.vi-badge { vertical-align: middle; flex: none; filter: drop-shadow(0 0 6px rgba(255,45,149,.55)); }
+.profile .pn .vi-badge { margin-left: 2px; }
+/* the event panel */
+.vi-head { display: flex; gap: 18px; align-items: flex-start; }
+.vi-head small { color: #6fe7ee; letter-spacing: .14em; text-transform: uppercase; font-size: 12px; }
+.vi-head h3 { margin: 2px 0 6px; font-family: var(--display); font-weight: 400; font-size: 40px; letter-spacing: .05em; color: #fff0f8; text-shadow: 0 0 12px rgba(255,45,149,.75); }
+.vi-head p { margin: 0 0 8px; color: #d8cfe0; line-height: 1.45; }
+.vi-goals h4 { font-family: var(--cond); letter-spacing: .16em; text-transform: uppercase; color: var(--bone); margin: 16px 0 8px; }
+.vi-row { display: grid; grid-template-columns: 190px 1fr 70px; gap: 12px; align-items: center; margin: 6px 0; font-size: 14px; }
+.vi-row .bar { height: 8px; background: rgba(255,255,255,.08); } .vi-row .bar div { height: 100%; background: linear-gradient(90deg, #ff2d95, #ff9a3c); box-shadow: 0 0 10px rgba(255,45,149,.6); }
+.vi-row b { text-align: right; color: #fff0f8; }
+.vi-done { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 10px 14px; border: 1px solid rgba(255,192,77,.5); background: rgba(255,192,77,.08); }
+.vi-done b { color: #ffc04d; font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: .05em; } .vi-done span { color: var(--dim); margin-left: auto; }
+.vi-sum { display: flex; align-items: center; gap: 12px; } .vi-sum b { color: #ff7ac0; } .vi-sum span { display: block; color: #d8cfe0; font-size: 13px; }
+@media (max-width: 760px) { .vi-head { flex-direction: column; } .vi-row { grid-template-columns: 1fr; } }
