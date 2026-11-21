@@ -51,7 +51,10 @@ function makePage() {
 }
 function makeKey() {
   const g = new THREE.Group(), mat = std(0x8a5a2e, { metalness: 0.7, roughness: 0.45 });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.018, 8, 20), mat); ring.position.y = 0.24; g.add(ring);
+  // a U-shaped bow like Granny 1's padlock key (1.6.0: it was a full ring), closed by a short crossbar on the shaft
+  const bow = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.017, 8, 16, Math.PI), mat); bow.position.y = 0.2; g.add(bow);
+  for (const sx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.035, 8), mat); leg.position.set(sx * 0.06, 0.183, 0); g.add(leg); }
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.022, 0.024), mat); bar.position.y = 0.166; g.add(bar);
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.17, 8), mat); shaft.position.y = 0.09; g.add(shaft);
   for (const [y, w] of [[0.03, 0.06], [0.07, 0.045]]) { const t = new THREE.Mesh(new THREE.BoxGeometry(w, 0.022, 0.012), mat); t.position.set(w / 2, y, 0); g.add(t); }
   return g;

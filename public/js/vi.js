@@ -9,7 +9,8 @@ export const VI = {
   from: Date.UTC(2026, 10, 20),       // 20 Nov 2026
   until: Date.UTC(2026, 11, 1),       // ends at the start of 1 Dec 2026 (UTC): all GTA VI things go with it (1.5.3)
   goals: { esc: 25, kills: 60 },      // escapes (as a survivor) and kills (as a killer), inside the window, not on Easy
-  passPrice: 50000,                   // 1.5.3: the GTA VI Pass: everything GTA VI at once (item, badge + title, both GTA VI collectables)
+  passPrice: 50000,
+  themePrice: 20000,                  // 1.6.0: the GTA VI theme on its own (also in the pass): kept after the event                   // 1.5.3: the GTA VI Pass: everything GTA VI at once (item, badge + title, both GTA VI collectables)
 };
 export const viOpen = () => { const t = nowMs(); return t >= VI.from && t < VI.until; };
 export const viDaysLeft = () => Math.max(0, Math.ceil((VI.until - nowMs()) / 864e5));
@@ -35,11 +36,15 @@ export function viBadge(size = 40, title = 'VI badge: Vice Nights 2026') {
   return `<span class="vi-badge" role="img" aria-label="${title}" title="${title}" style="height:${size}px;width:${Math.round(size * 1.31)}px"></span>`;
 }
 
-// the theme: html.theme-vi while the event runs (unless switched off in Settings), plus a sky layer in the menu
-export function applyViTheme(settings) {
-  const on = viOpen() && settings.viTheme !== false;
+// the theme: html.theme-vi while the event runs, or for good once it's owned (1.6.0: bought or from the pass), unless switched
+// off in Settings; plus a sky layer in the menu
+export const ownsViTheme = profile => !!(profile && ((profile.themes && profile.themes.vi) || (profile.vi && profile.vi.pass)));
+export const viThemeAvail = profile => viOpen() || ownsViTheme(profile);
+export function applyViTheme(settings, profile) {
+  const on = viThemeAvail(profile) && settings.viTheme !== false;
   document.documentElement.classList.toggle('theme-vi', on);
   const menu = document.getElementById('menu');
+  if (!on) { const sk = document.getElementById('vi-sky'); if (sk) sk.remove(); }
   if (on && menu && !document.getElementById('vi-sky')) {
     const sky = document.createElement('div'); sky.id = 'vi-sky';
     sky.innerHTML = `<div class="vi-glow"></div><div class="vi-sun"></div><div class="vi-grid"></div>${palm('vi-palm r')}${palm('vi-palm r2')}`;

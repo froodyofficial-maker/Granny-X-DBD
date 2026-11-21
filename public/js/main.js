@@ -19,10 +19,10 @@ import { loadScene, sceneReady } from './sceneGlb.js';
 import { loadGranny, grannyReady, onGrannyReady, loadGrandpa, loadSpiderMom, loadSlendrina, slendrinaReady, grandpaReady, loadAngeline, angelineReady, loadNosferatu, nosferatuReady, loadChild, childReady, loadSkinModel, skinModelReady, loadFather } from './grannyGlb.js';
 import { SnapWriter, SnapReader, Track } from './snap.js';
 import { MAP_NAMES, BIG_MAPS, REGULAR_MAPS } from './themes.js';
-import { icon, POWER_ICON } from './icons.js';
+import { icon, POWER_ICON, levelEmblem } from './icons.js';
 import { sound, loadClip } from './audio.js';
 import { showTrailer, trailerPlaying } from './trailer.js';
-import { showLoading, loadingUp, sceneShownAt, holdLoading } from './loadscreen.js';
+import { showLoading, loadingUp, sceneShownAt, holdLoading, setLoadingCast } from './loadscreen.js';
 import { initTouch, MOBILE, mobileText, openTouchEditor } from './touch.js';
 import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
@@ -34,7 +34,7 @@ import { readCode, makeGift } from './codes.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
-import { VI, viOpen, viDaysLeft, viOf, viHas, viRecord, viBadge, applyViTheme } from './vi.js';
+import { VI, viOpen, viDaysLeft, viOf, viHas, viRecord, viBadge, applyViTheme, ownsViTheme, viThemeAvail } from './vi.js';
 import { addColl, collShelfHTML, showcaseHTML, bindShelf, boardEntry, publishMe, unpublishMe, openBoard, closeBoard } from './collect.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
@@ -106,6 +106,8 @@ function detectQuality() {
 
 const settings = Object.assign({ name: 'Player' + Math.floor(Math.random() * 900 + 100), sens: 1, fov: 75, vol: 0.8, music: 0.7, invert: false, net: 'auto', dynres: true, showFps: false }, store.get('settings', {}));
 if (!QUALITY[settings.quality]) settings.quality = detectQuality();
+// 1.6.0: a phone on low / very low never uses the photo scans embedded in the offline file: free that memory
+if (MOBILE && (settings.quality === 'low' || settings.quality === 'potato')) { const t = document.getElementById('nb-tex'); if (t) t.remove(); }
 const profile = Object.assign({
   survivor: { char: 'mara', perks: [...DEFAULT_SURV_PERKS] },
   killer: { char: 'granny', perks: [...DEFAULT_KILLER_PERKS] },
@@ -162,7 +164,7 @@ function makeRenderer() {
   if (renderer) { renderer.dispose(); renderer.domElement.remove(); }
   const q = QUALITY[settings.quality];
   const lite = settings.quality === 'potato' || settings.quality === 'low';
-  renderer = new THREE.WebGLRenderer({ antialias: !lite, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ antialias: settings.quality !== 'potato', powerPreference: 'high-performance' }); // (1.6.0: low too: it looked jagged)
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.35 * (settings.brightness || 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -180,6 +182,17 @@ function makeRenderer() {
 // reflection maps the game draws itself are rebuilt here. If it never comes back the screen would stay
 // black, so the game reloads.
 let ctxLostAt = 0, ctxT = 0;
+// 1.6.0: which graphics chip WebGL runs on (shown in Settings); software graphics in the Windows app = Safe Graphics mode,
+// which used to stick forever: say so, and offer to go back to the graphics card
+function gpuName() { try { const gl = renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); return String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch { return ''; } }
+function checkSoftware() {
+  const n = gpuName(); if (!/swiftshader|llvmpipe|software|basic render/i.test(n) || !(window.gdbdDisk && window.gdbdDisk.useGpu) || document.getElementById('safe-gfx')) return;
+  const d = document.createElement('div'); d.id = 'safe-gfx';
+  d.innerHTML = '<b>Safe Graphics mode</b><span>The game is drawing with software graphics after an earlier graphics-driver crash, so it runs slowly.</span><button class="btn small primary">Use my graphics card</button><button class="btn small" data-x>Not now</button>';
+  d.querySelector('.primary').onclick = () => { try { window.gdbdDisk.useGpu(); } catch {} };
+  d.querySelector('[data-x]').onclick = () => d.remove();
+  document.body.appendChild(d);
+}
 function watchContext(canvas) {
   canvas.addEventListener('webglcontextlost', () => {
     ctxLostAt = Date.now(); console.warn('graphics context lost');
@@ -194,6 +207,7 @@ function watchContext(canvas) {
   });
 }
 makeRenderer();
+setTimeout(checkSoftware, 4000);
 
 function toast(msg, ms = 3500) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -282,7 +296,7 @@ function renderShowcase() {
   const lv = levelOf((profile.prog || {}).xp || 0), rk = rankOf(((profile.prog || {}).ranks || {})[menuMode === 'killer' ? 'killer' : 'survivor'] || 0);
   const tl = titleOf();
   $('profile').style.setProperty('--acc', profile.accent || '#efe6d6');
-  $('profile').innerHTML = `<div class="pn">${avatarHTML(36)}<span class="pname">${esc(settings.name)}</span>${viHas(profile) ? viBadge(22) : ''}</div>${tl ? `<div class="ptitle">${esc(tl)}</div>` : ''}<div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
+  $('profile').innerHTML = `<div class="pn">${avatarHTML(36)}<span class="pname">${esc(settings.name)}</span>${viHas(profile) ? viBadge(22) : ''}</div>${tl ? `<div class="ptitle">${esc(tl)}</div>` : ''}<div class="pe">${icon('ember')}${Math.round(st.embers).toLocaleString()}</div><div class="ps">${levelEmblem(lv.lvl, 20, { label: false })} Level ${lv.lvl} · ${rankBadge(rk, 16)} ${esc(rk.name)} ${menuMode === 'killer' ? 'killer' : 'survivor'}</div><div class="ps">${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills</div>`;
 }
 
 // ---------- side panel ----------
@@ -393,15 +407,29 @@ const hasViPass = () => !!viOf(profile).pass;
 function viPassHTML() {
   const own = hasViPass();
   return `<div class="vi-pass ${own ? 'own' : ''}">${viBadge(64)}<div class="vp-b"><small>GTA VI Pass · until 30 November</small><b>Everything GTA VI</b>
-    <ul><li><span class="gtaps-art"></span> GTA VI (PlayStation) item</li><li>${viBadge(18)} VI badge + Vice Legend title</li><li>★ GTA VI Monster Can (collectable)</li><li>★ GTA VI Game Case (collectable)</li></ul></div>
+    <ul><li><span class="gtaps-art"></span> GTA VI (PlayStation) item</li><li>${viBadge(18)} VI badge + Vice Legend title</li><li>★ GTA VI Monster Can (collectable)</li><li>★ GTA VI Game Case (collectable)</li><li>◆ GTA VI theme, yours to keep</li></ul></div>
     <div class="vp-buy">${own ? '<span class="of-p eq">Owned</span>' : `<span class="ch-price">${price(VI.passPrice)}</span><button class="btn primary" data-vipass>Buy the pass</button>`}</div></div>`;
 }
+// 1.6.0: the GTA VI theme on its own: neon menus, the GTA-style loading screens (one per character) and the theme music; bought
+// during the event (or in the pass), then it can be switched on any time, for good
+function viThemeHTML() {
+  const own = ownsViTheme(profile);
+  if (!own && !viOpen()) return '';
+  return `<div class="ad-card vitheme-card legendary"><span class="vitheme-art"></span><div class="ad-b"><small>Theme · ${own ? 'yours for good' : 'until 30 November'}</small><b>GTA VI Theme</b><p>Neon sunset menus, GTA-style loading screens with art of every character, and the GTA VI menu music. Keep it after the event and switch it on whenever you like. Included in the GTA VI Pass.</p></div>
+    <div class="ad-buy">${own ? `<button class="btn ${settings.viTheme !== false ? '' : 'primary'}" data-vithemeon>${settings.viTheme !== false ? 'Turn off' : 'Turn on'}</button><span class="of-p eq">Owned</span>` : `<span class="ch-price">${price(VI.themePrice)}</span><button class="btn primary" data-vithemebuy>Buy</button>`}</div></div>`;
+}
 function bindViPass(root) {
+  root.querySelectorAll('[data-vithemebuy]').forEach(b => b.onclick = () => {
+    if (ownsViTheme(profile) || !viOpen() || !spend(VI.themePrice, 'GTA VI Theme')) return;
+    (profile.themes ||= {}).vi = true; settings.viTheme = true; saveSettings(); saveProfile(); sound.play('escaped'); applyViTheme(settings, profile); renderThemeRows();
+    toast('The GTA VI theme is yours for good. Switch it in Settings.', 5000); try { renderStore(); } catch {}
+  });
+  root.querySelectorAll('[data-vithemeon]').forEach(b => b.onclick = () => { settings.viTheme = settings.viTheme === false; saveSettings(); applyViTheme(settings, profile); renderThemeRows(); sound.play('click'); try { renderStore(); } catch {} });
   root.querySelectorAll('[data-vipass]').forEach(b => b.onclick = () => {
     if (hasViPass() || !viOpen()) return;
     if (!spend(VI.passPrice, 'GTA VI Pass')) return;
     const v = viOf(profile), now = Date.now();
-    v.pass = now; v.got ||= nowMs(); profile.gtaps = true; profile.survivor.item = 'gtaps';
+    v.pass = now; v.got ||= nowMs(); profile.gtaps = true; profile.survivor.item = 'gtaps'; (profile.themes ||= {}).vi = true;
     addColl(profile, 'monster'); addColl(profile, 'gtacase');
     saveProfile(); publishMe(profile, myEntry, true); sound.play('escaped');
     toast('GTA VI Pass: the PlayStation item, the VI badge and two GTA VI collectables are yours!', 6000);
@@ -409,7 +437,8 @@ function bindViPass(root) {
   });
 }
 $('vi-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-vi', 'Vice Nights', true); });
-applyViTheme(settings); renderViCard();
+if (profile.vi && profile.vi.pass) (profile.themes ||= {}).vi = true; // (1.5.3 pass owners: the pass now includes the theme)
+applyViTheme(settings, profile); renderViCard();
 $('season-card').addEventListener('click', () => { sound.init(); sound.play('click'); openPanel('p-pass', 'Progress', true); });
 for (const b of $('mainnav').children) {
   b.addEventListener('mouseenter', () => { sound.init(); sound.play('hover'); if (b.dataset.scene) setScene(b.dataset.scene); });
@@ -421,7 +450,7 @@ for (const b of $('mainnav').children) {
 }
 document.addEventListener('pointerdown', () => sound.init(), { once: true });
 // 1.5.1: menu music. Plays in the menus, the lobby and on the results screen; fades out when a match begins
-setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown); sound.mapMusic(!!g && !g.endShown && session.map === 'granny'); }, 500); // (1.5.3: Granny's House has its own music)
+setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown, document.documentElement.classList.contains('theme-vi') && settings.viMusic !== false ? 'vitheme' : 'menu'); sound.mapMusic(!!g && !g.endShown && session.map === 'granny'); }, 500); // (1.5.3: Granny's House has its own music)
 document.addEventListener('keydown', () => sound.init(), { once: true });
 
 function seg(id, onChange) {
@@ -450,7 +479,7 @@ function levelHTML(role, char) {
   const C = charOf(profile, char), L = charLv(C.xp), free = freePoints(profile, char), cost = CHAR_LEVEL.train(L.lvl);
   const rows = (STATS[role] || []).map(d => { const v = C.st[d.id] | 0;
     return `<div class="st-row"><span class="st-n" title="+${(d.per * 100).toFixed(d.per * 100 % 1 ? 1 : 0)}${esc(d.unit)} per point">${esc(d.name)}</span><span class="st-pips">${Array.from({ length: d.max }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span><span class="st-v" title="+${(d.per * 100).toFixed(d.per * 100 % 1 ? 1 : 0)}${esc(d.unit)} per point">+${(v * d.per * 100).toFixed(v * d.per * 100 % 1 ? 1 : 0)}% ${esc(d.short)}</span><button class="st-b" data-stat="${d.id}" data-d="-1" ${v ? '' : 'disabled'}>−</button><button class="st-b" data-stat="${d.id}" data-d="1" ${free > 0 && v < d.max ? '' : 'disabled'}>+</button></div>`; }).join('');
-  return `<div class="lv-box"><div class="lv-top"><div class="lv-badge"><b>${L.lvl}</b><small>Level</small></div><div class="lv-mid"><div class="bar"><div style="width:${L.max ? 100 : (L.into / L.need * 100).toFixed(1)}%"></div></div><span>${L.max ? 'Max level' : `${L.into.toLocaleString()} / ${L.need.toLocaleString()} XP to level ${L.lvl + 1}`} · <b class="${free ? 'pts' : ''}">${free} point${free === 1 ? '' : 's'} to spend</b></span></div>
+  return `<div class="lv-box"><div class="lv-top"><div class="lv-badge em">${levelEmblem(L.lvl, 88, { max: L.max })}</div><div class="lv-mid"><div class="bar"><div style="width:${L.max ? 100 : (L.into / L.need * 100).toFixed(1)}%"></div></div><span>${L.max ? 'Max level' : `${L.into.toLocaleString()} / ${L.need.toLocaleString()} XP to level ${L.lvl + 1}`} · <b class="${free ? 'pts' : ''}">${free} point${free === 1 ? '' : 's'} to spend</b></span></div>
     <div class="lv-acts">${L.max ? '' : `<button class="btn small" data-train>Train +1 level · ${price(cost)}</button>`}${(profile.lvTokens | 0) && !L.max ? `<button class="btn small primary" data-token>Use level token (${profile.lvTokens})</button>` : ''}${statsSpent(C) ? '<button class="btn small" data-respec>Reset points</button>' : ''}</div></div>
     <div class="st-grid">${rows}</div></div>`;
 }
@@ -600,12 +629,12 @@ function renderLoadout(container, role, compact, onChange) {
 const QHINT = {
   potato: (MOBILE ? 'Very Low: for older phones and tablets.' : 'Very Low: for older laptops and integrated graphics.') + ' No shadows or effects, reduced draw distance.',
   low: 'Low: no shadows or post-processing, light foliage. Good for most ' + (MOBILE ? 'phones and tablets' : 'laptops') + '.',
-  medium: 'Medium: shadows, bloom and color grading.',
-  high: 'High: sharp shadows, dense grass and full effects. Needs a dedicated GPU.',
+  medium: 'Medium: shadows, bloom, color grading and photo-scanned textures.',
+  high: 'High: sharper shadows, denser grass, 4x anti-aliasing and light rays. Needs a dedicated GPU.',
 };
 function renderSettings() {
   $('set-name').value = settings.name;
-  setSeg('set-quality', settings.quality); $('set-quality-hint').textContent = QHINT[settings.quality];
+  setSeg('set-quality', settings.quality); $('set-quality-hint').textContent = QHINT[settings.quality] + (gpuName() ? ' · Graphics: ' + gpuName().replace(/^ANGLE \((.*)\)$/, '$1').replace(/Direct3D.*$/, '').slice(0, 70) : '');
   setSeg('set-style', settings.style === 'classic' ? 'classic' : 'realistic'); $('set-style-hint').textContent = SHINT[settings.style === 'classic' ? 'classic' : 'realistic'];
   $('set-dynres').checked = settings.dynres !== false; $('set-fps').checked = !!settings.showFps;
   $('set-bright').value = settings.brightness || 1; $('set-bright-v').textContent = Math.round((settings.brightness || 1) * 100) + '%';
@@ -628,8 +657,10 @@ seg('set-style', v => { settings.style = v; saveSettings(); $('set-style-hint').
 seg('set-quality', v => { settings.quality = v; saveSettings(); $('set-quality-hint').textContent = QHINT[v]; stopBG(); makeRenderer(); startBG(); });
 $('set-dynres').addEventListener('change', e => { settings.dynres = e.target.checked; saveSettings(); });
 $('set-fps').addEventListener('change', e => { settings.showFps = e.target.checked; saveSettings(); });
-$('set-vi-row').classList.toggle('hidden', !viOpen()); $('set-vi').checked = settings.viTheme !== false;
-$('set-vi').addEventListener('change', e => { settings.viTheme = e.target.checked; saveSettings(); applyViTheme(settings); });
+function renderThemeRows() { const av = viThemeAvail(profile); $('set-vi-row').classList.toggle('hidden', !av); $('set-vimus-row').classList.toggle('hidden', !av); $('set-vi').checked = settings.viTheme !== false; $('set-vimus').checked = settings.viMusic !== false; }
+renderThemeRows();
+$('set-vi').addEventListener('change', e => { settings.viTheme = e.target.checked; saveSettings(); applyViTheme(settings, profile); });
+$('set-vimus').addEventListener('change', e => { settings.viMusic = e.target.checked; saveSettings(); });
 $('set-lb').checked = settings.lb !== false;
 $('set-lb').addEventListener('change', e => { settings.lb = e.target.checked; saveSettings(); if (settings.lb) publishMe(profile, myEntry, true); else unpublishMe(profile); });
 $('set-bright').addEventListener('input', e => { settings.brightness = +e.target.value; saveSettings(); $('set-bright-v').textContent = Math.round(settings.brightness * 100) + '%'; if (renderer) renderer.toneMappingExposure = 1.35 * settings.brightness; if (session && session.game && session.game.W) session.game.W.base = null; });
@@ -810,8 +841,8 @@ function addonsHTML() {
   const teddy = teddyOut() ? `<div class="ad-card teddy-card veryrare"><span class="teddy-art big"></span><div class="ad-b"><small>Season 2 item · ${esc(SEASON.name)}</small><b>Teddy</b><p>${esc(T.desc)}</p><em class="hint">Yours until the end of this season.</em></div>
       <div class="ad-buy">${tOwn ? `<button class="btn ${myItem() === 'teddy' ? '' : 'primary'}" data-teddyeq>${myItem() === 'teddy' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(T.price)}</span><button class="btn primary" data-teddybuy>Buy</button>`}</div></div>` : '';
   const G = ITEMS.gtaps, gOwn = ownsPS();
-  const ps = !viOpen() ? '' : viPassHTML() + `<div class="ad-card gtaps-card legendary"><span class="gtaps-art big"></span><div class="ad-b"><small>Vice Nights · survivor item</small><b>${esc(G.name)}</b><p>${esc(G.desc)}</p><em class="hint">Yours until the event ends (30 November). Carry it from the survivor Loadout (Item). Also in the GTA VI Pass.</em></div>
-      <div class="ad-buy">${gOwn ? `<button class="btn ${myItem() === 'gtaps' ? '' : 'primary'}" data-pseq>${myItem() === 'gtaps' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(G.price)}</span><button class="btn primary" data-psbuy>Buy</button>`}</div></div>`;
+  const ps = viThemeHTML() + (!viOpen() ? '' : viPassHTML() + `<div class="ad-card gtaps-card legendary"><span class="gtaps-art big"></span><div class="ad-b"><small>Vice Nights · survivor item</small><b>${esc(G.name)}</b><p>${esc(G.desc)}</p><em class="hint">Yours until the event ends (30 November). Carry it from the survivor Loadout (Item). Also in the GTA VI Pass.</em></div>
+      <div class="ad-buy">${gOwn ? `<button class="btn ${myItem() === 'gtaps' ? '' : 'primary'}" data-pseq>${myItem() === 'gtaps' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(G.price)}</span><button class="btn primary" data-psbuy>Buy</button>`}</div></div>`);
   return `${ps}${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
     <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
 }
@@ -1346,7 +1377,10 @@ class ClientSession {
   dispose() { this.game && this.game.dispose(); }
 }
 
+// 1.6.0: the GTA-style loading screen shows your character first, then the match's killers, then the rest
+function castOf(roster, myId) { const me = roster.find(r => r.id === myId) || roster.find(r => !r.bot); return [...new Set([me && me.char, ...roster.filter(r => r.role === 'killer').map(r => r.char), ...roster.map(r => r.char)].filter(Boolean))]; }
 async function startHostMatch(roster, opts) {
+  setLoadingCast(castOf(roster, roster.some(r => r.id === 'me') ? 'me' : 'host'));
   loading(true, 'Entering the fog…');
   await nextFrame();
   // Chucky can appear in any match (picked, random bot killer, or an Infection turn)
@@ -1649,6 +1683,7 @@ setInterval(() => {
 }, 2000);
 
 async function startClientMatch(m) {
+  setLoadingCast(castOf(m.roster || [], lobby && lobby.myId));
   loading(true, 'Entering the fog…');
   await nextFrame();
   await waitForModels({ map: m.map, killers: (m.roster || []).filter(r => r.role === 'killer').map(r => r.char), kid: (m.roster || []).some(r => r.kid === 'child' || r.pet === 'child'), spider: (m.roster || []).some(r => r.char === 'spiderman'), glbs: [...(m.roster || []).map(r => r.role === 'killer' && skinOf(r.char, r.skin).glb).filter(Boolean), ...(MODES[m.mode] && MODES[m.mode].map === 'city' ? ['victim_car'] : []), ...((m.roster || []).some(r => r.char === 'father') ? ['slenderman'] : []), ...((m.roster || []).some(r => r.item === 'teddy') ? ['teddy'] : [])], granny: true, chucky: (m.roster || []).some(r => r.char === 'chucky') || m.mode === 'infection' });
@@ -1813,7 +1848,7 @@ function renderPass() {
   };
   const cols = SEASON.tiers.map(t => `<div class="sp-col ${tier >= t.t ? 'reached' : ''}"><small>Tier ${t.t}</small>${cell(t, 'free')}${cell(t, 'prem')}</div>`).join('');
   $('pass-body').innerHTML = `
-    <div class="pr-top"><div class="lv-ring"><b>${lv.lvl}</b><small>Level</small></div><div class="lv-info"><b>${esc(settings.name)}</b><div class="bar"><div style="width:${(lv.into / lv.need * 100).toFixed(1)}%"></div></div><span>${lv.into.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.lvl + 1}${profile.lvTokens ? ` · ${profile.lvTokens} level token${profile.lvTokens > 1 ? 's' : ''} (use them in Loadout)` : ''}</span>${Object.keys(P.badges || {}).length ? `<div class="badges">${Object.keys(P.badges).map(b => `<i>${/-final$/.test(b) ? 'Season ' + b.replace(/^s|-.*$/g, '') + ' finale' : 'Season ' + b.replace(/^s|-.*$/g, '')}</i>`).join('')}</div>` : ''}</div></div>
+    <div class="pr-top"><div class="lv-ring em">${levelEmblem(lv.lvl, 104)}</div><div class="lv-info"><b>${esc(settings.name)}</b><div class="bar"><div style="width:${(lv.into / lv.need * 100).toFixed(1)}%"></div></div><span>${lv.into.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.lvl + 1}${profile.lvTokens ? ` · ${profile.lvTokens} level token${profile.lvTokens > 1 ? 's' : ''} (use them in Loadout)` : ''}</span>${Object.keys(P.badges || {}).length ? `<div class="badges">${Object.keys(P.badges).map(b => `<i>${/-final$/.test(b) ? 'Season ' + b.replace(/^s|-.*$/g, '') + ' finale' : 'Season ' + b.replace(/^s|-.*$/g, '')}</i>`).join('')}</div>` : ''}</div></div>
     <div class="rk-row">${rankCard('survivor')}${rankCard('killer')}</div>
     <p class="hint">Ranks go up with good matches (escaping, a high score, or killing most of the survivors) and down with bad ones: Ash, Bronze, Silver, Gold and Iridescent, IV to I. When a season ends you get Embers for your ranks, and they drop one tier.</p>
     <div class="sp-head"><div><b>${esc(SEASON.name)}</b><span>${left} day${left === 1 ? '' : 's'} left · tier ${tier} / ${SEASON.tiers.length}</span></div><div class="bar"><div style="width:${(tier >= SEASON.tiers.length ? 100 : (P.season.xp % SEASON.tierXp) / SEASON.tierXp * 100).toFixed(1)}%"></div></div>
@@ -1873,7 +1908,7 @@ function renderProfile() {
   const chars = [...PLAY_K, ...PLAY_S];
   const av = KILLERS[profile.avatar] || SURVIVORS[profile.avatar] ? profile.avatar : profile.survivor.char;
   const titles = titlesList().map(t => `<button class="pf-title ${(profile.title || '') === t.id ? 'on' : ''} ${t.ok ? '' : 'locked'}" ${t.ok ? `data-title="${esc(t.id)}"` : 'disabled'} title="${t.ok ? '' : 'Unlock: ' + esc(t.need)}">${esc(t.label)}${t.ok ? '' : `<small>${esc(t.need)}</small>`}</button>`).join('');
-  const levels = chars.map(c => `<span><b>${esc(charName0(c).replace(/^The /, ''))}</b> ${charLv(charOf(profile, c).xp).lvl}</span>`).join('');
+  const levels = chars.map(c => { const L = charLv(charOf(profile, c).xp); return `<span>${levelEmblem(L.lvl, 30, { label: false, max: L.max })}<b>${esc(charName0(c).replace(/^The /, ''))}</b></span>`; }).join('');
   $('profile-body').innerHTML = `
     <div class="pf-top" style="--acc:${profile.accent || '#efe6d6'}">${avatarHTML(84)}<div><b class="pf-name">${esc(settings.name)}${viHas(profile) ? ' ' + viBadge(28) : ''}</b><span class="pf-tl">${esc(titleOf() || 'No title')}</span>${showcaseHTML(profile)}<span class="hint">Level ${lv.lvl} · ${st.matches} matches · ${st.escapes} escapes · ${st.kills} kills · ${price(st.embers)}</span></div></div>
     <div class="field"><label>Name <span class="hint-inline">(what other players see online)</span></label><input id="pf-name" maxlength="16" value="${esc(settings.name)}" autocomplete="off" spellcheck="false"></div>

@@ -1,7 +1,7 @@
 // Photo-scanned surfaces for the realistic look: real CC0 material scans (Poly Haven) with colour,
 // relief (normal) and roughness maps, stored as GPU-compressed KTX2. They stream in on the menu and
-// replace the painted textures as soon as they arrive. Classic mode, low/potato quality and the
-// offline single-file build never load them.
+// replace the painted textures as soon as they arrive. Classic mode and low/potato quality never load them; the offline
+// single file (exe / APK) carries them embedded (1.6.0).
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { GFX, realistic } from './gfx.js';
@@ -35,10 +35,26 @@ const dev = () => !!document.querySelector('script[type=importmap]');
 export const photoOn = () => !!loader && realistic();
 
 // start streaming every scan (called once the renderer exists, realistic look, medium/high quality)
+// 1.6.0: the offline file (exe / APK) carries the scans and the decoder in #nb-tex: their URLs are served from memory
+let embedded;
+function texManager() {
+  if (embedded === undefined) { embedded = null; const el = document.getElementById('nb-tex'); if (el && el.textContent.length > 10) try { embedded = JSON.parse(el.textContent); el.textContent = ''; } catch (e) { console.warn('nb-tex', e); } }
+  if (!embedded) return null;
+  const urls = new Map(), M = new THREE.LoadingManager();
+  M.setURLModifier(u => {
+    const i = u.lastIndexOf('tex/'), j = u.lastIndexOf('basis/'), key = j >= 0 && u.endsWith('.js') || u.endsWith('.wasm') ? u.slice(j) : i >= 0 ? u.slice(i) : null;
+    if (!key || !embedded[key]) return u;
+    if (!urls.has(key)) { const bin = atob(embedded[key]), a = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) a[k] = bin.charCodeAt(k); urls.set(key, URL.createObjectURL(new Blob([a], { type: key.endsWith('.wasm') ? 'application/wasm' : key.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' }))); delete embedded[key]; }
+    return urls.get(key);
+  });
+  return M;
+}
 export function initPhoto(renderer, quality) {
-  if (loader || !realistic() || quality === 'potato' || quality === 'low' || location.protocol === 'file:') return;
+  if (loader || !realistic() || quality === 'potato' || quality === 'low') return;
+  const man = location.protocol === 'file:' ? texManager() : null;
+  if (location.protocol === 'file:' && !man) return; // (an offline file without the scans)
   try {
-    loader = new KTX2Loader().setTranscoderPath((dev() ? '' : 'public/') + 'vendor/three/addons/libs/basis/').detectSupport(renderer);
+    loader = new KTX2Loader(man || undefined).setTranscoderPath((dev() ? '' : 'public/') + 'vendor/three/addons/libs/basis/').detectSupport(renderer);
   } catch (e) { console.warn('photo textures unavailable', e); loader = null; return; }
   // ground first (largest on screen), then walls and props
   for (const n of [...new Set(Object.values(GROUND).flat()), ...Object.keys(SETS)]) load(n);
@@ -64,6 +80,7 @@ function load(n) {
   return p;
 }
 export const photoSet = n => done.get(n) || null;
+if (typeof window !== 'undefined') window.__photoDone = () => [...done.keys()]; // (tests: which scans have arrived)
 export const whenSet = n => load(n);
 
 function rep(t, r, turn) { if (!t) return null; const k = t.clone(); k.repeat.set(r[0], r[1]); if (turn) k.rotation = Math.PI / 2; return k; }

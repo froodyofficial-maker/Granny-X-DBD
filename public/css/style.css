@@ -1261,12 +1261,22 @@ html.theme-vi .logo-imgs .x-mark { color: #ff2d95; }
 #loading .vl { display: none; }
 #loading.vi-ls .vl { display: block; position: absolute; inset: 0; z-index: 20; overflow: hidden; background: #12041c; }
 #loading.vi-ls > :not(.vl) { visibility: hidden; }
-.vl-art i { position: absolute; inset: -1.5%; background-size: cover; background-position: center; opacity: 0; animation: vlPan 24s linear infinite; will-change: opacity, transform; }
-.vl-art .a1 { background-image: url(../img/ls/granny.jpg); animation-delay: 0s; }
-.vl-art .a2 { background-image: url(../img/ls/grandpa.jpg); animation-delay: 6s; }
-.vl-art .a3 { background-image: url(../img/ls/slendrina.jpg); animation-delay: 12s; }
-.vl-art .a4 { background-image: url(../img/ls/nosferatu.jpg); animation-delay: 18s; }
-@keyframes vlPan { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 4% { opacity: 1; } 25% { opacity: 1; } 29% { opacity: 0; transform: scale(1.0) translateX(-.8%); } 100% { opacity: 0; transform: scale(1.0) translateX(-.8%); } }
+.vl-art i { position: absolute; inset: -1.5%; background-size: cover; background-position: center; opacity: 0; animation-timing-function: linear; animation-iteration-count: infinite; animation-fill-mode: backwards; will-change: opacity, transform; }
+.vl-art .ls-granny { background-image: url(../img/ls/granny.jpg); }
+.vl-art .ls-grandpa { background-image: url(../img/ls/grandpa.jpg); }
+.vl-art .ls-slendrina { background-image: url(../img/ls/slendrina.jpg); }
+.vl-art .ls-angeline { background-image: url(../img/ls/angeline.jpg); }
+.vl-art .ls-nosferatu { background-image: url(../img/ls/nosferatu.jpg); }
+.vl-art .ls-father { background-image: url(../img/ls/father.jpg); }
+.vl-art .ls-mara { background-image: url(../img/ls/mara.jpg); }
+.vl-art .ls-eli { background-image: url(../img/ls/eli.jpg); }
+.vl-art .ls-june { background-image: url(../img/ls/june.jpg); }
+.vl-art .ls-tomas { background-image: url(../img/ls/tomas.jpg); }
+/* n pictures, 6 s each: each one is on screen for 1/n of the cycle (a single picture just drifts) */
+@keyframes vlPan1 { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 8% { opacity: 1; } 100% { opacity: 1; transform: scale(1.0) translateX(-.8%); } }
+@keyframes vlPan2 { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 8% { opacity: 1; } 50% { opacity: 1; } 58% { opacity: 0; transform: scale(1.0) translateX(-.8%); } 100% { opacity: 0; } }
+@keyframes vlPan3 { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 5% { opacity: 1; } 33% { opacity: 1; } 38% { opacity: 0; transform: scale(1.0) translateX(-.8%); } 100% { opacity: 0; } }
+@keyframes vlPan4 { 0% { opacity: 0; transform: scale(1.03) translateX(.8%); } 4% { opacity: 1; } 25% { opacity: 1; } 29% { opacity: 0; transform: scale(1.0) translateX(-.8%); } 100% { opacity: 0; } }
 .vl-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,2,18,.55) 0%, rgba(10,2,18,0) 22%, rgba(10,2,18,0) 70%, rgba(10,2,18,.85) 100%); }
 .vl-logos { position: absolute; left: 4vw; top: 4vh; display: flex; align-items: center; gap: 12px; }
 .vl-logos .lg-granny { display: block; height: clamp(36px, 5vw, 70px); aspect-ratio: 447 / 195; background: url(../img/granny-logo.png) center / contain no-repeat; filter: drop-shadow(0 0 10px rgba(255,45,149,.8)) drop-shadow(0 3px 0 #000); }
@@ -1278,3 +1288,56 @@ html.theme-vi .logo-imgs .x-mark { color: #ff2d95; }
 .vl-load { display: flex; align-items: center; gap: 12px; font-family: var(--display); font-size: clamp(16px, 1.8vw, 24px); letter-spacing: .12em; text-transform: uppercase; color: #fff; text-shadow: 0 2px 4px #000; white-space: nowrap; }
 .vl-spin { display: block; width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; border-right-color: #ff2d95; animation: vlSpin .9s linear infinite; }
 @keyframes vlSpin { to { transform: rotate(360deg); } }
+/* 1.6.0: no film-grain overlays (players found the game grainy) */
+.m-grain, #loading .ls-grain { display: none !important; animation: none !important; }
+.vitheme-art { flex: none; width: 112px; height: 63px; background: url(../img/ls/granny.jpg) center / cover; border: 1px solid rgba(255,45,149,.7); box-shadow: 0 0 14px rgba(255,45,149,.4); }
+
+/* =====================================================================================================================
+   1.6.0 UI revamp: solid glass panels (the menu no longer shows through), angled buttons, a richer Store (rarity glow,
+   lift on hover, price pills), the level emblems, calmer focus states. Theme colours still come from --red / --red2 / --gold.
+   ===================================================================================================================== */
+:root { --glass: linear-gradient(160deg, rgba(22,14,16,.97), rgba(9,6,8,.985)); --edge: rgba(255,255,255,.07); }
+.panel { background: var(--glass) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-left: 1px solid rgba(232,53,43,.35); box-shadow: -40px 0 90px rgba(0,0,0,.75); }
+.panel::before { content: ''; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--red2), transparent 70%); pointer-events: none; }
+.panel-head h2 { letter-spacing: .06em; }
+#menu.panel-open .logo, #menu.panel-open .mainnav { opacity: .18; filter: blur(2px); transition: opacity .25s, filter .25s; }
+/* buttons: angled corners, a lit top edge, a small lift */
+.btn { clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); transition: transform .12s, filter .12s, box-shadow .12s; box-shadow: inset 0 1px 0 var(--edge); }
+.btn:hover { transform: translateY(-1px); filter: brightness(1.12); }
+.btn.primary { background: linear-gradient(180deg, #d8322a 0%, #9a1a16 55%, #6a0e0c 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 6px 18px rgba(179,32,30,.3); }
+html.theme-vi .btn.primary { background: linear-gradient(180deg, #ff4fa8 0%, #d1207a 55%, #8a0f50 100%); border-color: #ff7ac0; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 6px 18px rgba(255,45,149,.35); }
+.btn:focus-visible, .mainnav button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* main menu: a sliding accent bar on hover */
+.mainnav button { position: relative; transition: color .15s, transform .15s; }
+.mainnav button::before { content: ''; position: absolute; left: -14px; top: 18%; bottom: 18%; width: 4px; background: var(--red2); transform: scaleY(0); transition: transform .18s; box-shadow: 0 0 12px var(--red2); }
+.mainnav button:hover { transform: translateX(6px); } .mainnav button:hover::before, .mainnav button.on::before { transform: scaleY(1); }
+/* the Store */
+#store { background: radial-gradient(ellipse 60% 70% at 78% 50%, rgba(120,20,30,.14), transparent 70%), linear-gradient(90deg, rgba(6,4,5,.985) 0%, rgba(6,4,5,.95) 52%, rgba(6,4,5,.25) 74%, rgba(6,4,5,0) 100%); }
+html.theme-vi #store { background: radial-gradient(ellipse 60% 70% at 78% 50%, rgba(255,45,149,.12), transparent 70%), linear-gradient(90deg, rgba(14,4,20,.985) 0%, rgba(14,4,20,.95) 52%, rgba(14,4,20,.25) 74%, rgba(14,4,20,0) 100%); }
+.st-top { background: linear-gradient(180deg, rgba(18,12,14,.98), rgba(10,7,9,.9)); border-bottom: 1px solid rgba(232,53,43,.3); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.st-tabs button { position: relative; } .st-tabs button.on { text-shadow: 0 0 14px rgba(255,255,255,.25); }
+.st-wallet { background: linear-gradient(180deg, rgba(60,40,10,.35), rgba(20,12,4,.5)); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); box-shadow: inset 0 0 18px rgba(216,181,106,.12); }
+.of, .cs-por, .ad-card, .cl-card { transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.of { border-radius: 2px; background: linear-gradient(180deg, #120c0c, #070505); }
+.of img { transition: transform .25s ease; }
+.of:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.55), 0 0 18px color-mix(in srgb, var(--rc, #555) 45%, transparent); border-color: color-mix(in srgb, var(--rc, #888) 70%, white 10%); }
+.of:hover img { transform: scale(1.06); }
+.of::after { height: 4px; box-shadow: 0 0 12px var(--rc, #555); }
+.of .of-p { margin: 4px 8px 0; padding: 2px 8px; width: max-content; background: rgba(216,181,106,.1); border: 1px solid rgba(216,181,106,.25); }
+.of .of-p.own, .of .of-p.eq { background: transparent; border-color: transparent; padding-left: 0; }
+.cs-por { transition: transform .16s; } .cs-por:hover { transform: translateY(-2px); } .cs-por img { transition: transform .25s; } .cs-por:hover img { transform: scale(1.05); }
+.cs-detail { background: var(--glass); border-top: 3px solid var(--rc, var(--red2)); box-shadow: 0 20px 50px rgba(0,0,0,.6), 0 0 24px color-mix(in srgb, var(--rc, #b3201e) 25%, transparent); }
+.ad-card { box-shadow: inset 0 1px 0 var(--edge); } .ad-card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,.5); }
+.ch-row-title { border-bottom: 1px solid rgba(255,255,255,.06); padding-bottom: 8px; }
+/* level emblems */
+.lv-badge.em, .lv-ring.em { width: auto; height: auto; border: 0; transform: none; margin: 0; box-shadow: none; display: block; }
+.lv-emblem { display: inline-block; vertical-align: middle; flex: none; }
+.ps .lv-emblem { margin: -3px 2px 0 0; }
+.pf-lvls span { display: inline-flex; align-items: center; gap: 6px; }
+.ldb-v .lv-emblem { margin-top: -4px; }
+/* top-right buttons: same angled frames */
+.inbox-btn { clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); transition: transform .12s, background .12s; }
+.inbox-btn:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) { .of, .of img, .cs-por, .mainnav button, .btn { transition: none !important; } }
+#safe-gfx { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 95; display: flex; align-items: center; gap: 12px; padding: 12px 16px; max-width: min(860px, 94vw); background: var(--glass); border: 1px solid rgba(255,192,77,.5); box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+#safe-gfx b { color: var(--gold); font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .05em; white-space: nowrap; } #safe-gfx span { color: #d8cfe0; font-size: 14px; }

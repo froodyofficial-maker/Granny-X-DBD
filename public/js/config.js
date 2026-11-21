@@ -501,7 +501,7 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.5.3';
+export const VERSION = '1.6.0';
 // 1.5.3: collectables. Each one may turn up somewhere on the map at the start of a match (its chance), lying in a random
 // spot; whoever walks over it first keeps it (it counts on their profile, can be shown in 3D, and goes on the leaderboard).
 // glb: a model in public/models; else made in code (collect.js)
@@ -517,6 +517,17 @@ export const RARITY = { common: '#b8b0a4', uncommon: '#6fcf6a', rare: '#5aa7ff',
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd160', version: '1.6.0', date: 'Nov 2026', title: 'The graphics update', tag: 'Update',
+    body: [
+      'No more grain: the noisy ambient-occlusion pass, film grain and heavy sharpening are gone, and the resolution no longer drops to 60-70% when the frame rate dips. Smoother on good PCs, and Low now has anti-aliasing.',
+      'The Windows app and the APK now have the photo-scanned ground, wood, brick and bark textures (only the browser version had them before). Medium or High quality.',
+      "Blood looks like blood: Granny's bat is no longer white, Grandpa's club lost its paint blob, and weapons get a dark wet smear with drips after a hit instead of a red blob.",
+      'Angeline looks better: relief on her dress, skin and stains, fabric sheen, and less washed-out white.',
+      'The GTA VI theme is yours to keep: buy it in the Store (or get it with the GTA VI Pass) and switch it on any time, even after the event. Every character now has its own GTA-style loading screen, and yours comes first.',
+      'New look for the menus and the Store, and new level emblems: iron, bronze, silver, gold, crimson and iridescent.',
+    ],
+  },
   {
     id: 'gdbd153', version: '1.5.3', date: 'Nov 2026', title: 'GTA VI on PlayStation, collectables, leaderboard', tag: 'Update', from: Date.UTC(2026, 10, 20),
     body: [

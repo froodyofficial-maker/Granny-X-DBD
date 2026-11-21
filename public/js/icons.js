@@ -96,3 +96,33 @@ export function icon(name, cls = '') {
 }
 export const STATE_ICON = { healthy: 'healthy', injured: 'injured', down: 'down', carried: 'carried', caged: 'caged', dead: 'dead', out: 'out', exec: 'exec' };
 export const POWER_ICON = { butcher: 'rampage', wisp: 'fade', harrower: 'spear', lamplighter: 'lantern', foreman: 'hook', slimer: 'fade', bateman: 'chainsaw', chucky: 'knife', granny: 'beartrap', grandpa: 'shotgun', slendrina: 'gaze', angeline: 'eyes', nosferatu: 'fangs', father: 'fade' };
+
+// 1.6.0: the level emblem (account and character levels): a bevelled hex shield whose metal climbs with the level
+// (iron, bronze, silver, gold, crimson, then iridescent), with wings from gold up and a crown at the top level.
+const LV_TIERS = [
+  { min: 0, name: 'Iron', a: '#9aa0a6', b: '#3d4248', c: '#1a1d21', glow: 'rgba(170,180,190,.35)' },
+  { min: 10, name: 'Bronze', a: '#f0b27a', b: '#9a5a2c', c: '#3a1f0f', glow: 'rgba(230,140,70,.4)' },
+  { min: 20, name: 'Silver', a: '#f4f6fa', b: '#9aa6b4', c: '#2c333c', glow: 'rgba(220,230,245,.45)' },
+  { min: 30, name: 'Gold', a: '#fff1a8', b: '#d49a1e', c: '#4a2c05', glow: 'rgba(255,200,60,.5)' },
+  { min: 40, name: 'Crimson', a: '#ff8a8a', b: '#b3201e', c: '#3a0606', glow: 'rgba(255,60,50,.55)' },
+  { min: 50, name: 'Iridescent', a: '#a8fff4', b: '#9b5cff', c: '#24103f', glow: 'rgba(160,110,255,.6)' },
+];
+export const levelTier = lv => LV_TIERS.reduce((t, x) => (lv >= x.min ? x : t), LV_TIERS[0]);
+let lvUid = 0;
+export function levelEmblem(lv, size = 56, { max = false, label = true } = {}) {
+  const T = levelTier(lv), u = 'lve' + (lvUid++), wings = lv >= 30 || max, n = String(lv), fs = n.length > 2 ? 15 : 19;
+  return `<svg class="lv-emblem" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="Level ${lv} (${T.name})">
+<defs><linearGradient id="${u}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${T.a}"/><stop offset=".55" stop-color="${T.b}"/><stop offset="1" stop-color="${T.c}"/></linearGradient>
+<linearGradient id="${u}i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1416"/><stop offset="1" stop-color="#050304"/></linearGradient>
+<filter id="${u}g" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="0" stdDeviation="2.2" flood-color="${T.glow}"/></filter></defs>
+<g filter="url(#${u}g)">
+${wings ? `<path d="M10 30 C2 26 1 18 4 12 C7 20 11 22 16 23 Z M54 30 C62 26 63 18 60 12 C57 20 53 22 48 23 Z" fill="url(#${u}m)" opacity=".95"/>` : ''}
+${max ? `<path d="M22 9 L26 3 L29 8 L32 2 L35 8 L38 3 L42 9 Z" fill="url(#${u}m)"/>` : ''}
+<path d="M32 6 L54 18 L54 42 L32 58 L10 42 L10 18 Z" fill="url(#${u}m)"/>
+<path d="M32 11 L49 20.5 L49 39.5 L32 52.5 L15 39.5 L15 20.5 Z" fill="url(#${u}i)" stroke="${T.a}" stroke-opacity=".55" stroke-width="1"/>
+<path d="M32 11 L49 20.5 L32 26 L15 20.5 Z" fill="#fff" opacity=".06"/>
+</g>
+<text x="32" y="${label ? 37 : 39}" text-anchor="middle" font-family="'Bebas Neue', Impact, sans-serif" font-size="${fs}" fill="${T.a}" letter-spacing=".5">${n}</text>
+${label ? `<text x="32" y="47" text-anchor="middle" font-family="'Barlow Condensed', sans-serif" font-weight="600" font-size="5.6" letter-spacing="1.4" fill="${T.a}" opacity=".85">LEVEL</text>` : ''}
+</svg>`;
+}

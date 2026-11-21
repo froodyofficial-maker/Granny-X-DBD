@@ -407,11 +407,13 @@ export function tex(name) {
     case 'grassr': {
       // dense, fine blades with lighter tips, some dry and straw-coloured
       const S = 256, c = canvas(S), x = c.getContext('2d'), R = rng(91);
-      const tips = ['#5f7a34', '#71843a', '#86804a', '#4e6a2c', '#9a9058', '#62743a'];
-      for (let i = 0; i < 70; i++) {
-        const bx = 8 + R() * (S - 16), w = 1.6 + R() * 2.6, h = S * (0.35 + R() * 0.62), lean = (R() - 0.5) * 70;
+      // 1.6.0: finer and less dark at the root (it used to start near-black and read as dark spikes): the root takes the
+      // ground's mossy colour so a tuft blends into the ground it grows from
+      const tips = ['#6f8a3c', '#7d9242', '#93904e', '#5c7a34', '#a89c60', '#6e823e'];
+      for (let i = 0; i < 110; i++) {
+        const bx = 6 + R() * (S - 12), w = 1.0 + R() * 1.7, h = S * (0.25 + R() * 0.6) * (1 - Math.abs(bx / S - 0.5) * 0.7), lean = (R() - 0.5) * 60;
         const g = x.createLinearGradient(0, S, 0, S - h);
-        g.addColorStop(0, '#141c0e'); g.addColorStop(0.45, R() < 0.5 ? '#2c3c1a' : '#34401e'); g.addColorStop(1, tips[R() * tips.length | 0]);
+        g.addColorStop(0, '#2e3a20'); g.addColorStop(0.4, R() < 0.5 ? '#3e5226' : '#46562a'); g.addColorStop(1, tips[R() * tips.length | 0]);
         x.fillStyle = g; x.beginPath(); x.moveTo(bx - w, S);
         x.quadraticCurveTo(bx - w * 0.5 + lean * 0.25, S - h * 0.55, bx + lean, S - h);
         x.quadraticCurveTo(bx + w * 0.5 + lean * 0.25, S - h * 0.55, bx + w, S); x.fill();

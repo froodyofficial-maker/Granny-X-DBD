@@ -13,6 +13,8 @@ import { auraSkinMat } from './foremanGlb.js';
 import { GFX } from './gfx.js';
 import { b64buf, heavy } from './heavy.js';
 import { freddyOver } from './realism.js';
+import { fixModelBlood } from './bloodfx.js';
+import { enhanceCharacter } from './matfx.js';
 
 const M = {}, loading = {}, waiters = {};
 async function bytes(name) {
@@ -35,11 +37,12 @@ function load(name) {
   if (loading[name]) return loading[name];
   loading[name] = bytes(name).then(buf => heavy(() => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej)))).then(g => {
     const S = SPEC[name];
+    fixModelBlood(g.scene); // (1.6.0: Granny's bat was white, Grandpa's club had a paint blob)
     if (S.reskin) { toBindPose(g.scene); g.scene.updateMatrixWorld(true); }
     if (S.anim || S.mesh || S.reskin) { M[name] = { g }; for (const cb of (waiters[name] || []).splice(0)) { try { cb(); } catch (e) { console.error(e); } } return M[name]; }
     if (S.bind === 'fit') toBindPose(g.scene); else if (S.bind === 'pure') pureBind(g.scene); // (their skeletons are bent out of shape in the files)
     if (S.rx) { g.scene.rotation.x = S.rx; g.scene.updateMatrixWorld(true); } // (Z-up files)
-    if (name === 'angeline') { toBindPose(g.scene); } // animated in code from her T-pose (see animateAngeline)
+    if (name === 'angeline') { toBindPose(g.scene); if (!GFX.lite) enhanceCharacter(g.scene, { strength: 2.6, sheen: 0.7, tone: 0.86, folds: 9 }); } // animated in code from her T-pose (see animateAngeline); 1.6.0: relief + sheen
     if (name === 'nosferatu') g.scene.traverse(o => { if (o.isMesh && /skugga/i.test(o.material && o.material.name || '')) o.visible = false; }); // his file's painted ground shadow
     // measure in the first frame of the idle clip (the rest pose isn't a standing pose)
     const probe = cloneSkinned(g.scene), mx = new THREE.AnimationMixer(probe);
@@ -776,7 +779,8 @@ export function animateGranny(R, s, dt) {
     const f = s.exec.f;
     if (f < 0.34) { want = 'lookBed'; rate = 1.2; } else if (f < 0.6) { want = 'Hit'; scrub = 0.25 + (f - 0.34) / 0.26 * 0.6; fast = true; } else want = 'Look';
   }
-  else if (R.grandpa && s.shot != null) { want = 'Shoot'; scrub = 0.42 + s.shot * 0.5; fast = true; } // the blast and the pump
+  else if (R.grandpa && s.pump != null) { want = 'Shoot'; scrub = 0.4; fast = true; }  // 1.6.0: back on the shoulder while the left hand pumps
+  else if (R.grandpa && s.shot != null) { want = 'Shoot'; scrub = 0.42 + s.shot * 0.5; fast = true; } // the blast
   else if (R.grandpa && s.aim) { want = 'Shoot'; scrub = 0.4; fast = true; }   // shotgun raised to the shoulder
   else if (s.dash) { want = 'Hit'; scrub = 0.45; fast = true; }        // Bat Rush: mid-swing, charging forward
   else if (s.aim) { want = 'Hit'; scrub = 0.18; fast = true; }         // winding up the bat
@@ -801,5 +805,38 @@ export function animateGranny(R, s, dt) {
     else if (R.w[n] === 0) a.paused = true;
   }
   R.mixer.update(dt);
+  if (R.grandpa && s.pump != null) grandpaPump(R, s.pump);
   if (R.follow) R.follow();
+}
+// 1.6.0: Grandpa racks the shotgun with his left hand after a shot: the hand goes onto the fore-end under the barrel and slides
+// back toward him and forward again (two-bone IK on the left arm), the slide (ShotgunPipa) going with it. Bone names lose their
+// dots in three.js (lowArm.L -> lowArmL).
+const _ik = { s: new THREE.Vector3(), e: new THREE.Vector3(), h: new THREE.Vector3(), t: new THREE.Vector3(), rh: new THREE.Vector3(), f: new THREE.Vector3(), side: new THREE.Vector3(), d: new THREE.Vector3(), pole: new THREE.Vector3(), q: new THREE.Quaternion() };
+function grandpaPump(R, f) {
+  if (!R._pump) {
+    const find = re => { let b = null; R.root.traverse(o => { if (!b && re.test(o.name || '')) b = o; }); return b; };
+    R._pump = { up: find(/^upArm\.?L/), lo: find(/^lowArm\.?L/), hand: find(/^hand\.?L/), rhand: find(/^hand\.?R/), slide: find(/^ShotgunPipaGP$/) };
+    if (R._pump.slide) R._pump.slide0 = R._pump.slide.position.clone();
+  }
+  const P = R._pump; if (!P.up || !P.lo || !P.hand || !P.rhand) return;
+  const k = Math.sin(Math.min(1, Math.max(0, f)) * Math.PI); // 0 -> pulled back -> 0
+  R.root.updateMatrixWorld(true);
+  const V = _ik;
+  R.root.getWorldQuaternion(V.q); V.f.set(0, 0, 1).applyQuaternion(V.q).normalize(); V.side.set(1, 0, 0).applyQuaternion(V.q).normalize();
+  P.up.getWorldPosition(V.s); P.lo.getWorldPosition(V.e); P.hand.getWorldPosition(V.h); P.rhand.getWorldPosition(V.rh);
+  const L1 = V.s.distanceTo(V.e), L2 = V.e.distanceTo(V.h);
+  // the fore-end: ahead of the right hand along the gun, a little under it; pulled back by k
+  V.t.copy(V.rh).addScaledVector(V.f, 0.3 - 0.14 * k).addScaledVector(V.side, 0.03); V.t.y -= 0.1;
+  V.d.copy(V.t).sub(V.s); let d = V.d.length(); d = Math.min(d, (L1 + L2) * 0.999); V.d.normalize();
+  // elbow: out to his left side and down
+  V.pole.copy(V.side).multiplyScalar(0.6).add(new THREE.Vector3(0, -1, 0)); V.pole.addScaledVector(V.d, -V.pole.dot(V.d)).normalize();
+  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), hgt = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  const elbow = V.s.clone().addScaledVector(V.d, a).addScaledVector(V.pole, hgt);
+  aimBone(P.up, P.lo, elbow.clone().sub(V.s).normalize(), 1);
+  P.lo.getWorldPosition(V.e);
+  aimBone(P.lo, P.hand, V.t.clone().sub(V.e).normalize(), 1);
+  if (P.slide && P.slide0 && P.slide.parent) {
+    const w = P.slide.parent.localToWorld(P.slide0.clone()).addScaledVector(V.f, -0.08 * k);
+    P.slide.position.copy(P.slide.parent.worldToLocal(w));
+  }
 }

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { COLLECTABLES, RARITY, VERSION } from './config.js';
 import { COLL, makeCollectable, loadViceModels, openViewer } from './vice.js';
 import { publishBoard, watchBoard } from './net.js';
+import { levelEmblem } from './icons.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const RNAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', veryrare: 'Very rare', legendary: 'Legendary' };
@@ -113,7 +114,7 @@ export function renderBoard(el, me, badge) {
   const mine = sorted.findIndex(r => r.id === me);
   const row = (r, i) => `<div class="ldb-row ${r.id === me ? 'me' : ''}"><span class="ldb-rk">${i + 1}</span><span class="ldb-nm" ${r.acc ? `style="color:${r.acc}"` : ''}>${esc(r.n)}${r.vi ? ' ' + badge(16) : ''}</span>
     <span class="ldb-sh">${r.sh.map(k => `<i style="--rc:${RARITY[COLL[k].rarity]}" title="${esc(COLL[k].name)}">${thumbs[k] ? `<img alt="" src="${thumbs[k]}">` : ''}</i>`).join('')}</span>
-    <span class="ldb-v">${tab === 'c' ? `${r.c}<small>/${COLLECTABLES.length} · ${r.ct} finds</small>` : r[tab].toLocaleString()}</span></div>`;
+    <span class="ldb-v">${tab === 'c' ? `${r.c}<small>/${COLLECTABLES.length} · ${r.ct} finds</small>` : tab === 'lv' ? levelEmblem(r.lv, 30, { label: false }) : r[tab].toLocaleString()}</span></div>`;
   el.innerHTML = `<div class="ldb-tabs">${TABS.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-lbt="${k}">${n}</button>`).join('')}</div>
     <div class="ldb-list">${sorted.length ? sorted.slice(0, 100).map(row).join('') : '<p class="hint">Looking for players on the relays…</p>'}</div>
     ${mine >= 100 ? `<div class="ldb-list mine">${row(sorted[mine], mine)}</div>` : ''}

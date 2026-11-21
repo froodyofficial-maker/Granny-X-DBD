@@ -3,6 +3,7 @@
 // card; the lights stutter out between them. God rays from the bulb, dust in the light, low fog.
 // It is drawn with the game's own renderer (one WebGL context for the whole app: a second one next to a
 // match being built is what crashed the page on some PCs). The game and menu do not draw while this is up.
+import { nowMs } from './config.js';
 import * as THREE from 'three';
 import { loadGranny, loadGrandpa, loadSlendrina, loadAngeline, loadNosferatu, loadSpiderMom, grannyReady, grandpaReady, slendrinaReady, angelineReady, nosferatuReady, fatherReady } from './grannyGlb.js';
 import { PLAY_K } from './config.js';
@@ -51,7 +52,7 @@ function ui() {
     <div class="ls-top"><div class="ls-logo"><span class="ls-granny"></span><i>×</i><b>DBD</b></div></div>
     <div class="ls-card" id="ls-card"><div class="ls-kname" id="ls-kname"></div><div class="ls-kpow" id="ls-kpow"></div></div>
     <div class="ls-hud"><div class="ls-msg" id="ls-msg"></div><div class="ls-bar"><i></i></div><div class="ls-tip" id="ls-tip"></div></div>
-    <div class="vl" id="vl"><div class="vl-art"><i class="a1"></i><i class="a2"></i><i class="a3"></i><i class="a4"></i></div><div class="vl-shade"></div>
+    <div class="vl" id="vl"><div class="vl-art" id="vl-art"></div><div class="vl-shade"></div>
       <div class="vl-logos"><span class="lg-granny"></span><i>×</i><span class="lg-dbd"></span></div><span class="vl-gta"></span>
       <div class="vl-foot"><div class="vl-tip" id="vl-tip"></div><div class="vl-load"><span id="vl-msg">Loading</span><i class="vl-spin"></i></div></div></div>`;
   return el;
@@ -185,20 +186,35 @@ function frame(now) {
 }
 
 let tipT = 0, tipI = Math.floor(Math.random() * TIPS.length);
-function tip() { const el = $('ls-tip'); if (el) el.textContent = TIPS[tipI++ % TIPS.length]; const v = $('vl-tip'); if (v) v.textContent = VI_TIPS[tipI % VI_TIPS.length]; }
+function tip() { const el = $('ls-tip'); if (el) el.textContent = TIPS[tipI++ % TIPS.length]; const v = $('vl-tip'); if (v) { const L = VI_TIPS.filter(t => typeof t === 'string' || nowMs() < Date.UTC(2026, 11, 1)).map(t => t.t || t); v.textContent = L[tipI % L.length]; } }
 // 1.5.3: the GTA-style loading screen while Vice Nights runs (html.theme-vi): comic panels of the killers (img/ls/*.jpg,
 // through the stylesheet) cross-fading with a slow pan, the logos, a tip and a spinner. All CSS, so it keeps moving while
 // the page is busy building the match; the 3D reel isn't started under it.
 const VI_TIPS = [
-  'Throw GTA VI (PlayStation) at the killer: they sit down and play for 5 seconds.',
-  'The GTA VI Monster Can turns up in one match in ten. Walk over it to keep it.',
-  'The GTA VI Pass gives you everything GTA VI at once. Only until 30 November.',
+  { t: 'Throw GTA VI (PlayStation) at the killer: they sit down and play for 5 seconds.' },
+  { t: 'The GTA VI Monster Can turns up in one match in ten. Walk over it to keep it.' },
+  { t: 'The GTA VI Pass gives you everything GTA VI at once. Only until 30 November.' },
   'Show off up to three collectables on your Profile, and look at them in 3D.',
   'The leaderboard (trophy button) ranks everyone by collectables, kills, escapes and level.',
   'Granny hears everything. Even the controller clicking.',
-  'Earn the VI badge before 1 December: after that, nobody can.',
+  { t: 'Earn the VI badge before 1 December: after that, nobody can.' },
+  'Every character has its own loading screen: yours comes first.',
+  'Collectables lie somewhere on the map: walk over one to keep it, and show it off on your Profile.',
 ];
 
+// which characters' pictures the GTA-style screen shows (1.6.0: one per character, yours first), up to four, cross-fading
+const LS_ART = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father', 'mara', 'eli', 'june', 'tomas'];
+let cast = ['granny', 'grandpa', 'slendrina', 'nosferatu'];
+export function setLoadingCast(ids) {
+  const c = (ids || []).filter(i => LS_ART.includes(i));
+  for (const k of ['granny', 'grandpa', 'slendrina', 'angeline']) if (c.length < 2 && !c.includes(k)) c.push(k);
+  cast = c.slice(0, 4); fillArt();
+}
+function fillArt() {
+  const el = $('vl-art'); if (!el) return;
+  const n = cast.length, slot = 6;
+  el.innerHTML = cast.map((id, i) => `<i class="ls-${id}" style="animation-name:vlPan${n};animation-duration:${n * slot}s;animation-delay:${i * slot}s"></i>`).join('');
+}
 export function showLoading(on, msg, isLite, rendererOf) {
   if (rendererOf) getR = rendererOf;
   const el = ui();
@@ -209,6 +225,7 @@ export function showLoading(on, msg, isLite, rendererOf) {
   want = on;
   el.classList.toggle('hidden', !on);
   const gta = on && document.documentElement.classList.contains('theme-vi'); el.classList.toggle('vi-ls', gta);
+  if (gta) fillArt(); // (restarts the cross-fade from your own character)
   // the loading screen is see-through over the 3D canvas it draws on: hide the menu / HUD in between
   document.documentElement.classList.toggle('ls-up', on);
   if (!on) { clearInterval(tipT); holdLoading(false); return; }

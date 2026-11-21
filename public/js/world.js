@@ -16,8 +16,10 @@ export const QUALITY = {
   // potato: for very weak laptops / integrated graphics. No shadows, no post-processing, cheap materials.
   potato: { shadow: 0, grass: 0, pixel: 0.6, bloom: false, post: false, outer: 50, fog: 0, density: 0.05, far: 80, minPixel: 0.45 },
   low: { shadow: 0, grass: 1200, pixel: 0.8, bloom: false, post: false, outer: 110, fog: 6, density: 0.04, far: 120, minPixel: 0.5 },
-  medium: { shadow: 1024, grass: 4500, pixel: 1, bloom: true, post: true, outer: 260, fog: 22, density: 0.032, far: 300, minPixel: 0.6 },
-  high: { shadow: 2048, grass: 10000, pixel: Math.min(2, window.devicePixelRatio || 1), bloom: true, post: true, outer: 440, fog: 36, density: 0.03, far: 600, minPixel: 0.7 },
+  // 1.6.0: no ambient-occlusion pass, no film grain, little sharpening (the grain players saw), resolution never drops below
+  // 85-90% (it used to fall to 60-70% and look blurry), MSAA on both; pixel density capped at 1.5 on high
+  medium: { shadow: 1024, grass: 4500, pixel: 1, bloom: true, post: true, outer: 260, fog: 22, density: 0.032, far: 300, minPixel: 0.85, msaa: 2, sharp: 0.08 },
+  high: { shadow: 2048, grass: 8000, pixel: Math.min(1.5, window.devicePixelRatio || 1), bloom: true, post: true, outer: 440, fog: 36, density: 0.03, far: 600, minPixel: 0.9, msaa: 4, sharp: 0.12, rays: true },
 };
 
 
@@ -48,13 +50,13 @@ export function buildWorld(M, quality = 'medium') {
   W.amb = new THREE.AmbientLight(LK.amb, 0.9); scene.add(W.amb);
   const moon = new THREE.DirectionalLight(LK.moon[0], LK.moon[1]);
   const fill = new THREE.PointLight(0xa8b4d0, 1.8, 13, 1.2);
-  scene.add(fill); W.fill = fill;
+  scene.add(fill); W.fill = fill; fill.userData.keep = true; // (follows the player: always a real light)
   moon.position.set(30, 60, 20);
   if (q.shadow) {
     moon.castShadow = true;
-    const sm = realistic() ? q.shadow * 2 : q.shadow; // crisper shadows in the realistic look
+    const sm = Math.min(2048, realistic() ? q.shadow * 2 : q.shadow); // crisper shadows in the realistic look (1.6.0: at most 2048: 4096 was a big cost)
     moon.shadow.mapSize.set(sm, sm);
-    const s = moon.shadow.camera; s.left = -38; s.right = 38; s.top = 38; s.bottom = -38; s.near = 5; s.far = 160;
+    const s = moon.shadow.camera; s.left = -32; s.right = 32; s.top = 32; s.bottom = -32; s.near = 5; s.far = 160;
     moon.shadow.bias = -0.0006; moon.shadow.normalBias = 0.04;
   }
   scene.add(moon); scene.add(moon.target);
@@ -301,7 +303,7 @@ export function buildWorld(M, quality = 'medium') {
   if (q.grass && LK.grass > 0) {
     const gq = [];
     const real = !lite && realistic();
-    const plane = real ? new THREE.PlaneGeometry(0.75, 0.55, 1, 2) : new THREE.PlaneGeometry(0.7, 0.5); plane.translate(0, real ? 0.275 : 0.25, 0);
+    const plane = real ? new THREE.PlaneGeometry(0.7, 0.4, 1, 2) : new THREE.PlaneGeometry(0.7, 0.4); plane.translate(0, 0.2, 0); // (1.6.0: shorter)
     for (const ry of real ? [0, Math.PI / 3, Math.PI * 2 / 3] : [0, Math.PI / 2]) gq.push({ geo: plane, matrix: new THREE.Matrix4().makeRotationY(ry) });
     const ggeo = mergeGeos(gq);
     let gm;
@@ -309,6 +311,7 @@ export function buildWorld(M, quality = 'medium') {
       // lit like the ground it grows from (normals up, so no black back faces), swaying in the wind
       const n = ggeo.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
       gm = new THREE.MeshStandardMaterial({ map: tex('grassr').map, alphaTest: 0.4, side: THREE.DoubleSide, color: LK.grassTint, roughness: 0.95 });
+      gm.alphaToCoverage = !!q.msaa; // (soft blade edges with anti-aliasing)
       gm.envMapIntensity = 0.25;
       const T = W.grassT = { value: 0 };
       gm.onBeforeCompile = sh => {
@@ -326,7 +329,7 @@ export function buildWorld(M, quality = 'medium') {
       };
     } else gm = new THREE.MeshLambertMaterial({ map: tex('grass').map, alphaTest: 0.45, side: THREE.DoubleSide, color: LK.grassTint });
     const list = [];
-    const nGrass = q.grass * LK.grass * (real ? 1.8 : 1);
+    const nGrass = q.grass * LK.grass * (real ? 1.15 : 1);
     for (let i = 0; i < nGrass * 3 && list.length < nGrass; i++) {
       const x = R.range(-HF - 8, HF + 8), z = R.range(-HF - 8, HF + 8);
       let bad = false;
@@ -334,13 +337,19 @@ export function buildWorld(M, quality = 'medium') {
       if (bad || (M.isIndoors && M.isIndoors(x, z))) continue;
       let pd = 99; for (const [ax, az, bx, bz] of paths) pd = Math.min(pd, segDist(x, z, ax, az, bx, bz));
       if (pd < 1.3 && R() < 0.85) continue;
-      list.push({ x, z, rot: R() * 6.28, s: R.range(0.7, 1.6) });
+      list.push({ x, z, rot: R() * 6.28, s: R.range(0.65, 1.25) });
     }
-    const im = new THREE.InstancedMesh(ggeo, gm, list.length);
-    const m = new THREE.Matrix4(), qq = new THREE.Quaternion(), e = new THREE.Euler();
-    list.forEach((t, i) => { e.set(0, t.rot, 0); qq.setFromEuler(e); m.compose(new THREE.Vector3(t.x, 0, t.z), qq, new THREE.Vector3(t.s, t.s * R.range(0.7, 1.4), t.s)); im.setMatrixAt(i, m); im.setColorAt(i, real ? new THREE.Color().setHSL(0.16 + R() * 0.1, 0.25 + R() * 0.15, 0.5 + R() * 0.3) : new THREE.Color().setHSL(0.17 + R() * 0.08, 0.32, 0.36 + R() * 0.24)); });
-    im.receiveShadow = true;
-    scene.add(im);
+    // 1.6.0: a 4x4 grid of instanced meshes (each one is skipped when it's off screen) instead of one mesh for the whole map
+    const m = new THREE.Matrix4(), qq = new THREE.Quaternion(), e = new THREE.Euler(), CH = 4, span = (HF + 8) * 2 / CH;
+    const cells = Array.from({ length: CH * CH }, () => []);
+    for (const t of list) cells[Math.min(CH - 1, Math.max(0, Math.floor((t.x + HF + 8) / span))) * CH + Math.min(CH - 1, Math.max(0, Math.floor((t.z + HF + 8) / span)))].push(t);
+    for (const cl of cells) {
+      if (!cl.length) continue;
+      const im = new THREE.InstancedMesh(ggeo, gm, cl.length);
+      cl.forEach((t, i) => { e.set(0, t.rot, 0); qq.setFromEuler(e); m.compose(new THREE.Vector3(t.x, 0, t.z), qq, new THREE.Vector3(t.s, t.s * R.range(0.75, 1.25), t.s)); im.setMatrixAt(i, m); im.setColorAt(i, real ? new THREE.Color().setHSL(0.17 + R() * 0.08, 0.28 + R() * 0.14, 0.42 + R() * 0.22) : new THREE.Color().setHSL(0.17 + R() * 0.08, 0.32, 0.36 + R() * 0.24)); });
+      im.computeBoundingSphere(); im.receiveShadow = true; im.name = 'grass';
+      scene.add(im);
+    }
   }
 
   // ---------- lamp posts with pools of warm light ----------
@@ -355,17 +364,27 @@ export function buildWorld(M, quality = 'medium') {
   const poolTex = tex('glow').map;
   for (const L of lampSpots) {
     const g = new THREE.Group(); g.position.set(L.x, 0, L.z); g.rotation.y = R() * 6.28;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.4, 8), postM); post.position.y = 1.7; post.castShadow = true; g.add(post);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.06), postM); arm.position.set(0.32, 3.3, 0); g.add(arm);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.2, 8, 1, true), postM); head.position.set(0.62, 3.22, 0); g.add(head);
+    // 1.6.0: an old cast-iron street lamp: stepped base, tapered post with collars, a scrolled bracket and a glass lantern
+    const pm = (geo, x, y, z, rx = 0, ry = 0, rz = 0, m = postM) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; g.add(o); return o; };
+    pm(new THREE.CylinderGeometry(0.2, 0.26, 0.22, 10), 0, 0.11, 0); pm(new THREE.CylinderGeometry(0.13, 0.18, 0.3, 10), 0, 0.37, 0);
+    pm(new THREE.CylinderGeometry(0.055, 0.085, 2.9, 10), 0, 1.95, 0);
+    for (const y of [0.55, 1.6, 3.35]) pm(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 10), 0, y, 0);
+    pm(new THREE.CylinderGeometry(0.03, 0.03, 0.72, 6), 0.34, 3.32, 0, 0, 0, Math.PI / 2);
+    pm(new THREE.TorusGeometry(0.16, 0.02, 6, 12, Math.PI), 0.2, 3.18, 0, 0, 0, Math.PI);
+    // lantern: a cap, four glass panes round the bulb, a base plate
+    pm(new THREE.ConeGeometry(0.2, 0.16, 4, 1), 0.66, 3.4, 0, 0, Math.PI / 4, 0); pm(new THREE.SphereGeometry(0.035, 8, 6), 0.66, 3.5, 0);
+    pm(new THREE.BoxGeometry(0.26, 0.03, 0.26), 0.66, 3.03, 0);
+    const glassM = new THREE.MeshStandardMaterial({ color: 0xffe8b0, emissive: LK.lamp, emissiveIntensity: 0.6, transparent: true, opacity: 0.35, roughness: 0.1, depthWrite: false });
+    for (let k = 0; k < 4; k++) { const a2 = k * Math.PI / 2; const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.28), glassM); pane.position.set(0.66 + Math.sin(a2) * 0.12, 3.18, Math.cos(a2) * 0.12); pane.rotation.y = a2; g.add(pane); }
+    for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) pm(new THREE.BoxGeometry(0.018, 0.3, 0.018), 0.66 + dx * 0.12, 3.18, dz * 0.12);
     const bulbM = new THREE.MeshStandardMaterial({ color: 0x332a1a, emissive: LK.lamp, emissiveIntensity: 3 });
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), bulbM); bulb.position.set(0.62, 3.13, 0); g.add(bulb);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), bulbM); bulb.position.set(0.66, 3.16, 0); g.add(bulb);
     const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24), new THREE.MeshBasicMaterial({ map: poolTex, color: LK.lamp, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false }));
-    pool.rotation.x = -Math.PI / 2; pool.position.set(0.62, 0.04, 0); g.add(pool);
+    pool.rotation.x = -Math.PI / 2; pool.position.set(0.66, 0.04, 0); g.add(pool);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: poolTex, color: 0xffc070, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-    glow.scale.setScalar(1.1); glow.position.set(0.62, 3.1, 0); g.add(glow);
+    glow.scale.setScalar(1.1); glow.position.set(0.66, 3.16, 0); g.add(glow);
     let light = null;
-    if (quality === 'high' && W.lamps.length < 8) { light = new THREE.PointLight(LK.lamp, 7, 11, 1.6); light.position.set(0.62, 3.0, 0); g.add(light); }
+    if (W.lamps.length < 10) { light = new THREE.PointLight(LK.lamp, 7, 11, 1.6); light.position.set(0.66, 3.0, 0); g.add(light); } // (1.6.0: every quality: the light pool decides which ones are real)
     scene.add(g);
     W.lamps.push({ bulbM, pool, glow, light, ph: R() * 10 });
   }
@@ -384,6 +403,7 @@ export function buildWorld(M, quality = 'medium') {
     plane.rotation.x = -Math.PI / 2; plane.position.y = 0.3 + i * 0.5; plane.renderOrder = 2;
     scene.add(plane); W.fogLayers.push({ t, v: 0.004 + i * 0.002, d: i % 2 ? 1 : -1 });
   }
+  poolLights(W, quality);
   return W;
 }
 
@@ -424,6 +444,7 @@ export function addInteractables(W, M) {
 // per-frame updates for props, driven by state
 export function updateWorld(W, M, S, t, dt, follow) {
   if (W.grassT) W.grassT.value = t;
+  if (follow) updateLightPool(W, _v.set(follow.x, 2, follow.z), dt);
   if (follow) {
     W.fill.position.set(follow.x, 3.2, follow.z);
     W.moon.target.position.set(follow.x, 0, follow.z);
@@ -506,3 +527,43 @@ export function pointBlocked(M, x, y, z) {
   return false;
 }
 export { barBox };
+
+// 1.6.0: a small pool of real point lights shared by every lamp, generator and gate light. Each of those used to be a real
+// light, so every lit pixel looped over ~20 lights (most of them switched off, which costs just as much): the main reason
+// the game ran slowly even on fast graphics cards. The sources stay as plain objects that the code updates as before; the
+// pool (a fixed number, so shaders never recompile) is handed to the strongest ones near the camera, fading in and out.
+const POOL_N = { potato: 1, low: 2, medium: 4, high: 6 };
+export function poolLights(W, quality) {
+  const N = POOL_N[quality] ?? 4, scene = W.scene, virt = [];
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => { if (o.isPointLight && !o.userData.keep) virt.push(o); });
+  for (const L of virt) { const wp = L.getWorldPosition(new THREE.Vector3()); L.parent.remove(L); L.position.copy(wp); L.userData.virtual = true; }
+  W.vLights = virt; W.pool = []; W.poolT = 0;
+  for (let i = 0; i < N; i++) { const l = new THREE.PointLight(0xffffff, 0, 10, 1.5); l.userData.keep = true; scene.add(l); W.pool.push({ l, src: null, k: 0 }); }
+}
+const _v = new THREE.Vector3();
+export function updateLightPool(W, cam, dt) {
+  if (!W.pool || !W.vLights) return;
+  W.poolT -= dt;
+  if (W.poolT <= 0) {
+    W.poolT = 0.2;
+    // the sources worth lighting: lit, and their light reaches toward the camera
+    const live = [];
+    for (const L of W.vLights) {
+      if (!(L.intensity > 0.02)) continue;
+      const d = L.position.distanceTo(cam), reach = (L.distance || 15) + 12;
+      if (d > reach * 2.2) continue;
+      live.push([L.intensity * Math.max(1, L.distance || 10) / (1 + d * d * 0.02), L]);
+    }
+    live.sort((a, b) => b[0] - a[0]);
+    const want = new Set(live.slice(0, W.pool.length).map(x => x[1]));
+    for (const P of W.pool) if (P.src && !want.has(P.src)) P.src = null, P.out = true;
+    for (const L of want) if (!W.pool.some(P => P.src === L)) { const P = W.pool.find(P => !P.src && !(P.k > 0.02)) || W.pool.find(P => !P.src); if (P) { P.src = L; P.out = false; } }
+  }
+  for (const P of W.pool) {
+    const L = P.src;
+    P.k = Math.max(0, Math.min(1, P.k + (L ? dt * 4 : -dt * 4)));
+    if (L) { P.l.position.copy(L.position); P.l.color.copy(L.color); P.l.distance = L.distance; P.l.decay = L.decay; P.l.intensity = L.intensity * P.k; }
+    else P.l.intensity *= P.k > 0 ? 0.8 : 0;
+  }
+}

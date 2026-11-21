@@ -45,11 +45,19 @@ const extraGlb = ['ghosttrap', 'granny_map', 'granny1_map', 'slendrina', 'angeli
 // 1.5.1: the menu music (audio.js reads #nb-music-mp3 when there is no audio/ folder next to the page)
 const musicTag = existsSync(join(pub, 'audio/menu.mp3')) ? `<script id="nb-music-mp3" type="application/octet-stream">${readFileSync(join(pub, 'audio/menu.mp3')).toString('base64')}</script>\n` : '';
 // 1.5.3: Granny's House background music (#nb-granny3-mp3)
-const musicTag2 = existsSync(join(pub, 'audio/granny3.mp3')) ? `<script id="nb-granny3-mp3" type="application/octet-stream">${readFileSync(join(pub, 'audio/granny3.mp3')).toString('base64')}</script>\n` : '';
+// (1.6.0: and the GTA VI theme's menu music, audio/vitheme.mp3, when it's there)
+const musicTag2 = ['granny3', 'vitheme'].filter(n => existsSync(join(pub, 'audio/' + n + '.mp3'))).map(n => `<script id="nb-${n}-mp3" type="application/octet-stream">${readFileSync(join(pub, 'audio/' + n + '.mp3')).toString('base64')}</script>\n`).join('');
 // the map vote cards' pictures (the exe / apk have no img/ folder next to the page)
 const mapImgs = Object.fromEntries(['granny', 'granny1', 'forest'].filter(n => existsSync(join(pub, 'img/maps/' + n + '.jpg'))).map(n => [n, 'data:image/jpeg;base64,' + readFileSync(join(pub, 'img/maps/' + n + '.jpg')).toString('base64')]));
 const mapImgTag = `<script>window.__MAPIMG=${JSON.stringify(mapImgs)}</script>\n`;
-const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}${musicTag}${musicTag2}${mapImgTag}<script>${peer}</script>\n<script>${js}</script>`);
+// 1.6.0: the photo-scanned surfaces (public/tex/*/*.ktx2) and the KTX2 decoder go into the offline file too (pbr.js maps their
+// URLs to these): before, the exe and the APK never had them and showed only the painted textures
+import { readdirSync } from 'node:fs';
+const texFiles = {};
+if (existsSync(join(pub, 'tex'))) for (const d of readdirSync(join(pub, 'tex'))) { const dir = join(pub, 'tex', d); try { for (const f of readdirSync(dir)) if (f.endsWith('.ktx2')) texFiles['tex/' + d + '/' + f] = readFileSync(join(dir, f)).toString('base64'); } catch {} }
+for (const f of ['basis_transcoder.js', 'basis_transcoder.wasm']) { const p = join(pub, 'vendor/three/addons/libs/basis', f); if (existsSync(p)) texFiles['basis/' + f] = readFileSync(p).toString('base64'); }
+const texTag = Object.keys(texFiles).length ? `<script id="nb-tex" type="application/json">${JSON.stringify(texFiles)}</script>\n` : '';
+const withModel = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `${extraGlb}${musicTag}${musicTag2}${mapImgTag}${texTag}<script>${peer}</script>\n<script>${js}</script>`);
 // the web build stays small: it fetches public/models/foreman.glb instead of embedding it
 const web = html.replace(/<script type="module" src="js\/main.js"><\/script>/, () => `<script>${peer}</script>\n<script>${js}</script>`);
 const note = `<title>Granny x DBD</title>\n  <!-- Built file: everything is inlined. Source lives in public/. -->\n  <script>window.__NB_BUILT__=${Date.now()}</script>`;

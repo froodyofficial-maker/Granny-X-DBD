@@ -31,6 +31,9 @@ const VERSION = app.getVersion();
 const portableExe = process.env.PORTABLE_EXECUTABLE_FILE || '';
 const argv = process.argv.slice(1);
 if (argv.includes('--gpu')) { try { fs.unlinkSync(safeFlag); } catch {} }
+// 1.6.0: Safe Graphics mode no longer sticks forever (players on fast graphics cards were stuck in slow software graphics
+// after two crashes): every new version and every day the graphics card gets another try
+try { if (fs.existsSync(safeFlag)) { const st = fs.statSync(safeFlag), txt = fs.readFileSync(safeFlag, 'utf8'); if (!txt.includes('v' + VERSION + ' ') || Date.now() - st.mtimeMs > 864e5) fs.unlinkSync(safeFlag); } } catch {}
 const safe = argv.includes('--safe-graphics') || fs.existsSync(safeFlag);
 log(`start v${VERSION} electron ${process.versions.electron} windows ${os.release()} ${os.arch()}`,
   portableExe ? 'portable' : 'unpacked', safe ? 'safe-graphics' : 'gpu', 'from', process.execPath);
@@ -56,7 +59,7 @@ function toSafeMode(why) {
   restarting = true;
   log('switching to Safe Graphics mode:', why);
   splashMsg('Restarting in Safe Graphics mode…', 'Your graphics driver could not run the game, so it will use software graphics.');
-  try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(safeFlag, why); } catch {}
+  try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(safeFlag, 'v' + VERSION + ' ' + why); } catch {}
   const args = [...argv.filter(a => a !== '--gpu' && a !== '--safe-graphics'), '--safe-graphics'];
   // portable .exe: restart the launcher itself, which unpacks a fresh copy (see the note at the top)
   if (portableExe && fs.existsSync(portableExe)) app.relaunch({ execPath: portableExe, args });
@@ -81,6 +84,14 @@ const backupFile = () => path.join(app.getPath('documents'), 'Granny x DBD', 'Gr
 ipcMain.on('gdbd-backup', (e, v) => {
   if (typeof v !== 'string' || !/^GDBD1:/.test(v)) return;
   try { const f = backupFile(); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', v); fs.renameSync(f + '.tmp', f); } catch (err) { log('backup failed:', err && err.message); }
+});
+// 1.6.0: the game can ask to leave Safe Graphics mode (restart on the graphics card)
+ipcMain.on('gdbd-gpu', () => {
+  log('player asked for the graphics card');
+  try { fs.unlinkSync(safeFlag); } catch {}
+  const args = [...argv.filter(a => a !== '--gpu' && a !== '--safe-graphics'), '--gpu'];
+  if (portableExe && fs.existsSync(portableExe)) app.relaunch({ execPath: portableExe, args }); else app.relaunch({ args });
+  app.exit(0);
 });
 ipcMain.on('gdbd-backup-load', e => { try { e.returnValue = fs.readFileSync(backupFile(), 'utf8'); } catch { e.returnValue = null; } });
 

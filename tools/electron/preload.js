@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('gdbdDisk', {
   // 1.5.1: the backup code also kept in Documents\Granny x DBD (survives deleting the app and its AppData)
   backup: v => { if (typeof v === 'string' && /^GDBD1:/.test(v) && v.length < 4e6) ipcRenderer.send('gdbd-backup', v); },
   loadBackup: () => ipcRenderer.sendSync('gdbd-backup-load'),
+  // 1.6.0: restart on the graphics card (leave Safe Graphics mode)
+  useGpu: () => ipcRenderer.send('gdbd-gpu'),
 });

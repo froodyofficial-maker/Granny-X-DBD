@@ -93,7 +93,7 @@ const RaysShader = {
 };
 
 const PostShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, red: { value: 0 }, desat: { value: 0 }, flash: { value: 0 }, vig: { value: 0.9 }, grain: { value: 0.01 }, pulse: { value: 0 }, real: { value: 0 }, px: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, sharp: { value: 0.4 } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, red: { value: 0 }, desat: { value: 0 }, flash: { value: 0 }, vig: { value: 0.9 }, grain: { value: 0 }, pulse: { value: 0 }, real: { value: 0 }, px: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, sharp: { value: 0.4 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float time, red, desat, flash, vig, grain, pulse, real, sharp; uniform vec2 px; varying vec2 vUv;
     float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + time*7.0) * 43758.5453); }
@@ -104,7 +104,7 @@ const PostShader = {
       c.rgb = max(c.rgb + (c.rgb - blur) * sharp, 0.0);
       if (real > 0.0) {
         // lens: faint colour fringing toward the frame edges
-        vec2 ca = (vUv - 0.5) * 0.0028 * real;
+        vec2 ca = (vUv - 0.5) * 0.0012 * real;
         c.r = texture2D(tDiffuse, vUv + ca).r; c.b = texture2D(tDiffuse, vUv - ca).b;
         // night vision (Purkinje shift): in the dark the eye loses colour and sees blue-grey
         float lq = dot(max(c.rgb, 0.0), vec3(0.2126, 0.7152, 0.0722));
@@ -442,10 +442,10 @@ export class Game {
     if (q.post) {
       // multisampled render target: the post-processing chain otherwise loses anti-aliasing
       // (with a stencil buffer: the aura outlines are masked with it)
-      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: real ? 4 : 0, stencilBuffer: true });
+      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: q.msaa || 0, stencilBuffer: true });
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
-      if (real) {
+      if (real && this.settings.ao) { // (1.6.0: off unless asked for: it was the grain and a big cost)
         const hi = this.settings.quality === 'high';
         this.ao = new NightAO(this.scene, this.camera, innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), hi ? 0.75 : 0.5);
         this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.4, thickness: 1.2, scale: 1.15, samples: hi ? 16 : 10, distanceFallOff: 1, screenSpaceRadius: false });
@@ -455,9 +455,9 @@ export class Game {
       }
       // guard: one bad (NaN / infinite) pixel would otherwise be smeared by bloom into growing black squares
       this.composer.addPass(new ShaderPass(SanitizeShader));
-      if (real && !this.M.indoor) { this.rays = new ShaderPass(RaysShader); this.composer.addPass(this.rays); }
+      if (real && q.rays && !this.M.indoor) { this.rays = new ShaderPass(RaysShader); this.composer.addPass(this.rays); }
       if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.8); this.composer.addPass(this.bloom); }
-      this.post = new ShaderPass(PostShader); this.post.uniforms.real.value = real ? 1 : 0; this.post.uniforms.sharp.value = real ? 0.45 : 0.25; this.composer.addPass(this.post);
+      this.post = new ShaderPass(PostShader); this.post.uniforms.real.value = real ? 1 : 0; this.post.uniforms.sharp.value = q.sharp || 0; this.composer.addPass(this.post);
       this.composer.addPass(new OutputPass());
     } else { this.composer = null; this.post = null; }
     // HUD
@@ -1009,12 +1009,12 @@ export class Game {
   // ---------------- characters ----------------
   updateChars(dt, S, me) {
     const viewerKiller = me && me.role === 'killer';
-    if (this.chars.size > S.players.length) for (const [id, c] of this.chars) if (!S.players.some(p => p.id === id)) { this.scene.remove(c.rig.root); this.chars.delete(id); }
+    if (this.chars.size > S.players.length) for (const [id, c] of this.chars) if (!S.players.some(p => p.id === id)) { this.dropChar(c); this.chars.delete(id); }
     const K = killerOf(S);
     for (const p of S.players) {
       let c = this.chars.get(p.id);
       // rebuild when the role changes (Infection) or Chucky's real model finishes loading mid-match
-      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (p.char === 'father' && lookRole(p) === 'killer' && !c.rig.father && fatherReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb === 'freddy' && !c.rig.freddy && realismReady('freddy')) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.scene.remove(c.rig.root); this.chars.delete(p.id); c = null; }
+      if (c && (c.role !== lookRole(p) || c.char !== p.char || (p.char === 'chucky' && !c.rig.chucky && chuckyReady()) || (p.char === 'chucky' && p.skin === 'slappy' && lookRole(p) === 'killer' && !c.rig.slappy && slappyReady() && chuckyReady()) || (p.char === 'granny' && lookRole(p) === 'killer' && !c.rig.granny && grannyReady()) || (p.char === 'grandpa' && lookRole(p) === 'killer' && !c.rig.grandpa && grandpaReady()) || (p.char === 'slendrina' && lookRole(p) === 'killer' && !c.rig.slendrina && slendrinaReady()) || (p.char === 'angeline' && lookRole(p) === 'killer' && !c.rig.angeline && angelineReady()) || (p.char === 'nosferatu' && lookRole(p) === 'killer' && !c.rig.nosferatu && nosferatuReady()) || (p.char === 'father' && lookRole(p) === 'killer' && !c.rig.father && fatherReady()) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb && !c.rig.skinGlb && skinModelReady(skinOf(p.char, p.skin).glb)) || (lookRole(p) === 'killer' && skinOf(p.char, p.skin).glb === 'freddy' && !c.rig.freddy && realismReady('freddy')) || (p.char === 'slimer' && lookRole(p) === 'killer' && !c.rig.staticGlb && staticReady('slimer')))) { this.dropChar(c); this.chars.delete(p.id); c = null; }
       if (!c) {
         const rig = lookRole(p) === 'killer' ? makeKiller(p.char, skinOf(p.char, p.skin)) : makeSurvivor(SURVIVORS[p.char] || SURVIVORS.mara, skinOf(p.char, p.skin));
         this.scene.add(rig.root);
@@ -1093,7 +1093,7 @@ export class Game {
         st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0 && !(p.gamed > 0); st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
         if (p.char === 'slendrina') { st.gaze = p.gaze > 0; st.speed = c.spd; }
         if (p.char === 'nosferatu' || p.char === 'father') st.speed = c.spd;
-        if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; }
+        if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; st.pump = p.char === 'grandpa' && c.shotAt != null && this.t - c.shotAt > 0.45 && this.t - c.shotAt < 1.35 ? (this.t - c.shotAt - 0.45) / 0.9 : null; }
         if (p.atk === 1) { c.atkT = (c.atkPrev === 1 ? c.atkT + dt : 0); st.atkF = c.atkT / (RULES.lungeTime * (p.atkAmbush ? 1.4 : 1)); }
         c.atkPrev = p.atk;
         st.atkHit = p.atkHit; st.tele = !!p.tele; st.dark = p.char === 'foreman' && p.ab === 1;
@@ -1155,6 +1155,7 @@ export class Game {
         if (cg) { const yw = R.root.rotation.y; R.root.position.set(cg.x - Math.cos(yw) * 0.17, HOOK_Y - 1.62 + Math.sin(this.t * 1.1) * 0.015, cg.z + Math.sin(yw) * 0.17); }
       }
       if (p.role === 'survivor') this.placeTorch(c, R, p, flashOn && R.root.visible);
+      if (p.role === 'survivor') this.placeHandItem(c, R, p);
       // Season 2: the Teddy, held up in both hands while it's raised
       if (p.role === 'survivor' && (p.tedT > 0 || c.teddy)) {
         if (!c.teddy) { const t = makeTeddy(); if (t) { c.teddy = t; this.scene.add(t); } }
@@ -1715,6 +1716,17 @@ export class Game {
 
   // flashlight: a torch in the right hand with a soft volumetric beam (and a real spotlight on
   // medium/high for the beam nearest the camera)
+  // a character's model and everything drawn beside it (torch, hand item, teddy) leave the scene together
+  dropChar(c) { this.scene.remove(c.rig.root); for (const k of ['torch', 'handItem', 'teddy']) if (c[k]) { this.scene.remove(c[k]); c[k] = null; } c.handK = undefined; }
+  // 1.6.0: the item a survivor carries, in the right hand (pepper spray, taser); the flashlight is placeTorch
+  placeHandItem(c, R, p) {
+    const k = (p.item === 'pepper' || p.item === 'taser') && p.st === 'ok' && !p.act && R.root.visible && (p.hide ?? -1) < 0 && (p.car ?? -1) < 0 ? p.item : null;
+    if (c.handK !== k) { if (c.handItem) { this.scene.remove(c.handItem); c.handItem = null; } c.handK = k; if (k) { c.handItem = k === 'pepper' ? pepperModel() : itemModel('taser'); if (k === 'taser') c.handItem.scale.multiplyScalar(0.5); this.scene.add(c.handItem); } }
+    if (!c.handItem) return;
+    const hand = R.j && R.j.handR;
+    if (hand) hand.getWorldPosition(c.handItem.position); else c.handItem.position.set(p.x, 1.0, p.z);
+    c.handItem.rotation.set(0, c.yaw, 0); if (k === 'pepper') c.handItem.rotateX(0.35);
+  }
   placeTorch(c, R, p, on) {
     if (!c.torch) {
       const g = new THREE.Group();
@@ -1809,12 +1821,12 @@ export class Game {
         const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.42, 0.56), wood); box.position.y = 0.21; g.add(box);
         for (const x of [-0.33, 0.33]) { const band = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.58), iron); band.position.set(x, 0.21, 0); g.add(band); }
         const lid = new THREE.Group(); lid.position.set(0, 0.42, -0.28); g.add(lid);
-        const top = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.9, 14, 1, false, 0, Math.PI), wood); top.rotation.set(0, 0, Math.PI / 2); top.position.set(0, 0, 0.28); top.scale.set(1, 1, 0.45); lid.add(top);
-        for (const x of [-0.33, 0.33]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.06, 14, 1, false, 0, Math.PI), iron); band.rotation.set(0, 0, Math.PI / 2); band.position.set(x, 0, 0.28); band.scale.set(1, 1, 0.47); lid.add(band); }
-        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold); lock.position.set(0, 0.36, 0.29); g.add(lock);
+        const top = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.96, 16, 1, false, 0, Math.PI), wood); top.rotation.set(0, 0, Math.PI / 2); top.position.set(0, 0, 0.28); top.scale.set(1, 1, 0.8); lid.add(top); // (1.6.0: a bigger, rounder lid)
+        for (const x of [-0.33, 0.33]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.06, 14, 1, false, 0, Math.PI), iron); band.rotation.set(0, 0, Math.PI / 2); band.position.set(x, 0, 0.28); band.scale.set(1, 1, 0.82); lid.add(band); }
+        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold); lock.position.set(0, 0.4, 0.3); g.add(lock);
         g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
         const glow = new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), new THREE.MeshBasicMaterial({ color: 0xffd890, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.43; g.add(glow);
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.43; glow.visible = false; g.add(glow); // (1.6.0: no glowing circle on the chest)
         const hold = new THREE.Group(); hold.position.y = 0.62; g.add(hold);
         this.scene.add(g); this.chestMeshes.push({ g, lid, glow, hold, k: null, open: 0 });
       }
@@ -2533,8 +2545,8 @@ export class Game {
     this.drT = 0;
     const fps = 1 / this.ftAvg;
     let pr = this.pr;
-    if (fps < 42 && pr > this.q.minPixel) pr = Math.max(this.q.minPixel, pr - 0.1);
-    else if (fps > 58 && pr < this.q.pixel) pr = Math.min(this.q.pixel, pr + 0.05);
+    if (fps < 40 && pr > this.q.minPixel) pr = Math.max(this.q.minPixel, pr - 0.05);
+    else if (fps > 56 && pr < this.q.pixel) pr = Math.min(this.q.pixel, pr + 0.05);
     if (pr !== this.pr) { this.pr = pr; this.renderer.setPixelRatio(pr); this.renderer.setSize(innerWidth, innerHeight); if (this.composer) { this.composer.setPixelRatio(pr); this.composer.setSize(innerWidth, innerHeight); } }
   }
 
@@ -2702,6 +2714,7 @@ export class Game {
 
   // the survivor's item card (changes when you swap at a chest)
   renderItemHUD(me) {
+    if (MOBILE) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char, me.item); // (1.6.0: the button name of THIS match's item, not the last one's)
     this.hudItem = me.item;
     $('item').innerHTML = this.itemHTML(me);
   }
@@ -3043,7 +3056,17 @@ function makeBearTrap() {
 }
 
 // a survivor item as a small model (chests, hands): flashlight, ghost trap, taser
+// 1.6.0: a pepper spray can (it used to show a flashlight): red can, black nozzle cap, white label band
+function pepperModel() {
+  const g = new THREE.Group(), red = new THREE.MeshStandardMaterial({ color: 0xb3201e, metalness: 0.5, roughness: 0.35 });
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.15, 14), red); g.add(can);
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0285, 0.0285, 0.05, 14), new THREE.MeshStandardMaterial({ color: 0xf0ece0, roughness: 0.6 })); label.position.y = -0.01; g.add(label);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.035, 12), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.5 })); cap.position.y = 0.092; g.add(cap);
+  const noz = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.012, 0.02), cap.material); noz.position.set(0, 0.1, 0.022); g.add(noz);
+  return g;
+}
 function itemModel(k) {
+  if (k === 'pepper') { const g = pepperModel(); g.scale.setScalar(1.6); return g; }
   if (k === 'taser') { const m = cloneStatic('taser'); if (m) { m.scale.setScalar(1.9); return m; } }
   if (k === 'trap') { const m = cloneStatic('ghosttrap'); if (m) { m.scale.setScalar(0.75); m.position.y = -0.12; return m; } }
   const g = new THREE.Group();

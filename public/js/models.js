@@ -1,5 +1,6 @@
 // Procedural 3D models: rigged characters, killers, props. Every character mesh has an
 // "aura" twin (fresnel glow, drawn through walls) that can be toggled on.
+import { weaponBlood } from './bloodfx.js';
 import * as THREE from 'three';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
@@ -18,7 +19,7 @@ const auraMats = new Map();
 // Each aura mesh gets two children (auraParts): a mask that writes the silhouette into the stencil buffer (drawn with the
 // opaque objects, so always first) and a faint fill inside it; the aura mesh itself is pushed out along its normals by a
 // fixed number of pixels and only drawn where the mask isn't: what's left is the rim. Seen through walls like before.
-export const AURA_W = 0.0075; // outline width, in NDC (about 2.7 px on a 720 px tall screen)
+export const AURA_W = 0.0038; // outline width, in NDC (about 1.4 px on a 720 px tall screen, 2.7 px at 1440p; 1.6.0: was twice that, too thick)
 export const OUTLINE_VS = `
   vec4 outlineClip(vec4 mv, vec3 viewN) {
     vec4 clip = projectionMatrix * mv;
@@ -71,6 +72,7 @@ const stdCache = new Map();
 export const DETAIL = { lite: false, seg: 1 };
 export function setDetail(quality) {
   const lite = quality === 'potato' || quality === 'low';
+  GFX.lite = lite; // (1.6.0: grannyGlb skips the heavier character materials on low)
   // the realistic look rounds characters out with more polygons
   const seg = realistic() ? ({ potato: 0.5, low: 0.8, medium: 1.35, high: 1.7 }[quality] ?? 1) : quality === 'potato' ? 0.5 : quality === 'low' ? 0.7 : 1;
   const style = GFX.style;
@@ -884,11 +886,12 @@ export function makeViewModel(id, vsk = {}, real = {}) {
   } else if (id === 'granny') {
     // her bloody baseball bat: one piece, gripped at the handle, tip raised a little
     const bat = new THREE.Group(); bat.position.set(0, 0.0, -0.02); bat.rotation.x = 0.28; arm.add(bat);
-    const wood = mat(0xb08858, { map: 'wood', rough: 0.55 }), blood = mat(0x6a0505, { rough: 0.15 });
+    const wood = mat(0xb08858, { map: 'wood', rough: 0.55 });
     add(bat, G.cyl(0.024, 0.02, 0.3, 10), mat(0x6a4426, { map: 'wood', rough: 0.6 }), 0, 0, -0.1, Math.PI / 2, 0, 0);
     add(bat, G.cyl(0.044, 0.026, 0.4, 12), wood, 0, 0, -0.45, Math.PI / 2, 0, 0);
-    add(bat, G.cyl(0.046, 0.044, 0.2, 12), blood, 0, 0, -0.73, Math.PI / 2, 0, 0);
-    add(bat, G.sph(0.046, 10, 8), blood, 0, 0, -0.83, 0, 0, 0, 1, 1, 0.6);
+    add(bat, G.cyl(0.046, 0.044, 0.2, 12), wood, 0, 0, -0.73, Math.PI / 2, 0, 0);
+    add(bat, G.sph(0.046, 10, 8), wood, 0, 0, -0.83, 0, 0, 0, 1, 1, 0.6);
+    { const sm = weaponBlood(new THREE.Vector3(0, 0, -0.55), new THREE.Vector3(0, 0, -0.86), 0.05); sm.material.opacity = 0.9; bat.add(sm); } // (old blood soaked in)
     tip.position.set(0, Math.sin(0.28) * 0.83, -Math.cos(0.28) * 0.83); base.position.set(0, Math.sin(0.28) * 0.25, -Math.cos(0.28) * 0.25);
   } else if (id === 'slimer') {
     // no weapon: he grabs with his slimy hands
@@ -911,8 +914,8 @@ export function makeViewModel(id, vsk = {}, real = {}) {
   }
   arm.add(tip); arm.add(base);
   // blood smear on the business end, revealed after a hit
-  const bloodMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshStandardMaterial({ color: 0x5a0505, roughness: 0.15, transparent: true, opacity: 0 }));
-  bloodMesh.position.copy(tip.position).lerp(base.position, 0.3); bloodMesh.scale.set(0.035, 0.07, 0.12); bloodMesh.visible = false; bloodMesh.renderOrder = 6;
+  // (1.6.0: a smear with drips round the end of the weapon, not a red blob)
+  const bloodMesh = weaponBlood(base.position.clone().lerp(tip.position, 0.35), tip.position.clone().lerp(base.position, -0.04), id === 'granny' ? 0.05 : 0.045); bloodMesh.visible = false;
   arm.add(bloodMesh); g.userData.bloodMesh = bloodMesh;
   // left hand (holds the lantern for the Lamplighter)
   const left = new THREE.Group(); g.add(left);
@@ -1004,27 +1007,54 @@ export function makeLantern() {
 }
 
 // ---------- props ----------
+let STRIPES = null;
 export function makeGenerator() {
+  // 1.6.0: a proper old generator: painted engine block on a skid frame, cooling fins, a fuel tank, a bent exhaust, a control
+  // panel with dials, hazard stripes and a cable up to a caged work-lamp mast (pistons, bulbs, body and aura stay the same)
   const g = new THREE.Group();
-  const metal = mat(0x8a8478, { map: 'metal', metal: 0.4, rough: 0.6 });
-  const dark = mat(0x2b2a28, { metal: 0.5, rough: 0.5 });
-  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.castShadow = true; me.receiveShadow = true; g.add(me); return me; };
-  add(G.box(1.25, 0.18, 0.95), dark, 0, 0.09, 0);
-  const body = add(G.box(1.0, 0.72, 0.78), metal, 0, 0.55, 0);
-  add(G.box(0.25, 0.6, 0.82), dark, -0.62, 0.48, 0);
-  for (let i = 0; i < 6; i++) add(G.box(0.02, 0.5, 0.8), dark, -0.5 - i * 0.03, 0.5, 0);
-  add(G.cyl(0.05, 0.05, 0.8), dark, 0.42, 1.2, -0.25);
-  add(new THREE.TorusGeometry(0.2, 0.04, 8, 18), dark, 0.52, 0.6, 0.42, 0, 0, 0);
+  const paint = mat(0x7a2c1a, { map: 'metal', metal: 0.35, rough: 0.55 }), paint2 = mat(0x5a2014, { map: 'metal', metal: 0.4, rough: 0.6 });
+  const steel = mat(0x2a2826, { map: 'metal', metal: 0.7, rough: 0.45 }), chrome = mat(0x9a9890, { metal: 0.9, rough: 0.25 });
+  const tankM = mat(0x8a6a24, { map: 'metal', metal: 0.4, rough: 0.5 }), rubber = mat(0x141312, { rough: 0.8 });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0, par = g) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); me.castShadow = true; me.receiveShadow = true; par.add(me); return me; };
+  // skid frame
+  for (const z of [-0.4, 0.4]) add(G.box(1.4, 0.08, 0.1), steel, 0, 0.04, z);
+  for (const x of [-0.55, 0, 0.55]) add(G.box(0.08, 0.06, 0.9), steel, x, 0.1, 0);
+  // engine block + crankcase
+  const body = add(G.box(1.0, 0.62, 0.72), paint, 0.02, 0.45, 0);
+  add(G.box(1.04, 0.08, 0.76), paint2, 0.02, 0.78, 0);                 // top lip
+  add(G.box(0.3, 0.42, 0.62), steel, -0.62, 0.36, 0);                  // alternator housing
+  add(G.cyl(0.24, 0.24, 0.12, 14), steel, -0.8, 0.38, 0, 0, 0, Math.PI / 2);
+  for (let i = 0; i < 7; i++) add(G.box(0.025, 0.5, 0.66), paint2, 0.56 + i * 0.035, 0.45, 0);   // cooling fins
+  // fuel tank on top, toward the back
+  const tank = add(G.cap(0.15, 0.62), tankM, 0.05, 0.98, -0.18, 0, 0, Math.PI / 2);
+  add(G.cyl(0.04, 0.04, 0.06, 8), steel, 0.25, 1.15, -0.18);           // filler cap
+  // exhaust: up from the side, bent over
+  add(G.cyl(0.045, 0.045, 0.5, 8), steel, 0.48, 1.0, 0.28);
+  add(G.tor(0.09, 0.045, Math.PI / 2), steel, 0.57, 1.25, 0.28, 0, 0, 0);
+  add(G.cyl(0.05, 0.04, 0.16, 8), rubber, 0.66, 1.25 - 0.09 + 0.0, 0.28, 0, 0, Math.PI / 2);
+  // control panel with two dials and a switch
+  const panel = add(G.box(0.36, 0.26, 0.04), steel, -0.12, 0.52, 0.38);
+  for (const dx of [-0.08, 0.06]) {
+    add(G.cyl(0.05, 0.05, 0.015, 14), mat(0xe8e2cc, { rough: 0.4, emissive: 0x302810, ei: 0.4 }), -0.12 + dx, 0.56, 0.405, Math.PI / 2, 0, 0);
+    add(G.box(0.006, 0.04, 0.004), mat(0xb3201e), -0.12 + dx, 0.57, 0.414, 0, 0, 0.6);
+  }
+  add(G.box(0.03, 0.06, 0.03), chrome, -0.04, 0.45, 0.415, 0.5, 0, 0);
+  // hazard stripes along the front of the base
+  if (!STRIPES) { const c = document.createElement('canvas'); c.width = 128; c.height = 16; const x = c.getContext('2d'); x.fillStyle = '#d8a420'; x.fillRect(0, 0, 128, 16); x.fillStyle = '#141210'; for (let k = -16; k < 128; k += 16) { x.beginPath(); x.moveTo(k, 16); x.lineTo(k + 8, 0); x.lineTo(k + 16, 0); x.lineTo(k + 8, 16); x.fill(); } STRIPES = new THREE.CanvasTexture(c); STRIPES.colorSpace = THREE.SRGBColorSpace; }
+  add(G.box(1.0, 0.06, 0.01), new THREE.MeshStandardMaterial({ map: STRIPES, roughness: 0.7 }), 0.02, 0.2, 0.365);
   const pistons = [];
-  for (let i = 0; i < 4; i++) pistons.push(add(G.cyl(0.07, 0.07, 0.28), mat(0x5a5650, { metal: 0.7, rough: 0.4 }), -0.25 + i * 0.17, 1.02, 0.05));
-  // lamp mast with 3 bulbs
-  add(G.cyl(0.03, 0.03, 0.9), dark, 0.3, 1.35, 0.25);
+  for (let i = 0; i < 4; i++) { const p = add(G.cyl(0.065, 0.065, 0.28, 12), chrome, -0.28 + i * 0.16, 1.02, 0.16); pistons.push(p); add(G.cyl(0.085, 0.085, 0.05, 12), steel, -0.28 + i * 0.16, 0.84, 0.16); }
+  // work-lamp mast: a pole, a bracket and three caged bulbs, fed by a cable from the panel
+  add(G.cyl(0.03, 0.035, 1.0, 8), steel, 0.3, 1.32, 0.3);
+  add(G.box(0.55, 0.03, 0.05), steel, 0.3, 1.8, 0.3);
   const bulbs = [];
   for (let i = 0; i < 3; i++) {
-    const bm = new THREE.MeshStandardMaterial({ color: 0x332a1a, emissive: 0xffb050, emissiveIntensity: 0, roughness: 0.3 });
-    bulbs.push(add(G.sph(0.06), bm, 0.3 + (i - 1) * 0.16, 1.82, 0.25));
+    const bx = 0.3 + (i - 1) * 0.17, bm = new THREE.MeshStandardMaterial({ color: 0x332a1a, emissive: 0xffb050, emissiveIntensity: 0, roughness: 0.3 });
+    bulbs.push(add(G.sph(0.055, 12, 10), bm, bx, 1.72, 0.3));
+    for (const ry of [0, Math.PI / 2]) add(G.tor(0.07, 0.006, Math.PI), steel, bx, 1.72, 0.3, 0, ry, Math.PI);
   }
-  add(G.box(0.55, 0.03, 0.06), dark, 0.3, 1.76, 0.25);
+  const cab = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.12, 0.42, 0.4), new THREE.Vector3(0.0, 0.18, 0.55), new THREE.Vector3(0.22, 0.4, 0.42), new THREE.Vector3(0.3, 0.9, 0.32)]);
+  add(new THREE.TubeGeometry(cab, 20, 0.016, 6, false), rubber, 0, 0, 0);
   // the aura (seen through walls) is the generator's own outline, not a box: a merged copy of its parts
   const parts = []; g.updateMatrixWorld(true);
   g.traverse(o => { if (o.isMesh && o.geometry) { const gg = o.geometry.index ? o.geometry : null; parts.push({ geo: gg || o.geometry, matrix: o.matrix.clone() }); } });

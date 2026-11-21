@@ -3,8 +3,9 @@
 // a painted backdrop drawn here (sunset sky, sun, clouds, skyline, palms, a gas station / pier / street).
 //   FRAMES=4 OUTDIR=/tmp/lsart PAGE=lsart-page.js node render-devlog.mjs     (then: python3 lsart.py /tmp/lsart public/img/ls)
 import * as THREE from 'three';
-import { makeKiller, animate } from './js/models.js';
-import { loadGranny, loadGrandpa, loadSlendrina, loadNosferatu, loadVictimCar, makeVictimCar } from './js/grannyGlb.js';
+import { makeKiller, makeSurvivor, animate } from './js/models.js';
+import { SURVIVORS } from './js/config.js';
+import { loadGranny, loadGrandpa, loadSlendrina, loadNosferatu, loadAngeline, loadFather, loadVictimCar, makeVictimCar } from './js/grannyGlb.js';
 import { PALM, loadImg, logoRow, gtaLogo as drawGta, eventLine } from './__vicity-common.js';
 
 const W = 1920, H = 1080, SS = 1.5;
@@ -18,11 +19,18 @@ const SHOTS = [
   { id: 'nosferatu', st: { anim: 'idle', speed: 0 }, frames: 40, yaw: -0.45, cam: [-0.3, 0.75, 3.9], at: [0.95, 1.15, 0], scene: 'roof' },
   // 4: the Game Jolt thumbnail (Vice Nights): Granny on the right, the logos on the left
   { id: 'granny', st: { anim: 'idle', speed: 0, aim: true }, frames: 18, yaw: -0.15, cam: [-0.35, 0.65, 3.3], at: [-1.15, 1.2, 0], scene: 'gas', thumb: true },
+  // 5-10 (1.6.0): every other character gets its own loading screen
+  { id: 'angeline', st: { anim: 'idle', speed: 0, aim: true }, frames: 40, yaw: 0.3, cam: [0.1, 0.8, 3.6], at: [-0.85, 1.25, 0], scene: 'beach' },
+  { id: 'father', st: { anim: 'idle', speed: 0, aim: true }, frames: 40, yaw: -0.4, cam: [-0.4, 0.9, 6.6], at: [1.3, 1.75, 0], scene: 'street' },
+  { surv: 'mara', st: { anim: 'run', speed: 5 }, frames: 9, yaw: 0.7, cam: [0.1, 0.6, 3.5], at: [-0.8, 0.95, 0], scene: 'gas' },
+  { surv: 'eli', st: { anim: 'run', speed: 5 }, frames: 15, yaw: -0.6, cam: [-0.1, 0.6, 3.5], at: [0.8, 0.95, 0], scene: 'roof' },
+  { surv: 'june', st: { anim: 'run', speed: 5 }, frames: 14, yaw: -0.65, cam: [-0.1, 0.6, 3.5], at: [0.8, 0.95, 0], scene: 'beach' },
+  { surv: 'tomas', st: { anim: 'crouchwalk', speed: 1.5 }, frames: 20, yaw: 0.55, cam: [0.1, 0.5, 3.2], at: [-0.8, 0.75, 0], scene: 'pier' },
 ];
 window.setup = async () => {
-  await Promise.all([loadGranny(), loadGrandpa(), loadSlendrina(), loadNosferatu(), loadVictimCar()]);
+  await Promise.all([loadGranny(), loadGrandpa(), loadSlendrina(), loadNosferatu(), loadAngeline(), loadFather(), loadVictimCar()]);
   sc = new THREE.Scene();
-  for (const s of SHOTS) { const r = makeKiller(s.id, {}); r.root.visible = false; r.root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } }); sc.add(r.root); A[s.id] = r; }
+  for (const s of SHOTS) { const key = s.id || s.surv; if (A[key]) continue; const r = s.surv ? makeSurvivor(SURVIVORS[s.surv]) : makeKiller(s.id, {}); r.root.visible = false; r.root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } }); sc.add(r.root); A[key] = r; }
   car = makeVictimCar(); car.visible = false; car.traverse(o => { if (o.isMesh) o.castShadow = true; }); sc.add(car);
   // a ground that only shows shadows
   ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.45, color: 0x1a0320 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; sc.add(ground);
@@ -113,20 +121,33 @@ function rooftop(x, base) {
   x.save(); x.shadowColor = '#ff2d95'; x.shadowBlur = 30; x.strokeStyle = '#ff5ab0'; x.lineWidth = 8; x.strokeRect(W * 0.04 + 20, base - 450, 520, 190);
   x.font = 'italic 110px "Bebas Neue", sans-serif'; x.textAlign = 'center'; x.fillStyle = '#ffe7f4'; x.fillText('VICE NIGHTS', W * 0.04 + 280, base - 315); x.restore();
 }
+function beach(x, base) {
+  const sea = x.createLinearGradient(0, base, 0, base + 150); sea.addColorStop(0, '#7a3f95'); sea.addColorStop(1, '#3a2266');
+  x.fillStyle = sea; x.fillRect(0, base, W, 150);
+  x.fillStyle = 'rgba(255,200,150,.55)'; for (let i = 0; i < 30; i++) { const y = base + 6 + rnd() * 120, w = 50 + rnd() * 180; x.fillRect(W * 0.66 + (rnd() - 0.5) * 360 - w / 2, y, w, 3); }
+  const sand = x.createLinearGradient(0, base + 140, 0, H); sand.addColorStop(0, '#c77a8a'); sand.addColorStop(1, '#5a2a52');
+  x.fillStyle = sand; x.beginPath(); x.moveTo(0, base + 150); for (let i = 0; i <= 12; i++) x.lineTo(i * W / 12, base + 140 + Math.sin(i * 1.7) * 10); x.lineTo(W, H); x.lineTo(0, H); x.fill();
+  // a lifeguard tower
+  const tx = W * 0.16, ty = base + 120;
+  x.fillStyle = '#21102e'; x.fillRect(tx - 70, ty - 60, 8, 120); x.fillRect(tx + 62, ty - 60, 8, 120); x.fillRect(tx - 80, ty - 70, 160, 14);
+  x.fillStyle = '#2d1640'; x.fillRect(tx - 60, ty - 170, 120, 100); x.fillStyle = '#ff4fa3'; x.fillRect(tx - 60, ty - 120, 120, 8);
+  x.fillStyle = '#1a0b24'; x.beginPath(); x.moveTo(tx - 80, ty - 170); x.lineTo(tx, ty - 215); x.lineTo(tx + 80, ty - 170); x.fill();
+}
 function backdrop(x, kind) {
-  const horizon = kind === 'pier' ? H * 0.6 : H * 0.64;
+  const horizon = kind === 'pier' || kind === 'beach' ? H * 0.6 : H * 0.64;
   sky(x, horizon);
   clouds(x, 14, H * 0.08, H * 0.42);
   sunDisc(x, kind === 'street' || kind === 'roof' ? W * 0.3 : W * 0.7, horizon - 190, 120);
   skyline(x, horizon, 'rgba(120,60,150,.75)', 120, 380, false);
-  if (kind !== 'pier') skyline(x, horizon + 4, '#2a1238', 60, 260, true);
+  if (kind !== 'pier' && kind !== 'beach') skyline(x, horizon + 4, '#2a1238', 60, 260, true);
   if (kind === 'pier') pier(x, horizon);
+  else if (kind === 'beach') beach(x, horizon);
   else if (kind === 'roof') rooftop(x, H * 0.72);
   else road(x, horizon);
   if (kind === 'gas') gasStation(x, W * 0.04, horizon + 40);
   // palms
   const P = { gas: [[W * 0.52, 0.62, false], [W * 0.6, 0.48, true], [W * 0.95, 0.9, true]], street: [[W * 0.05, 0.85, false], [W * 0.14, 0.6, true], [W * 0.46, 0.5, false]],
-    pier: [[W * 0.4, 0.66, true], [W * 0.5, 0.5, false], [W * 0.97, 0.95, true]], roof: [[W * 0.58, 0.44, false], [W * 0.66, 0.36, true]] }[kind] || [];
+    pier: [[W * 0.4, 0.66, true], [W * 0.5, 0.5, false], [W * 0.97, 0.95, true]], beach: [[W * 0.32, 0.7, false], [W * 0.42, 0.52, true], [W * 0.96, 0.92, true]], roof: [[W * 0.58, 0.44, false], [W * 0.66, 0.36, true]] }[kind] || [];
   for (const [px, s, f] of P) palmAt(x, px, horizon + 40 + (s > 0.8 ? 300 : 0), H * s, f);
 }
 // the killer layer: a dark ink outline round the silhouette, then the render, a touch more saturated
@@ -141,7 +162,7 @@ function inked(x, img) {
 window.frame = (i) => {
   const s = SHOTS[i % SHOTS.length]; for (const k in A) A[k].root.visible = false;
   for (const k in A) A[k].root.visible = k === s.id;
-  const r = A[s.id]; r.root.position.set(0, 0, 0); r.root.rotation.y = s.yaw;
+  const r = A[s.id || s.surv]; r.root.visible = true; r.root.position.set(0, 0, 0); r.root.rotation.y = s.yaw;
   for (let k = 0; k < s.frames; k++) animate(r, s.st, 1 / 30);
   car.visible = !!s.car; if (s.car) { car.position.set(-1.0, 0, -2.6); car.rotation.y = -1.1; }
   cam.position.set(...s.cam); cam.lookAt(...s.at); cam.updateProjectionMatrix();

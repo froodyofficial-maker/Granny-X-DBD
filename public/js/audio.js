@@ -31,20 +31,27 @@ export class Sound {
     this.musicLoading = false;
     return this.musicBuf;
   }
-  menuMusic(on) {
+  // id: 'menu' (public/audio/menu.mp3) or a theme track ('vitheme': the GTA VI theme, played from 1:00 with a slow fade-in,
+  // looping from there). A theme track that isn't there falls back to the menu music.
+  menuMusic(on, id = 'menu') {
     this.wantMenu = on;
+    if (id !== 'menu' && this.tracks && this.tracks[id] === null) id = 'menu';
     if (!this.ok) return;
     const c = this.ctx, t = c.currentTime;
+    const stop = () => { const src = this.menuSrc, g = this.menuGain; this.menuSrc = null; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2); src.stop(t + 1.3); };
+    if (on && this.menuSrc && this.menuId !== id) stop();
     if (on && !this.menuSrc) {
-      if (!this.musicBuf) { this.loadMusic().then(() => { if (this.wantMenu && !this.menuSrc && this.musicBuf) this.menuMusic(true); }); return; }
-      const src = c.createBufferSource(); src.buffer = this.musicBuf; src.loop = true;
-      const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + 2.5);
-      src.connect(g); g.connect(this.musicBus); src.start(); this.menuSrc = src; this.menuGain = g;
-    } else if (!on && this.menuSrc) {
-      const src = this.menuSrc, g = this.menuGain; this.menuSrc = null;
-      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
-      src.stop(t + 1.3);
-    }
+      const buf = id === 'menu' ? this.musicBuf : this.tracks && this.tracks[id];
+      if (!buf) {
+        if (id === 'menu') this.loadMusic().then(() => { if (this.wantMenu && !this.menuSrc && this.musicBuf) this.menuMusic(true, 'menu'); });
+        else if (!this.tracks || this.tracks[id] === undefined) this.loadTrack(id).then(() => { if (this.wantMenu && !this.menuSrc) this.menuMusic(true, id); });
+        return;
+      }
+      const off = id === 'vitheme' ? Math.min(60, buf.duration * 0.5) : 0, fade = id === 'vitheme' ? 5 : 2.5;
+      const src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = off; src.loopEnd = buf.duration;
+      const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + fade);
+      src.connect(g); g.connect(this.musicBus); src.start(t, off); this.menuSrc = src; this.menuGain = g; this.menuId = id;
+    } else if (!on && this.menuSrc) stop();
   }
   // 1.5.3: Granny's House background music during a match there (public/audio/granny3.mp3, offline: #nb-granny3-mp3)
   async loadTrack(id) {
