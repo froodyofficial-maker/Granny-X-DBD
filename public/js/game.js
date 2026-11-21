@@ -8,13 +8,14 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { initPhoto } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF, SIDEKICKS } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
 import { updateVice, SEAT_DROP, COLL } from './vice.js';
 import { sawOffGun } from './grannyGlb.js';
+import { makeCrow, loadCrow, crowReady, animateCrowPerched, animateCrowFlying, crowFlightOffset } from './crow.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady, fatherReady, makeTeddy } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
@@ -814,6 +815,7 @@ export class Game {
     if (this.execTrap && !S.players.some(o => o.st === 'exec')) { this.execTrapT = (this.execTrapT || 0) + dt; if (this.execTrapT > 6) { this.scene.remove(this.execTrap); this.execTrap = null; this.execTrapT = 0; } } else this.execTrapT = 0;
     this.updateSpiderMom(dt, S);
     this.updateKids(dt, S);
+    this.updateCrows(dt, S);
     if (S.cars) updateCity(this, S, dt, me);
     this.updateFatherFx(dt, S, me);
     // pepper-sprayed killer: eyes streaming (heavy until the last few seconds)
@@ -1091,7 +1093,7 @@ export class Game {
         anim = vaulting ? 'vault' : (c.spd > 0.3 || (!local && p.mv >= 1 && p.mv <= 2)) ? 'walk' : 'idle';
         if (vaulting) { const d = p.vault.d || 1.7; y = Math.sin(Math.min(1, c.vaultT / d) * Math.PI) * 0.5; }
         if (execing) st.exec = { f: p.act.t / RULES.execTime, char: p.char, role: 'killer' };
-        st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0 && !(p.gamed > 0); st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
+        st.carry = p.carry != null; st.atk = p.atk; st.stun = p.stun > 0 && !(p.gamed > 0) && !(p.sawT > 0 && !p.sawed); st.act = p.act && p.act.k; st.aim = p.aim; st.rampage = p.char === 'butcher' && p.ab === 1;
         if (p.char === 'slendrina') { st.gaze = p.gaze > 0; st.speed = c.spd; }
         if (p.char === 'nosferatu' || p.char === 'father') st.speed = c.spd;
         if (p.char === 'granny' || p.char === 'grandpa') { st.listen = p.ab === 1 || !!p.tele; st.blind = p.blind > 0; st.aim = !!p.aim; st.dash = !!p.dash; st.shot = c.shotAt != null && this.t - c.shotAt < 0.7 ? (this.t - c.shotAt) / 0.7 : null; st.pump = p.char === 'grandpa' && c.shotAt != null && this.t - c.shotAt > 0.45 && this.t - c.shotAt < 1.35 ? (this.t - c.shotAt - 0.45) / 0.9 : null; }
@@ -1471,7 +1473,7 @@ export class Game {
       const bob = Math.sin(this.t * 8) * 0.035 * Math.min(1, (c?.spd || 0) / 4);
       let vy = 0;
       if (me.vault) { const v = me.vault; vy = Math.sin(Math.min(1, v.t / v.d) * Math.PI) * 0.4; }
-      const stunTilt = me.stun > 0 && !(me.gamed > 0) ? Math.sin(this.t * 6) * 0.08 : 0;
+      const stunTilt = me.stun > 0 && !(me.gamed > 0) && !(me.sawT > 0 && !me.sawed) ? Math.sin(this.t * 6) * 0.08 : 0;
       const lift = ((this.chars.get(me.id) || {}).lift || 0) - (me.gamed > 0 ? SEAT_DROP : 0); // (1.5.3: sat at the GTA VI desk)
       cam.position.set(me.x, eye + bob + vy + lift + ((c && c.h) || 0), me.z);
       cam.rotation.set(me.pitch + sy, me.yaw + Math.PI + sx, stunTilt);
@@ -1926,6 +1928,44 @@ export class Game {
       R.play(k.st === 2 ? 'attack' : sp > 0.4 || k.st === 1 ? 'walk' : 'idle', dt, k.st === 1 || sp > 0.4 ? Math.min(2, Math.max(0.8, sp / 2.5)) : 1);
     }
   }
+  // 1.6.0: Tamed Crows on their survivors' left shoulders (or up in the sky while p.crowF > 0)
+  updateCrows(dt, S) {
+    this.crows ||= new Map();
+    const FL = SIDEKICKS.crow.flight, v = this._cv ||= new THREE.Vector3(), o = this._co ||= new THREE.Vector3();
+    for (const [id, C] of this.crows) if (!S.players.some(p => p.id === id && p.kid === 'crow')) { this.scene.remove(C.m); this.crows.delete(id); }
+    for (const p of S.players) {
+      if (p.kid !== 'crow' || p.role !== 'survivor') continue;
+      const c = this.chars.get(p.id); if (!c) continue;
+      let C = this.crows.get(p.id);
+      if (!C) { if (!crowReady()) { loadCrow(); continue; } const m = makeCrow(); if (!m) continue; C = { m, pos: new THREE.Vector3(), yaw: 0, init: false }; this.scene.add(C.m); this.crows.set(p.id, C); }
+      const R = c.rig, sh = R.j && R.j.shL;
+      // the perch: on top of the left shoulder (or above the root for models without one)
+      if (sh) { sh.getWorldPosition(v); v.y += 0.05; }
+      else { R.root.getWorldPosition(v); const yw = R.root.rotation.y; v.x += Math.cos(yw) * 0.2; v.z -= Math.sin(yw) * 0.2; v.y += 1.45; }
+      const gone = p.st === 'dead' || p.st === 'out';
+      const flying = p.crowF > 0 || gone;
+      if (flying) {
+        const u = gone ? 0.5 : 1 - p.crowF / FL; crowFlightOffset(u, o); v.add(o);
+        const k = 1 - Math.exp(-dt * 6), px = C.pos.x, pz = C.pos.z;
+        if (!C.init) C.pos.copy(v); else C.pos.lerp(v, k);
+        const mv = Math.hypot(C.pos.x - px, C.pos.z - pz); if (mv > 1e-3) C.yaw = Math.atan2(C.pos.x - px, C.pos.z - pz);
+        animateCrowFlying(C.m, dt, gone ? 0 : u < 0.5 ? 1 : -0.5);
+        if (!C.fly) { C.fly = true; if (!gone) sound.play('flap', p.x, p.z); }
+      } else {
+        // landing: glide in, then sit and face where its survivor faces
+        const k = C.fly ? 1 - Math.exp(-dt * 9) : 1;
+        if (!C.init) C.pos.copy(v); else C.pos.lerp(v, k);
+        if (C.fly && C.pos.distanceTo(v) < 0.05) C.fly = false;
+        C.yaw = R.root.rotation.y;
+        if (C.fly) animateCrowFlying(C.m, dt, -0.3); else animateCrowPerched(C.m, dt);
+      }
+      C.init = true;
+      C.m.position.copy(C.pos); C.m.rotation.y = C.yaw;
+      // hidden with its survivor (lockers, cars), and never in the camera's face
+      const cd = this.camera ? this.camera.position.distanceTo(C.pos) : 9;
+      C.m.visible = (flying || R.root.visible) && cd > 0.45 && !(gone && false);
+    }
+  }
   // ---------------- Spider Mom ----------------
   updateSpiderMom(dt, S) {
     const sp = S.spider;
@@ -2034,7 +2074,7 @@ export class Game {
           col = !far ? null : p.st === 'caged' || p.st === 'exec' ? 0xff4a3a : p.st === 'down' ? 0xffa030 : p.st === 'carried' ? 0xff7030 : p.st === 'ok' ? 0xe8d8a0 : null;
           // (on another floor of the house, a teammate's outline would just hang in the air)
           if (col != null && this.M.stairs && !levelsMeet(p, me) && me.st !== 'dead' && me.st !== 'out') col = null;
-        } else if (lookRole(p) === 'killer' && (p.exposed > 0 || (has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
+        } else if (lookRole(p) === 'killer' && (p.exposed > 0 || me.crowSee > 0 || (has(me, 'sixth') && me.sixT < 4 && me.st !== 'dead') || me.st === 'dead' || me.st === 'out')) col = 0xff2020;
       }
       if (p.st === 'dead' || p.st === 'out') col = null;
       if ((S.dark > 0 || S.mode === 'dark') && !killerView && p.role === 'survivor') col = null; // Lights Out: you lose track of each other
@@ -2465,6 +2505,12 @@ export class Game {
           else if (e.by === this.myId && e.ram) this.feed('You rammed the killer!', 'big');
           break;
         }
+        case 'crowcaw': { // 1.6.0: the Tamed Crow
+          const owner = S && playerById(S, e.id), K = S && playerById(S, e.by);
+          if (owner) sound.play('caw', owner.x, owner.z, { n: 2 + (Math.random() < 0.4 ? 1 : 0) });
+          if (e.id === this.myId && K) this.feed(`Your crow spotted ${K.name}! (${Math.round(dist(owner, K))}m)`, 'big');
+          break;
+        }
         case 'kidcry': {
           sound.play('scream', e.x, e.z, { pitch: 3.1, len: 0.6 });
           const me3 = this.mine();
@@ -2831,6 +2877,7 @@ export class Game {
         }
       } else {
         if (me.act) { prog = me.prog; label = { pickup: 'Picking up', cage: 'Hooking', kick: 'Damaging generator', break: 'Breaking barricade', execute: KILLERS[me.char] ? KILLERS[me.char].exec.name : 'Execution' }[me.act.k] || ''; }
+        else if (me.sawT > 0 && !me.sawed) status = 'Sawing off the barrel…';
         else if (me.stun > 0) status = 'Stunned';
         else if (me.tele) { status = 'Shadow Step'; prog = me.tele.t / RULES.teleTime; label = 'Stepping'; }
         else {

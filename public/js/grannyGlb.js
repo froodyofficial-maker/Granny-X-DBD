@@ -843,13 +843,19 @@ function grandpaPump(R, f) {
 
 // 1.6.0: Sawed-Off: shorten Grandpa's shotgun (and its slide) along the barrel, from the stock end
 export function sawOffGun(root) {
+  // only the barrel (ShotgunPipaGP) is cut: the muzzle is the end of its long axis farther from Grandpa's right hand
+  root.updateMatrixWorld(true);
+  let hand = null; root.traverse(o => { if (!hand && o.isBone && /^hand\.?R/.test(o.name)) hand = o; });
+  const hp = hand ? hand.getWorldPosition(new THREE.Vector3()) : root.getWorldPosition(new THREE.Vector3());
   root.traverse(o => {
-    if (!o.isMesh || !/^Shotgun(GP|PipaGP)_/.test(o.name || '')) return;
+    if (!o.isMesh || !/^ShotgunPipaGP_/.test(o.name || '')) return;
     const g = o.geometry; if (!g.boundingBox) g.computeBoundingBox();
-    const b = g.boundingBox, sz = b.getSize(new THREE.Vector3()), ax = sz.x > sz.y && sz.x > sz.z ? 'x' : sz.y > sz.z ? 'y' : 'z';
-    o.geometry = g.clone(); const P = o.geometry.attributes.position, lo = b.min[ax], hi = b.max[ax], cut = lo + (hi - lo) * 0.55;
-    // everything past 55% of the length (the muzzle end: the end farthest from the grip, the larger coordinate here) is pulled back to the cut
-    for (let i = 0; i < P.count; i++) { const v = P.getComponent(i, ax === 'x' ? 0 : ax === 'y' ? 1 : 2); if (v > cut) P.setComponent(i, ax === 'x' ? 0 : ax === 'y' ? 1 : 2, cut + (v - cut) * 0.12); }
-    P.needsUpdate = true; o.geometry.computeBoundingSphere();
+    const b = g.boundingBox, sz = b.getSize(new THREE.Vector3()), ax = sz.x > sz.y && sz.x > sz.z ? 0 : sz.y > sz.z ? 1 : 2;
+    const c = b.getCenter(new THREE.Vector3()), lo = b.min.getComponent(ax), hi = b.max.getComponent(ax);
+    const end = v => o.localToWorld(c.clone().setComponent(ax, v)).distanceTo(hp);
+    const sgn = end(hi) > end(lo) ? 1 : -1, back = sgn > 0 ? lo : hi, cut = back + (hi - lo) * 0.5 * sgn;
+    o.geometry = g.clone(); const P = o.geometry.attributes.position;
+    for (let i = 0; i < P.count; i++) { const v = P.getComponent(i, ax); if ((v - cut) * sgn > 0) P.setComponent(i, ax, cut + (v - cut) * 0.05); }
+    P.needsUpdate = true; o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere();
   });
 }

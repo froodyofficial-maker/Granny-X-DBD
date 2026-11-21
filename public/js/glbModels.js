@@ -4,6 +4,7 @@
 //  - ghosttrap: "HW Detail #4 GHOST TRAP" by Kirumba86 (sketchfab.com/MorisKirumba86), CC BY 4.0
 //  - beartrap: "Granny bear trap" by Eri Game Dev (sketchfab.com/blerko0178), CC BY 4.0; its clip snaps the jaws shut
 //  - taser: "Taser Gun" by Mati236 (sketchfab.com/chenjunliu6), CC BY 4.0
+//  - crow: "Granny granny 3 crow dvloper" by Gsjeijenjd (sketchfab.com/Gsjeijenjd), CC BY 4.0
 import * as THREE from 'three';
 import { b64buf, heavy } from './heavy.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -15,6 +16,7 @@ const SPEC = {
   ghosttrap: { size: 0.5, axis: 'x', origin: 'bottom' },
   beartrap: { size: 0.62, axis: 'max', origin: 'bottom' },
   taser: { size: 0.2, axis: 'max', origin: 'center' },
+  crow: { size: 0.44, axis: 'max', origin: 'bottom' }, // (1.6.0: the Tamed Crow, rigged in crow.js)
 };
 const tpl = {}, loading = {}, waiters = {};
 

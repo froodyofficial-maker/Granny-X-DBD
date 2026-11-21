@@ -314,6 +314,9 @@ export const PERK_SLOTS = 4;
 export const SIDEKICKS = {
   child: { id: 'child', name: 'The Child of Slendrina', role: 'killer', price: 20000, range: 11, reveal: 4, cooldown: 14, speed: 5.2,
     desc: "Slendrina's baby crawls after you on all fours. When a survivor comes within 11m of it and it can see them, it shrieks: they are revealed to you for 4s (14s before it shrieks at the same survivor again)." },
+  // 1.6.0 (community idea): a survivor sidekick
+  crow: { id: 'crow', name: 'Tamed Crow', role: 'survivor', price: 15000, range: 45, reveal: 5, every: [50, 80], flight: 3.4,
+    desc: 'A tame crow rides on your shoulder. Every minute or so, when a killer is within 45m, it flies up high, caws, and shows you where the killer is for 5s (an outline through walls).' },
 };
 // ---------------- Character levels and stats (1.4) ----------------
 // Every character has its own level, earned with match XP (or trained with Embers). Each level past 1 gives a stat

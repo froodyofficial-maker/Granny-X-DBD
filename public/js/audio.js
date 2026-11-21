@@ -31,7 +31,7 @@ export class Sound {
     this.musicLoading = false;
     return this.musicBuf;
   }
-  // id: 'menu' (public/audio/menu.mp3) or a theme track ('vitheme': the GTA VI theme, played from 1:00 with a slow fade-in,
+  // id: 'menu' (public/audio/menu.mp3) or a theme track ('vitheme': the GTA VI theme, played from 0:50 with a slow fade-in,
   // looping from there). A theme track that isn't there falls back to the menu music.
   menuMusic(on, id = 'menu') {
     this.wantMenu = on;
@@ -47,7 +47,7 @@ export class Sound {
         else if (!this.tracks || this.tracks[id] === undefined) this.loadTrack(id).then(() => { if (this.wantMenu && !this.menuSrc) this.menuMusic(true, id); });
         return;
       }
-      const off = id === 'vitheme' ? Math.min(60, buf.duration * 0.5) : 0, fade = id === 'vitheme' ? 5 : 2.5;
+      const off = id === 'vitheme' ? Math.min(50, buf.duration * 0.5) : 0, fade = id === 'vitheme' ? 5 : 2.5;
       const src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = off; src.loopEnd = buf.duration;
       const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + fade);
       src.connect(g); g.connect(this.musicBus); src.start(t, off); this.menuSrc = src; this.menuGain = g; this.menuId = id;
@@ -55,16 +55,21 @@ export class Sound {
   }
   // 1.5.3: Granny's House background music during a match there (public/audio/granny3.mp3, offline: #nb-granny3-mp3)
   async loadTrack(id) {
-    this.tracks ||= {};
+    this.tracks ||= {}; this.trackWait ||= {};
     if (this.tracks[id] !== undefined || !this.ctx) return this.tracks[id];
-    this.tracks[id] = null;
+    if (this.trackWait[id]) return this.trackWait[id];
+    return (this.trackWait[id] = this.loadTrack0(id));
+  }
+  async loadTrack0(id) {
+    let buf = null;
     try {
       const el = document.getElementById('nb-' + id + '-mp3');
       let ab = el && el.textContent.trim() ? await b64buf(el.textContent.trim()) : null;
       if (!ab) for (const u of [`audio/${id}.mp3`, `public/audio/${id}.mp3`]) { try { const r = await fetch(u); if (r.ok) { ab = await r.arrayBuffer(); break; } } catch {} }
-      if (ab) this.tracks[id] = await this.ctx.decodeAudioData(ab);
+      if (ab) buf = await this.ctx.decodeAudioData(ab);
     } catch (e) { console.warn('track', id, e); }
-    return this.tracks[id];
+    this.tracks[id] = buf; // (null: not there, the menu music plays instead)
+    return buf;
   }
   mapMusic(on, id = 'granny3', vol = 0.42) {
     this.wantMap = on;
@@ -207,6 +212,10 @@ export class Sound {
       case 'fade': if (!(d = o(6, 40))) return; this.tone(d, t, 1.2, 'sine', opt.on ? 900 : 300, opt.on ? 200 : 900, 0.15, 0.3); this.noise(d, t, 1.2, 'highpass', 5000, null, 1, 0.15, 0.4); break;
       case 'roar': if (!(d = o(8, 80))) return; this.tone(d, t, 1.3, 'sawtooth', 95, 60, 0.5, 0.05); this.tone(d, t, 1.3, 'square', 97, 61, 0.2, 0.05); this.noise(d, t, 1.2, 'bandpass', 400, 200, 2, 0.6, 0.05); break;
       case 'step': if (!(d = o(2, 18))) return; this.noise(d, t, 0.07, 'lowpass', opt.run ? 700 : 450, 150, 1, opt.vol || 0.25); break;
+      case 'caw': { if (!(d = o(6, 60))) return; // (1.6.0: the crow) a hoarse caw, two or three times
+        const n = opt.n || 2; for (let i = 0; i < n; i++) { const t1 = t + i * 0.34; this.tone(d, t1, 0.26, 'sawtooth', 820, 560, 0.18, 0.02); this.tone(d, t1, 0.26, 'square', 1240, 900, 0.05, 0.02); this.noise(d, t1, 0.24, 'bandpass', 1600, 1100, 2.5, 0.35, 0.02); }
+        break; }
+      case 'flap': if (!(d = o(3, 30))) return; for (let i = 0; i < 5; i++) this.noise(d, t + i * 0.09, 0.07, 'lowpass', 900, 300, 1, 0.45, 0.004); break;
       case 'heal': d = o(); this.tone(d, t, 0.5, 'sine', 660, 880, 0.15); break;
       case 'pickup': if (!(d = o(5, 50))) return; this.tone(d, t, 0.4, 'sine', 90, 50, 0.6); this.scream(d, t + 0.1, opt.pitch || 1, 0.6); break;
       case 'end': d = o(); for (const f of [55, 65.4, 77.8]) this.tone(d, t, 4, 'sawtooth', f, f * 0.9, 0.1, 0.4); break;

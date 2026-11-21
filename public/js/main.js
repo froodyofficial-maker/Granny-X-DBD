@@ -137,7 +137,8 @@ const petOf = () => '';
 // a new season (every six weeks): rank rewards, ranks drop a tier, a fresh pass
 { const msg = seasonRoll(profile); if (msg) setTimeout(() => toast(msg, 9000), 3000); }
 const kidOf = () => profile.pets.child && profile.killer.pet === 'child' ? 'child' : '';
-const extrasOf = (role, char) => ({ stats: matchStats(profile, char, role), ...(role === 'killer' ? { kid: kidOf() } : { addons: cleanAddons(profile.survivor.addons) }) });
+const crowOf = () => profile.pets.crow && profile.survivor.pet === 'crow' ? 'crow' : ''; // (1.6.0: the Tamed Crow)
+const extrasOf = (role, char) => ({ stats: matchStats(profile, char, role), ...(role === 'killer' ? { kid: kidOf() } : { addons: cleanAddons(profile.survivor.addons), kid: crowOf() }) });
 for (const k of [...profile.survivor.perks, ...profile.killer.perks]) profile.perksOwned[k] = true;
 const perkPrice = k => PERK_PRICES[k] || 0;
 const ownsPerk = k => !perkPrice(k) || !!profile.perksOwned[k];
@@ -541,6 +542,10 @@ function bindAddons(container, rerender) {
   container.querySelectorAll('[data-adoff]').forEach(b => b.onclick = () => { profile.survivor.addons = cleanAddons(profile.survivor.addons).filter(k => k !== b.dataset.adoff); saveProfile(); sound.play('click'); rerender(); });
   container.querySelectorAll('[data-adstore]').forEach(b => b.onclick = () => { sound.play('click'); openStore('addons'); });
 }
+function crowRowHTML() {
+  const D = SIDEKICKS.crow, own = !!profile.pets.crow, on = crowOf() === 'crow';
+  return `<div class="kid-row ${on ? 'on' : ''}"><span class="crow-art"></span><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Rides on your shoulder and watches for the killer' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-croweq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
+}
 function kidRowHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
   return `<div class="kid-row ${on ? 'on' : ''}"><span class="child-art"></span><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
@@ -595,7 +600,7 @@ function renderLoadout(container, role, compact, onChange) {
       <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
       <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
       ${levelHTML(role, lo.char)}
-      ${role === 'killer' ? kidRowHTML() : itemRowHTML() + addonRowHTML()}
+      ${role === 'killer' ? kidRowHTML() : itemRowHTML() + addonRowHTML() + crowRowHTML()}
       
 
       <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div><button class="perk-pin ${ownPerks(lo.char) ? 'on' : ''}" data-perkpin title="${ownPerks(lo.char) ? `These perks are only for ${esc(charName0(lo.char))}. Click to use the shared set again.` : `Shared by every ${role}. Click to give ${esc(charName0(lo.char))} its own perks.`}">${ownPerks(lo.char) ? '📌 Own set' : '📌 Shared'}</button></div>
@@ -611,6 +616,10 @@ function renderLoadout(container, role, compact, onChange) {
     });
     bindLevel(container, role, lo.char, rerender);
     if (role === 'survivor') bindAddons(container, rerender);
+    container.querySelectorAll('[data-croweq]').forEach(b => b.onclick = () => {
+      if (!profile.pets.crow) { sound.play('click'); openStore('sidekicks'); return; }
+      profile.survivor.pet = crowOf() ? '' : 'crow'; saveProfile(); sound.play('click'); rerender();
+    });
     container.querySelectorAll('[data-kideq]').forEach(b => b.onclick = () => {
       if (!profile.pets.child) { sound.play('click'); openStore('sidekicks'); return; }
       profile.killer.pet = profile.killer.pet === 'child' ? '' : 'child'; saveProfile(); sound.play('click'); rerender();
@@ -947,9 +956,13 @@ let storePet = 'ted', storePetRole = 'survivor';
 function sidekicksHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
   const act = !own ? `<span class="ch-price">${price(D.price)}</span><button class="btn primary" data-kidbuy>Buy</button>` : `<button class="btn ${on ? '' : 'primary'}" data-kidtoggle>${on ? 'Unequip' : 'Equip'}</button>${on ? '<span class="of-p eq">Equipped</span>' : ''}`;
-  return `<div class="ch-row-title">Sidekicks · companions for killers</div>
+  const C = SIDEKICKS.crow, cown = !!profile.pets.crow, con = crowOf() === 'crow';
+  const cact = !cown ? `<span class="ch-price">${price(C.price)}</span><button class="btn primary" data-crowbuy>Buy</button>` : `<button class="btn ${con ? '' : 'primary'}" data-crowtoggle>${con ? 'Unequip' : 'Equip'}</button>${con ? '<span class="of-p eq">Equipped</span>' : ''}`;
+  return `<div class="ch-row-title">Sidekicks · companions</div>
     <div class="kid-card"><div class="kid-img child-art"></div>
-      <div class="kid-body"><small>Killer sidekick</small><h3>${esc(D.name)}</h3><p>${esc(D.desc)}</p><p class="hint">It can't be hurt and never blocks anyone. When it falls behind (a wall, the stairs, a Haunt or a Creep) it catches up out of sight. Equip it in the killer Loadout.</p><div class="row">${act}</div></div></div>`;
+      <div class="kid-body"><small>Killer sidekick</small><h3>${esc(D.name)}</h3><p>${esc(D.desc)}</p><p class="hint">It can't be hurt and never blocks anyone. When it falls behind (a wall, the stairs, a Haunt or a Creep) it catches up out of sight. Equip it in the killer Loadout.</p><div class="row">${act}</div></div></div>`
+    + `<div class="kid-card"><div class="kid-img crow-art"></div>
+      <div class="kid-body"><small>Survivor sidekick · new</small><h3>${esc(C.name)}</h3><p>${esc(C.desc)}</p><p class="hint">It can't be hurt and the killer can't scare it off. It stays on your shoulder while you're down, hooked or hiding. Equip it in the survivor Loadout.</p><div class="row">${cact}</div></div></div>`;
 }
 
 function bindStore(body) {
@@ -962,6 +975,8 @@ function bindStore(body) {
   body.querySelectorAll('[data-adbuy]').forEach(b => b.onclick = () => { const k = b.dataset.adbuy, A = ADDONS[k]; if (profile.addons[k] || !spend(A.price, A.name)) return; profile.addons[k] = true; const L = profile.survivor.addons = cleanAddons(profile.survivor.addons); if (L.length < ADDON_SLOTS) L.push(k); saveProfile(); sound.play('escaped'); renderStore(); });
   body.querySelectorAll('[data-adeq]').forEach(b => b.onclick = () => { const k = b.dataset.adeq, L = profile.survivor.addons = cleanAddons(profile.survivor.addons); const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else { if (L.length >= ADDON_SLOTS) L.shift(); L.push(k); } saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-kidbuy]').forEach(b => b.onclick = () => { if (profile.pets.child || !spend(SIDEKICKS.child.price, SIDEKICKS.child.name)) return; profile.pets.child = true; profile.killer.pet = 'child'; saveProfile(); sound.play('escaped'); renderStore(); });
+  body.querySelectorAll('[data-crowbuy]').forEach(b => b.onclick = () => { if (profile.pets.crow || !spend(SIDEKICKS.crow.price, SIDEKICKS.crow.name)) return; profile.pets.crow = true; profile.survivor.pet = 'crow'; saveProfile(); sound.play('escaped'); renderStore(); });
+  body.querySelectorAll('[data-crowtoggle]').forEach(b => b.onclick = () => { profile.survivor.pet = crowOf() ? '' : 'crow'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-kidtoggle]').forEach(b => b.onclick = () => { profile.killer.pet = kidOf() ? '' : 'child'; saveProfile(); sound.play('click'); renderStore(); });
   body.querySelectorAll('[data-pet]').forEach(el => el.onclick = e => { if (e.target.closest('button')) return; storePet = el.dataset.pet; sound.play('hover'); renderStore(); });
   body.querySelectorAll('[data-petbuy]').forEach(b => b.onclick = () => { const id = b.dataset.petbuy; if (profile.pets[id] || !spend(SIDEKICKS[id].price, SIDEKICKS[id].name)) return; profile.pets[id] = true; profile.survivor.pet ||= id; saveProfile(); storePet = id; renderStore(); });
@@ -1105,7 +1120,7 @@ function botSurvivor(i, used) {
   const sk = SKINS[char].slice(1).filter(k => !k.secret && !k.pass); const skin = Math.random() < 0.5 || !sk.length ? 'default' : sk[Math.floor(Math.random() * sk.length)].id; // (never a secret outfit)
   // bots bring an add-on or two now and then (1.4.3)
   const ak = Object.keys(ADDONS).filter(k => ADDONS[k].item === 'flashlight'), addons = Math.random() < 0.5 ? [ak[Math.floor(Math.random() * ak.length)]] : [];
-  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: '', bot: true, addons };
+  return { id: 'bot' + i, name: nm + ' (bot)', role: 'survivor', char, skin, perks: randomPerks(SURV_PERKS, PERK_SLOTS, char), item, pet: '', bot: true, addons, kid: Math.random() < 0.2 ? 'crow' : '' }; // (1.6.0: one in five brings a Tamed Crow)
 }
 function botKiller(char, n = 0, avoid = []) {
   const pool = PLAY_K.filter(k => !avoid.includes(k));
@@ -1115,7 +1130,7 @@ function botKiller(char, n = 0, avoid = []) {
   const picked = char && char !== 'random' && c === char, outfits = SKINS[c].slice(1).filter(k => !k.god && !k.secret);
   const skin = picked || !outfits.length || Math.random() < 0.5 ? 'default' : outfits[Math.floor(Math.random() * outfits.length)].id;
   if (window.__killerSkin) return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin: window.__killerSkin, perks: randomPerks(KILLER_PERKS), bot: true }; // trailer capture
-  return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS), bot: true, kid: Math.random() < 0.35 ? 'child' : '' };
+  return { id: 'botk' + (n || ''), name: KILLERS[c].name, role: 'killer', char: c, skin, perks: randomPerks(KILLER_PERKS, PERK_SLOTS, c), bot: true, kid: Math.random() < 0.35 ? 'child' : '' };
 }
 // ---------- Testing Area: everything unlocked, nothing earned ----------
 const testCfg = { role: 'survivor', char: { survivor: 'mara', killer: 'granny' }, skin: {}, item: 'flashlight', reach: {}, perks: { survivor: [], killer: [] }, opp: 'random', surv: 4, map: 'granny', gm: 'classic', bots: 'normal', diff: 'normal' };
@@ -1818,7 +1833,7 @@ $('btn-lobby-start').addEventListener('click', () => {
   if (!lobby || !lobby.isHost) return;
   const ps = lobby.players;
   // (stats: each player's own character stats for the character they play; the simulation clamps them)
-  const roster = ps.map(p => { const L = p.loadouts?.[p.role] || {}; return { id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, stats: L.char === p.char ? L.stats : {}, addons: p.role === 'survivor' ? cleanAddons(L.addons) : [], ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og, kid: L.kid === 'child' ? 'child' : '' } : {}) }; });
+  const roster = ps.map(p => { const L = p.loadouts?.[p.role] || {}; return { id: p.id, name: p.name, role: p.role, char: p.char, skin: p.skin || 'default', perks: p.perks, item: p.item, pet: p.pet || '', bot: false, stats: L.char === p.char ? L.stats : {}, addons: p.role === 'survivor' ? cleanAddons(L.addons) : [], ...(p.role === 'killer' ? { lv: +(p.loadouts?.killer?.lv) || undefined, og: !!p.loadouts?.killer?.og, kid: L.kid === 'child' ? 'child' : '' } : { kid: L.kid === 'crow' ? 'crow' : '' }) }; });
   const used = roster.filter(r => r.role === 'survivor').map(r => r.char);
   const cap = lobbyCaps();
   if (!roster.some(r => r.role === 'killer')) {

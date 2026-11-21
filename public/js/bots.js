@@ -88,6 +88,7 @@ export class Bots {
     for (const e of evs) if (e.k === 'infected') this.brains.delete(e.id); // a fresh (killer) brain
     for (const e of evs) if (e.k === 'swap') { this.brains.delete(e.from); this.brains.delete(e.to); }
     for (const e of evs) if (e.k === 'shuffle') { this.brains.delete(e.a); this.brains.delete(e.b); } // (Chaos Shuffle: new bodies, fresh brains)
+    for (const e of evs) if (e.k === 'crowcaw') this.intel = { x: e.x, z: e.z, t: this.sim.S.t, chasing: this.intel && this.intel.chasing || null }; // (a crow showed where the killer is)
     for (const e of evs) if (e.k === 'noise') this.noises.push({ x: e.x, z: e.z, t: this.sim.S.t });
     this.noises = this.noises.filter(n => this.sim.S.t - n.t < 6);
   }

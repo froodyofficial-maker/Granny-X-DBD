@@ -1,5 +1,5 @@
 // Authoritative game simulation. Runs only on the host (or in single-player).
-import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS, cleanAddons, addonMods } from './config.js';
+import { RULES, KILLERS, SURVIVORS, POSSESS_MAX, POWER_LV, powerReach, SPEED, DIFFICULTY, HALF, MODES, INFECT_POOL, SURV_PERKS, KILLER_PERKS, PERK_SLOTS, ITEMS, statK, cleanStats, SIDEKICKS, cleanAddons, addonMods } from './config.js';
 import { cityInit, cityUpdate, cityFinish, cityKillerHit, cityOnDamage } from './city.js';
 import { viceInit, viceAct, viceUpdate } from './vicesim.js';
 import { barBox, losBlocked, moveCircle, findPath, cellOf, cellPos, levelOf, levelsMeet, losL, heightAt, levelStep, overlaps, floorUnder } from './map.js';
@@ -68,7 +68,7 @@ export class Sim {
     const M = this.M;
     {
       return ({
-        id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).filter(k => !SURV_PERKS[k] || !SURV_PERKS[k].only || SURV_PERKS[k].only === r.char).slice(0, PERK_SLOTS), bot: !!r.bot,
+        id: r.id, name: r.name, role: r.role, char: r.char, skin: typeof r.skin === 'string' ? r.skin.slice(0, 24) : 'default', perks: (r.perks || []).filter(k => { const P = SURV_PERKS[k] || KILLER_PERKS[k]; return !P || !P.only || P.only === r.char; }).slice(0, PERK_SLOTS), bot: !!r.bot,
         x: sp.x, z: sp.z, yaw: r.role === 'killer' ? M.spawns.killerYaw : M.spawns.survivorYaw, pitch: 0, mv: 0, cr: 0, tp: 0,
         st: 'ok', hp: 2, act: null, prog: 0, healP: 0, bleed: 0, cage: -1, stage: 0, cageT: 0, cageMax: 1, esc: 0,
         wig: 0, boost: 0, boostMul: SPEED.hitBoost, vault: null,
@@ -82,7 +82,7 @@ export class Sim {
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
         // 1.4: character stats (levels) and the killer's sidekick
-        stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : '',
+        stats: cleanStats(r.role, r.stats), kid: r.role === 'killer' && r.kid === 'child' ? 'child' : r.role === 'survivor' && r.kid === 'crow' ? 'crow' : '',
         addons: r.role === 'survivor' ? cleanAddons(r.addons) : [],
         hide: -1, car: -1, hg: -1, // City Mode
         teddy: r.role === 'survivor' && r.item === 'teddy' && mode !== 'bloodmoon' ? ITEMS.teddy.uses.length : 0, tedT: 0, tedCd: 0,
@@ -804,6 +804,7 @@ export class Sim {
     this.updateSawedOff(dt);
     viceUpdate(this, dt);
     this.updateKids(dt);
+    this.updateCrows(dt);
 
     // 1.5.1 (WolfSpider): nobody left free to unhook them: whoever is on a hook is sacrificed now, not after minutes of waiting
     if (this.mode !== 'infection' && S.players.some(p => p.role === 'survivor' && p.st === 'caged') && !S.players.some(p => p.role === 'survivor' && p.st === 'ok'))
@@ -1952,6 +1953,32 @@ export class Sim {
         this.ev({ k: 'kidcry', id: s.id, by: K.id, x: k.x, z: k.z });
         break;
       }
+    }
+  }
+  // 1.6.0: the Tamed Crow (survivor sidekick). crowF = flight time left (0 = on the shoulder), crowSee = the killer's outline
+  // shown to this survivor, crowCd = time until it looks again.
+  updateCrows(dt) {
+    const S = this.S, C = SIDEKICKS.crow;
+    for (const p of S.players) {
+      if (p.role !== 'survivor' || p.kid !== 'crow') continue;
+      if (p.crowSee > 0) p.crowSee = Math.max(0, p.crowSee - dt);
+      if (p.crowF > 0) {
+        const was = p.crowF; p.crowF = Math.max(0, p.crowF - dt);
+        // at the top of its flight it caws: the nearest killer is shown
+        if (was > C.flight / 2 && p.crowF <= C.flight / 2) {
+          const K = S.players.filter(k => k.role === 'killer' && k.st !== 'dead').sort((a, b) => dist(a, p) - dist(b, p))[0];
+          if (K && dist(K, p) < C.range * 1.2) { p.crowSee = C.reveal; this.ev({ k: 'crowcaw', id: p.id, by: K.id, x: K.x, z: K.z }); }
+        }
+        continue;
+      }
+      if (p.crowCd == null) p.crowCd = 20 + Math.random() * 20; // (first look 20-40s into the match)
+      if (p.st !== 'ok' || p.hide >= 0 || p.car >= 0) continue; // (it stays put while you're down, hooked or hiding)
+      p.crowCd -= dt;
+      if (p.crowCd > 0) continue;
+      const near = S.players.some(k => k.role === 'killer' && k.st !== 'dead' && dist(k, p) < C.range);
+      if (!near) { p.crowCd = 6; continue; }
+      p.crowF = C.flight; p.crowCd = C.every[0] + Math.random() * (C.every[1] - C.every[0]);
+      this.ev({ k: 'crowfly', id: p.id, x: p.x, z: p.z });
     }
   }
   // Spider Mom: crawls from generator to generator; anyone she finds repairing one is shown to Granny
