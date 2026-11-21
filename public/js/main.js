@@ -922,6 +922,11 @@ function redeem(input) {
   if (!c) { say("That code doesn't work. Check it and try again."); sound.play('click'); return; }
   profile.redeemed ||= {};
   if (profile.redeemed[c.id]) { say('This code was already used on this device.'); return; }
+  if (c.kind === 'embers') { // (1.6.0: a developer code worth Embers)
+    profile.stats.embers = (profile.stats.embers || 0) + c.amount; profile.redeemed[c.id] = true; saveProfile(); sound.play('escaped');
+    say(`+${c.amount.toLocaleString()} Embers!`, true); toast(`+${c.amount.toLocaleString()} Embers`); try { renderShowcase(); } catch {} try { renderStore(); } catch {}
+    return;
+  }
   if (c.kind === 'secret') {
     if (profile.owned['granny:freddy']) { say('You already have the Freddy Fazbear outfit.'); return; }
     profile.owned['granny:freddy'] = true;

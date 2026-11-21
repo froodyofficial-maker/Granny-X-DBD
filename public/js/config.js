@@ -366,6 +366,9 @@ export const LORE = {};
 // ---------------- Store: skins (bought with embers) ----------------
 // ---------- codes (back in 1.4.4, from 1.3.2): secret Discord codes and gift codes ----------
 // secret codes: only their salted SHA-256 (codes.js); each one unlocks Granny's legendary Freddy Fazbear outfit
+// 1.6.0: 10 one-off codes from the developer, each worth 100,000 Embers once per device (only their salted SHA-256 is here)
+export const EMBER_CODES = ["038a8676805ed8ac986ba2b4c5592464e19151c63dc06b6810117c41072ec2cb", "a193d9e8d87f5ab55873f3a2f6d3f4f4901a9e3d566e96a9c649fec3d7a923a6", "b9ef66c4bd6c22c726847d443a4cc3fba84ce4f596a0385102dd8985e551a654", "6f1a1991e5c3c60e10cc46b2cb44100fd920c402ba3aa3701949ece579385d88", "cabb0f441362431f000d3bb899e03b3c8fbd4d8f9ce2b103a5d5d58a2574d7dd", "70820ff02c1ea8f25adedda3d7c145de5495660f4fcb654494cfaa5f46ae6cbe", "aecd7ec364a733a12061c950709bef4473e3f49c75ef3bee8676f2e31c2f18a3", "adcb044260cc459ecd2b91a3b687bb4e3dce1ff3542f0f205428dd417b43004f", "2a7ebd1ed110b104ac01e0aa5ac1783a9cf86e279655b06ec47c431b820839dd", "1aac2b4b9e52874e33b2fd2594180562fffa3bfd479cefd774e08fef4cb957ff"];
+export const EMBER_CODE_AMOUNT = 100000;
 export const SECRET_CODES = ["a6fb993d580ca12455d500af871be912e902f2ed21e22e270ca4c5833b09439d", "acf3b8fe9a31f8d8625419ab93a1681e3811330d23e013bcf2965c2ec657aaae", "52517749c1e9d61e4b1c580b718f8e9082446bd4d0bce3755cbc6918d6c755dc", "bd5977e481fdafa95fc238758c7ac53c030a5d241a3cb27b1d42d2aa01d5adcd", "11eea88346def0fb7e43a7b450776842f99f3307859d9b6282a31961bae1dc25", "56f719f05edae38085c1073e6b2c3de395ae0107b3644f984d83a9d5f8a2190f", "7bff9130dc1416c1a7d925add43aa660daf01a1dc2f1a0d839ef6d796523cc0a", "aa0ec1e4854f2e5df076d40da49aa8e735aa7c8ad61e99201a792271145282b4", "617dde538cb62f8050b88286870607fc05f40b6be75e3998f9f1f0095a1a8849", "445358acb7fba3b30c076874c6e309a63be51647781d474abc3316376d947ee7"];
 // gift codes carry a character and an outfit by position in these lists: 1.3.x's order first (codes made in 1.3.2 / 1.3.3
 // still work), new outfits only ever appended
@@ -531,7 +534,7 @@ export const INBOX = [
     body: [
       'No more grain: the noisy ambient-occlusion pass, film grain and heavy sharpening are gone, and the resolution no longer drops to 60-70% when the frame rate dips. Smoother on good PCs, and Low now has anti-aliasing.',
       'New lighting: the moon hangs low over the maps (long shadows, moonlit walls), the street lamps throw beams through the mist, and a new colour grade.',
-      'Faster on gaming laptops: the Windows app now asks for the graphics card instead of the built-in chip, High caps its resolution on 150%-scaled screens, and shadows cost half as much. Turn on the FPS counter to see which GPU is drawing.',
+      'Much faster: every prop on the map (generators, lamps, hooks, gates, pallets) and every survivor is now drawn in a handful of pieces instead of dozens, so a frame needs about a third of the work it did, with the same look. The Windows app also asks for the graphics card instead of the built-in chip, High caps its resolution on 150%-scaled screens, and shadows cost half as much. Turn on the FPS counter to see which GPU is drawing.',
       "Granny swings her bat properly (wind-up over the shoulder, a full swing through the middle of the screen), Grandpa rifle-butts with his shotgun, and when he aims, the gun comes up to the middle of the screen.",
       "Granny's House music now plays on every map (it was far too quiet before), and the GTA VI menu music starts straight away.",
       'The Windows app and the APK now have the photo-scanned ground, wood, brick and bark textures (only the browser version had them before). Medium or High quality.',

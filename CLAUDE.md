@@ -245,6 +245,19 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
     tip/base line is hand->farthest point, ~30 deg off). Test: tools/test/vmtest.mjs <killer> <out.jpg> (SEQ='[...]' poses; prints POSE).
   - Music: granny3.mp3 re-mastered +13 dB (it peaked at -18 dB: inaudible), `mapMusic` vol 0.8 on every map but the city;
     vitheme.mp3 is stored from 0:49 of the song (offset 1 s = 0:50), fade 1.2 s. Test: /tmp-style musictest (sound module state in a match).
+- 1.6.0 third build (owner: "needs severe optimization, still 50 fps on an RTX 4070"; wants 120+ with the same look): APK VC 30,
+  exe unpackDirName GrannyxDBD-1.6.0-c. The game was draw-call bound (~1,400 calls/frame incl. the shadow pass; WebGL pays per call):
+  - merge.js `mergeStatic(root, keep)`: after buildWorld every top-level prop group (generators 49 -> ~17 meshes, lamps 22 -> ~5,
+    hooks, gates, pallets, switches, the house model) has its static parts fused into one mesh per material; anything referenced from
+    the group's userData or from W (`collectRefs`) is kept (pistons, bulbs, auras, doors, lamp glows), and referenced sub-groups are
+    merged inside themselves. `trimShadows` turns off castShadow for meshes under ~22 cm.
+  - models.js Rig: joints are THREE.Bone and `finalize()` builds ONE SkinnedMesh per batch material (rigid weights per joint), with
+    materials that differ only in colour batched via vertex colours (`batchMats`): a survivor ~45 -> ~10 draws. Aura meshes still sit on
+    the joints (skinfx `frames()` measures them). `R.skinned(meshes)` turns the wound blobs into one skinned mesh per set.
+  - Same test view (gfx160 high): 1,316 -> 369 draw calls. Draw-call breakdown script pattern: count meshes per top-level scene group.
+- Ember codes (owner asked for 10 x 100,000): config.js `EMBER_CODES` = salted SHA-256 ('gdbd-embers:' + code), `EMBER_CODE_AMOUNT`;
+  codes.js readCode -> { kind: 'embers' }, main.js redeem adds them once per device (`profile.redeemed['em:...']`). The plain codes
+  were handed to the owner as a file only (not in the repo).
 - Tests: crowlook.mjs (crow in a match + taser cells), simtest `CROW=1` / `KPERKS=sawedoff`, pump-page.js (Grandpa's pump + sawed-off gun),
   gfx160.mjs, offtex.mjs, crowshot-page.js (the crow's Store picture: frame 0 perched; frames 1-3 flight checks).
 - Devlog banner: tools/test/devlog160-page.js ("THE GRAPHICS UPDATE · AND A CROW THAT WATCHES FOR HER": Grandpa with the sawed-off gun,

@@ -1,5 +1,6 @@
 // Builds the 3D scene for a generated map.
 import * as THREE from 'three';
+import { mergeStatic, collectRefs, trimShadows } from './merge.js';
 import { HALF } from './config.js';
 import { realistic } from './gfx.js';
 import { cloneScene } from './sceneGlb.js';
@@ -417,6 +418,11 @@ export function buildWorld(M, quality = 'medium') {
     plane.rotation.x = -Math.PI / 2; plane.position.y = 0.3 + i * 0.5; plane.renderOrder = 2;
     scene.add(plane); W.fogLayers.push({ t, v: 0.004 + i * 0.002, d: i % 2 ? 1 : -1 });
   }
+  // 1.6.0 (performance): fuse each prop's static parts into one mesh per material (generators, lamps, hooks, gates, pallets,
+  // the house model...): ~1,400 draw calls a frame became a few hundred
+  { const keep = collectRefs(W); keep.delete(scene); let n = 0;
+    for (const o of [...scene.children]) if (o !== W.sky && !o.isLight && (o.isGroup || o.type === 'Object3D' || o.isScene)) { try { n += mergeStatic(o, keep); } catch (e) { console.warn('merge', e); } }
+    W.merged = n; trimShadows(scene); }
   poolLights(W, quality);
   return W;
 }

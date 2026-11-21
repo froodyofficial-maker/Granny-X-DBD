@@ -104,7 +104,8 @@ export function mat(color, opts = {}) {
 // then every joint's parts are merged per material so a detailed body stays cheap to draw.
 class Rig {
   constructor() { this.root = new THREE.Group(); this.j = {}; this.aura = []; this.meshes = []; this.pose = {}; this.phase = 0; this.t = Math.random() * 10; this.parts = []; }
-  joint(name, parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); (parent ? this.j[parent] : this.root).add(g); this.j[name] = g; return g; }
+  joint(name, parent, x = 0, y = 0, z = 0) { const g = new THREE.Bone(); g.position.set(x, y, z); // (1.6.0: bones, so the body can be one skinned mesh per material)
+    (parent ? this.j[parent] : this.root).add(g); this.j[name] = g; return g; }
   // geometry placed on a joint; merged in finalize()
   mesh(parent, geo, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, aura = true) {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
@@ -113,6 +114,45 @@ class Rig {
   finalize() {
     const byJoint = new Map();
     for (const p of this.parts) { if (!byJoint.has(p.parent)) byJoint.set(p.parent, []); byJoint.get(p.parent).push(p); }
+    // 1.6.0 (performance): the whole body is ONE skinned mesh per material, each part rigidly bound to its joint (a survivor
+    // was ~45 draw calls, twice over with the shadow map; now ~6). The joints are bones, animated exactly as before.
+    if (this.root.children.length && Object.values(this.j).every(j => j.isBone)) {
+      this.root.updateMatrixWorld(true);
+      const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert();
+      const names = [...byJoint.keys()], bones = names.map(n => this.j[n]), byMat = new Map();
+      // materials that differ only in colour are drawn together: the colour goes into the vertices instead
+      const bkey = m => { const o = []; for (const k of ['type', 'roughness', 'metalness', 'transparent', 'opacity', 'side', 'alphaTest', 'depthWrite', 'emissiveIntensity', 'sheen', 'clearcoat', 'flatShading', 'wireframe']) o.push(m[k]); for (const k of ['map', 'normalMap', 'roughnessMap', 'emissiveMap', 'alphaMap', 'aoMap', 'bumpMap']) o.push(m[k] ? m[k].uuid : ''); o.push(m.emissive ? m.emissive.getHex() : ''); return o.join('|'); };
+      const batchMats = this.batchMats ||= new Map();
+      for (const p of this.parts) {
+        const m0 = p.material, k = m0 && m0.color && !m0.vertexColors && !m0.isShaderMaterial ? bkey(m0) : m0.uuid;
+        let bm = batchMats.get(k); if (!bm) { bm = m0.color && !m0.vertexColors && !m0.isShaderMaterial ? m0.clone() : m0; if (bm !== m0) { bm.color.set(0xffffff); bm.vertexColors = true; bm.userData.batch = true; } batchMats.set(k, bm); }
+        p.color = bm === m0 ? null : m0.color.clone();
+        if (!byMat.has(bm)) byMat.set(bm, []); byMat.get(bm).push(p);
+      }
+      // the skeleton needs every bone between the root and the used ones too
+      const all = [], seen = new Set(); const addB = b => { if (!b || seen.has(b) || !b.isBone) return; seen.add(b); all.push(b); };
+      for (const b of Object.values(this.j)) addB(b);
+      const idxOf = new Map(all.map((b, i) => [b, i]));
+      const skel = new THREE.Skeleton(all); this.skel = skel; this.boneIdx = idxOf;
+      for (const [material, ps] of byMat) {
+        const items = ps.map(p => ({ geo: p.geo, color: p.color || (material.userData.batch ? new THREE.Color(1, 1, 1) : undefined), matrix: new THREE.Matrix4().multiplyMatrices(inv, this.j[p.parent].matrixWorld).multiply(p.m), bone: idxOf.get(this.j[p.parent]) }));
+        const geo = mergeGeos(items), n = geo.attributes.position.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+        let v = 0; for (const it of items) { const c = it.geo.attributes.position.count; for (let i = 0; i < c; i++, v++) { si[v * 4] = it.bone; sw[v * 4] = 1; } }
+        geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+        const mesh = new THREE.SkinnedMesh(geo, material);
+        mesh.castShadow = true; mesh.frustumCulled = false; this.root.add(mesh); mesh.updateMatrixWorld(true); mesh.bind(skel, mesh.matrixWorld);
+        this.meshes.push(mesh);
+      }
+      for (const [jn, list] of byJoint) {
+        const jg = this.j[jn], ap = list.filter(p => p.aura);
+        if (ap.length) {
+          const am = new THREE.Mesh(mergeGeos(ap.map(p => ({ geo: p.geo, matrix: p.m.clone().scale(new THREE.Vector3(1.05, 1.05, 1.05)) }))), auraMat(0xffffff));
+          am.visible = false; am.renderOrder = 10; am.frustumCulled = false; jg.add(am); this.aura.push(am);
+        }
+      }
+      this.parts = null;
+      return this;
+    }
     for (const [jn, list] of byJoint) {
       const jg = this.j[jn];
       const byMat = new Map();
@@ -129,6 +169,20 @@ class Rig {
     }
     this.parts = null;
     return this;
+  }
+  // 1.6.0: loose meshes hanging on joints (wounds) -> one skinned mesh drawn in one call (null when the rig isn't skinned)
+  skinned(meshes) {
+    if (!this.skel || !meshes.length) return null;
+    this.root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert();
+    const items = meshes.map(m => ({ geo: m.geometry, matrix: new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld), bone: this.boneIdx.get(m.parent) ?? 0 }));
+    const geo = mergeGeos(items), n = geo.attributes.position.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+    let v = 0; for (const it of items) { const c = it.geo.attributes.position.count; for (let i = 0; i < c; i++, v++) { si[v * 4] = it.bone; sw[v * 4] = 1; } }
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    const sm = new THREE.SkinnedMesh(geo, meshes[0].material); sm.frustumCulled = false; sm.castShadow = false;
+    this.root.add(sm); sm.updateMatrixWorld(true); sm.bind(this.skel, sm.matrixWorld);
+    for (const m of meshes) m.parent.remove(m);
+    return sm;
   }
   setAura(color) {
     for (const a of this.aura) { if (color == null) a.visible = false; else { a.visible = true; a.material = auraMat(color); } }
@@ -303,7 +357,7 @@ export function makeSurvivor(def, sk = {}) {
   const bloodM = new THREE.MeshStandardMaterial({ color: 0x6a0606, emissive: 0x2a0000, roughness: 0.18, metalness: 0.08 });
   const ws = new THREE.SphereGeometry(1, 10, 8);
   const part = (jn, x, y, z, sx, sy, sz, rz = 0) => { const m = new THREE.Mesh(ws, bloodM); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.z = rz; m.visible = false; R.j[jn].add(m); return m; };
-  const group = list => ({ set visible(v) { for (const m of list) m.visible = v; } });
+  const group = list => { const sm = R.skinned(list); if (sm) { sm.visible = false; return sm; } return { set visible(v) { for (const m of list) m.visible = v; } }; }; // (1.6.0: one draw call per wound set)
   R.wounds = {
     light: group([part('spine', 0.04, 0.32, -0.108, 0.05, 0.12, 0.02, 0.3), part('spine', 0.158, 0.16, 0.02, 0.02, 0.09, 0.06), part('shL', 0.03, -0.16, 0.035, 0.03, 0.07, 0.03), part('spine', -0.06, 0.12, -0.1, 0.07, 0.05, 0.02, -0.4)]),
     heavy: group([part('spine', 0.02, 0.22, 0.106, 0.09, 0.14, 0.02, 0.2), part('lgR', 0.02, -0.22, 0.066, 0.035, 0.13, 0.025), part('handL', 0, -0.05, 0.01, 0.045, 0.055, 0.03), part('head', 0.05, 0.16, 0.08, 0.025, 0.05, 0.02, -0.5), part('kn' + 'L', 0.0, -0.12, 0.05, 0.03, 0.1, 0.02)]),
