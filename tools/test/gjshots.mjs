@@ -111,16 +111,14 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
     const fwd = CFG.map === 'granny' ? dirTo(P, H) : { x: 0, z: 1 };
     if (SHOT === 'c_granny') {
       // Granny in the east yard, seen from the ground: the house, the wreck and the lamps behind her
-      const k = spot(15.8, 10.4, 15.8, 10.4); K.x = k.x; K.z = k.z; K.yaw = Math.PI / 2 + 0.25; me.x = K.x + 2; me.z = K.z;
-      cam = new THREE.Vector3(K.x + 3.4, 0.42, K.z + 1.3); look = new THREE.Vector3(K.x - 1.5, 2.3, K.z - 0.3);
+      const k = spot(20.6, 8.4, 20.6, 8.4); K.x = k.x; K.z = k.z; K.yaw = Math.PI / 2 + 0.2; me.x = K.x + 2; me.z = K.z;
+      cam = new THREE.Vector3(K.x + 3.3, 0.45, K.z + 1.1); look = new THREE.Vector3(K.x - 2.5, 2.25, K.z + 0.2);
     } else if (SHOT === 'c_hunt') {
-      // over Granny's shoulder: a survivor at a generator under the lamp, unaware
-      const Y = { x: 16, z: 10 }, G = M.gens.filter(q => !(M.isIndoors && M.isIndoors(q.x, q.z)) && open(q.x, q.z, 3) >= 8).sort((a, b) => Math.hypot(a.x - Y.x, a.z - Y.z) - Math.hypot(b.x - Y.x, b.z - Y.z))[0] || M.gens[0];
-      const A = sv.find(o => o !== me) || sv[0], d = { x: Math.sin(G.rot || 0), z: Math.cos(G.rot || 0) };
-      const a = spot(G.x + d.x, G.z + d.z, G.x, G.z); A.x = a.x; A.z = a.z; A.yaw = yawTo(A, G); A.act = { k: 'repair', id: M.gens.indexOf(G), t: 2 };
-      const k = at(A, dirTo(G, A), 4.2, 1.2); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A);
-      const bk = dirTo(A, K); const c = { x: K.x + bk.x * 1.3 + bk.z * 0.55, z: K.z + bk.z * 1.3 - bk.x * 0.55 };
-      cam = new THREE.Vector3(c.x, 1.75, c.z); look = new THREE.Vector3(A.x, 0.9, A.z); me.x = G.x; me.z = G.z;
+      // over Granny's shoulder: Mara creeping past the wreck, not knowing who's behind her
+      const A = sv.find(o => o !== me) || sv[0]; const a = spot(17.6, 10.9, 17.6, 10.9); A.x = a.x; A.z = a.z; A.yaw = -Math.PI / 2 - 0.3; A.cr = 1; A.mv = 1;
+      const k = spot(22.3, 8.3, 22.3, 8.3); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A);
+      const bk = dirTo(A, K); cam = new THREE.Vector3(K.x + bk.x * 1.25 - bk.z * 0.55, 1.85, K.z + bk.z * 1.25 + bk.x * 0.55); look = new THREE.Vector3(A.x, 0.8, A.z);
+      me.x = (A.x + K.x) / 2; me.z = (A.z + K.z) / 2;
     } else if (SHOT === 'c_crow') {
       // June's crow close up, the killer coming out of the dark behind her
       const j = spot(18.5, 9.2, 18.5, 9.2); me.x = j.x; me.z = j.z; me.yaw = Math.PI / 2 - 0.35; me.crowF = 0; g.hideMe = false;
@@ -150,6 +148,7 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
   if (cam) { const cu = g.updateCamera.bind(g); g.updateCamera = (dt, S2, m2) => { cu(dt, S2, m2); g.camera.position.copy(cam); g.camera.lookAt(look); }; }
   for (let i = 0; i < frames + 30; i++) g.frame(1 / 30);
   if (view && g.view) { for (let i = 0; i < 60; i++) animateView(g.view, { t: 1, speed: 0, ...view }, 1 / 30); }
+  for (const arr of [g.W.gens, g.W.cages, g.W.gates]) for (const o of arr || []) if (o.userData.aura) o.userData.aura.visible = false; // (no prop outlines in a cinematic)
   for (const [id, c] of g.chars) { if (c.rig && c.rig.setAura) c.rig.setAura(null); c.aura = null; if (id === 'me' && g.hideMe && c.rig) c.rig.root.visible = false; }
   if (g.composer) g.composer.render(1 / 30); else g.renderer.render(g.scene, g.camera);
   return [g.renderer.domElement.toDataURL('image/png')];
