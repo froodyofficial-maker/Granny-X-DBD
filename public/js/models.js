@@ -909,7 +909,7 @@ export function makeViewModel(id, vsk = {}, real = {}) {
   // the killer's own forearm and hand (and weapon, if the model holds one) from their model
   if (real.R) {
     for (const m of armParts) m.visible = false;
-    if (real.R.weapon) { for (const o of arm.children) if (!armParts.includes(o)) o.visible = false; tip.position.copy(real.R.tip); base.position.copy(real.R.base); }
+    if (real.R.weapon) { for (const o of arm.children) if (!armParts.includes(o)) o.visible = false; tip.position.copy(real.R.tip); base.position.copy(real.R.base); if (real.R.axis) g.userData.wAxis = real.R.axis.clone(); }
     arm.add(real.R.group);
   }
   arm.add(tip); arm.add(base);
@@ -935,7 +935,7 @@ export function makeViewModel(id, vsk = {}, real = {}) {
     const saw = makeChainsaw(); saw.position.set(0.0, -0.06, -0.1); saw.rotation.set(0, Math.PI, 0); saw.scale.setScalar(0.55); left.add(saw);
     g.userData.saw = saw;
   }
-  g.userData = { ...g.userData, arm, left, tip, base, pose: null, id, bloodMesh };
+  g.userData = { ...g.userData, arm, left, tip, base, pose: null, id, bloodMesh, wAxis: g.userData.wAxis || null };
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 5; } });
   return g;
 }
@@ -955,9 +955,77 @@ const VP = {
 };
 const LP = { saw: [-0.4, -0.38, -0.6, 0.35, -0.35, 0.2], sawAim: [-0.34, -0.3, -0.8, 0.15, 0.45, -0.15], idle: [-0.34, -0.44, -0.5, 0.2, -0.1, 0], carry: [-0.3, -0.25, -0.42, -0.4, -0.2, 0.3], wipe: [-0.12, -0.3, -0.38, 0.4, -0.6, 0], stun: [-0.18, -0.2, -0.28, -0.7, -0.2, -0.5], act: [-0.2, -0.5, -0.5, 0.6, -0.1, -0.2], lantern: [-0.3, -0.2, -0.52, 0.1, 0.15, 0], tele: [-0.1, -0.15, -0.45, -0.6, 0, 0] };
 const mixP = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+// 1.6.0: real swings for the weapon killers (Granny's bat, Grandpa's shotgun). Each key = where the hand is and which way the
+// weapon points (camera space: x right, y up, -z ahead) + which way its 'up' faces; the arm is turned so the weapon's own
+// axis (base -> tip, measured from the model) lands on that direction, and keys are blended with slerp, so the weapon sweeps
+// through a real arc instead of tumbling through mixed euler angles.
+const nv = (x, y, z) => new THREE.Vector3(x, y, z).normalize();
+const SWING = {
+  granny: {
+    windup: { p: [0.44, -0.1, -0.3], d: nv(0.3, 0.85, 0.42), u: nv(-1, 0.2, 0) },        // bat cocked over the right shoulder
+    impact: { p: [0.08, -0.3, -0.5], d: nv(-0.62, 0.12, -0.78), u: nv(0, 1, -0.1) },     // through the middle of the screen
+    follow: { p: [-0.16, -0.42, -0.46], d: nv(-0.78, -0.42, -0.2) },                  // low on the left
+  },
+  grandpa: {
+    // a rifle-butt strike: the gun flat across the screen, stock driven forward-left, barrel out to the right
+    windup: { p: [0.32, -0.27, -0.5], d: nv(0.9, 0.22, 0.38) },
+    impact: { p: [-0.04, -0.2, -0.56], d: nv(0.78, 0.12, 0.62) },
+    follow: { p: [-0.12, -0.3, -0.5], d: nv(0.85, -0.05, 0.52) },
+    // aiming: the hand low on the right, the barrel angled in so the muzzle sits in the middle of the screen
+    aim: { p: [0.1, -0.3, -0.5], d: nv(-0.13, 0.25, -1), roll: 1.57 },
+  },
+};
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
+function basisQ(d, up, out) { const z = d.clone(), y = up.clone().sub(z.clone().multiplyScalar(up.dot(z))).normalize(), x = new THREE.Vector3().crossVectors(y, z); return out.setFromRotationMatrix(_m1.makeBasis(x, y, z)); }
+function swingSetup(u) {
+  if (u.sw !== undefined) return u.sw;
+  const S = SWING[u.id]; if (!S) return (u.sw = null);
+  const ld = (u.wAxis && u.id === 'grandpa' ? u.wAxis.clone() : u.tip.position.clone().sub(u.base.position)); if (ld.lengthSq() < 1e-6) return (u.sw = null); ld.normalize(); // (Grandpa: his barrel's own axis)
+  // the roll: the forearm always runs from the hand back to the shoulder (off-screen, bottom right), as in the idle pose
+  const SH = new THREE.Vector3(0.34, -0.8, 0.2);
+  const qi = new THREE.Quaternion().setFromEuler(_e.set(VP.idle[3], VP.idle[4], VP.idle[5]));
+  const lu = SH.clone().sub(new THREE.Vector3(VP.idle[0], VP.idle[1], VP.idle[2])).normalize().applyQuaternion(qi.clone().invert());
+  const lq = basisQ(ld, lu, new THREE.Quaternion()).invert(); // local -> canonical
+  const key = k => {
+    const hand = new THREE.Vector3(...(k.p || k.base)), q = basisQ(k.d, SH.clone().sub(hand).normalize(), new THREE.Quaternion()).multiply(lq);
+    if (k.roll) q.premultiply(new THREE.Quaternion().setFromAxisAngle(k.d, k.roll)); // (a twist about the weapon's own axis)
+    return { p: k.base ? hand.clone().sub(u.base.position.clone().applyQuaternion(q)) : hand, q };
+  };
+  const K = { idle: { p: new THREE.Vector3(VP.idle[0], VP.idle[1], VP.idle[2]), q: qi } };
+  for (const n of Object.keys(S)) K[n] = key(S[n]);
+  return (u.sw = K);
+}
+const ease = t => t * t * (3 - 2 * t), easeIn = t => t * t, easeOut = t => 1 - (1 - t) * (1 - t);
+function blendKey(a, b, k, out) { out.p.copy(a.p).lerp(b.p, k); out.q.copy(a.q).slerp(b.q, k); return out; }
 // s: { atk, atkF, atkHit, recF, aim, stun, rampage, carry, act, moving, speed, t, tele }
 export function animateView(v, s, dt) {
   const u = v.userData;
+  const K = !s.stun && !s.tele && !s.carry && !s.act ? swingSetup(u) : null;
+  if (K && (s.atk === 1 || s.atk === 2 || (s.aim && K.aim))) {
+    const cur = u.swCur ||= { p: new THREE.Vector3(), q: new THREE.Quaternion() };
+    let tk = { p: new THREE.Vector3(), q: new THREE.Quaternion() }, k = 18;
+    if (s.atk === 1) {
+      const f = s.atkF || 0;
+      if (f < 0.24) blendKey(K.idle, K.windup, ease(f / 0.24), tk);
+      else if (f < 0.42) blendKey(K.windup, K.impact, easeIn((f - 0.24) / 0.18), tk);
+      else blendKey(K.impact, K.follow, easeOut(Math.min(1, (f - 0.42) / 0.2)), tk);
+      k = 60;
+    } else if (s.atk === 2 && s.atkHit) { blendKey(K.impact, K.follow, 0.6, tk); k = 10; }
+    else if (s.atk === 2) { blendKey(K.follow, K.idle, ease(Math.min(1, (s.recF || 0) * 1.3)), tk); k = 14; }
+    else { tk.p.copy(K.aim.p); tk.q.copy(K.aim.q); k = 16; }
+    if (!u.swOn) { // coming from the euler poses: start from where the arm is now
+      cur.p.copy(u.arm.position); cur.q.copy(u.arm.quaternion); u.swOn = true;
+    }
+    const kk = 1 - Math.exp(-dt * k);
+    cur.p.lerp(tk.p, kk); cur.q.slerp(tk.q, kk);
+    if (s.aim && !s.atk) { cur.p.y += Math.sin(s.t * 1.3) * 0.002; } // (a steady hold)
+    u.arm.position.copy(cur.p); u.arm.quaternion.copy(cur.q);
+    // keep the euler pose in step so leaving the swing doesn't jump
+    _e.setFromQuaternion(cur.q); u.pose = [cur.p.x, cur.p.y, cur.p.z, _e.x, _e.y, _e.z];
+    u.left.visible = false;
+    return;
+  }
+  u.swOn = false;
   let target, k = 14;
   if (s.stun) target = VP.stun;
   else if (s.tele) target = VP.tele;

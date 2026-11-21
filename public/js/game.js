@@ -117,8 +117,10 @@ const PostShader = {
       // grade (scene is still linear HDR here): slightly cool shadows, warm highlights,
       // and contrast around mid-grey that can never push a channel negative
       float lg = dot(max(c.rgb, 0.0), vec3(0.2126, 0.7152, 0.0722));
-      c.rgb = max(c.rgb, 0.0) * mix(vec3(0.95, 0.99, 1.05), vec3(1.05, 1.0, 0.94), smoothstep(0.02, 0.5, lg));
-      c.rgb = pow(c.rgb / 0.18, vec3(1.05)) * 0.18;
+      // 1.6.0: a stronger film grade: teal-blue shadows, warm lamp-lit highlights, more contrast and a little more colour
+      c.rgb = max(c.rgb, 0.0) * mix(vec3(0.86, 0.97, 1.12), vec3(1.12, 1.0, 0.84), smoothstep(0.02, 0.45, lg));
+      c.rgb = pow(c.rgb / 0.18, vec3(1.12)) * 0.18;
+      float ls = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = max(mix(vec3(ls), c.rgb, 1.12), 0.0);
       vec2 d = vUv - 0.5; float r = length(d*vec2(1.25,1.0));
       float v = smoothstep(0.85, 0.25, r*(vig + pulse*0.25));
       c.rgb *= mix(0.4, 1.0, v);
@@ -402,7 +404,7 @@ export class Game {
 
   start() {
     resetVoices(); KB_SETTINGS = this.settings;
-    const q = QUALITY[this.settings.quality] || QUALITY.medium;
+    let q = QUALITY[this.settings.quality] || QUALITY.medium;
     initPhoto(this.renderer, this.settings.quality);
     this.W = buildWorld(this.M, this.settings.quality);
     // Blood Moon mode: a red moon, red-tinged fog and moonlight
@@ -416,6 +418,9 @@ export class Game {
     } }
     this.scene = this.W.scene;
     this.camera = new THREE.PerspectiveCamera(this.settings.fov || 75, innerWidth / innerHeight, 0.05, q.far);
+    // 1.6.0: a pixel budget: laptop screens at 150% scaling made High draw 2.25x the pixels (2560x1600 and more, with 4x MSAA)
+    { const budget = { high: 3.7e6, medium: 2.4e6, low: 1.6e6, potato: 1.0e6 }[this.settings.quality] || 2.4e6, cap = Math.sqrt(budget / Math.max(1, innerWidth * innerHeight));
+      if (q.pixel > cap) q = { ...q, pixel: Math.max(0.75, +cap.toFixed(2)), minPixel: Math.min(q.minPixel, Math.max(0.7, +cap.toFixed(2) - 0.1)) }; }
     this.q = q; this.pr = q.pixel; this.ftAvg = 1 / 60; this.drT = 0; this.fpsT = 0; this.fpsN = 0;
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
@@ -444,7 +449,7 @@ export class Game {
     if (q.post) {
       // multisampled render target: the post-processing chain otherwise loses anti-aliasing
       // (with a stencil buffer: the aura outlines are masked with it)
-      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: q.msaa || 0, stencilBuffer: true });
+      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: Math.min(q.msaa || 0, r.getPixelRatio() >= 1.25 ? 2 : 4), stencilBuffer: true }); // (dense screens need less MSAA)
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       if (real && this.settings.ao) { // (1.6.0: off unless asked for: it was the grain and a big cost)
@@ -852,6 +857,8 @@ export class Game {
       const off = Math.max(Math.abs(v.x), Math.abs(v.y));
       ru.on.value = inFront ? 1 - Math.min(1, Math.max(0, (off - 1) / 1.2)) : 0;
     }
+    // 1.6.0: the shadow map is redrawn every other frame (it re-renders every caster around the camera; at 60+ fps nobody sees it)
+    { const sm = this.renderer.shadowMap; if (sm.enabled) { if (sm.autoUpdate) sm.autoUpdate = false; this.shTick = (this.shTick + 1) % 2 || 0; sm.needsUpdate = this.shTick === 0; } }
     if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
     else this.renderer.render(this.scene, this.camera);
     this.perf(dt);
@@ -2592,7 +2599,7 @@ export class Game {
     this.lastNow = performance.now();
     this.ftAvg += (Math.min(0.2, real) - this.ftAvg) * 0.05;
     this.fpsN++; this.fpsT += real;
-    if (this.fpsT > 0.5) { if (this.settings.showFps) $('fps').textContent = Math.round(this.fpsN / this.fpsT) + ' FPS · ' + (this.pr * 100).toFixed(0) + '% res'; this.fpsN = 0; this.fpsT = 0; }
+    if (this.fpsT > 0.5) { if (this.settings.showFps) { if (this.gpuShort == null) { try { const gl = this.renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); this.gpuShort = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '').replace(/^ANGLE \(|\)$/g, '').split(',').slice(-2, -1).join('').replace(/Direct3D.*|\(0x[0-9A-F]+\)/gi, '').trim().slice(0, 40); } catch { this.gpuShort = ''; } } $('fps').textContent = Math.round(this.fpsN / this.fpsT) + ' FPS · ' + (this.pr * 100).toFixed(0) + '% res' + (this.gpuShort ? ' · ' + this.gpuShort : ''); } this.fpsN = 0; this.fpsT = 0; } // (1.6.0: the FPS counter also names the GPU that draws the game)
     if (this.settings.dynres === false) return;
     this.drT += real;
     if (this.drT < 1.2) return;

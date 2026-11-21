@@ -451,7 +451,7 @@ for (const b of $('mainnav').children) {
 }
 document.addEventListener('pointerdown', () => sound.init(), { once: true });
 // 1.5.1: menu music. Plays in the menus, the lobby and on the results screen; fades out when a match begins
-setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown, document.documentElement.classList.contains('theme-vi') && settings.viMusic !== false ? 'vitheme' : 'menu'); sound.mapMusic(!!g && !g.endShown && session.map === 'granny'); }, 500); // (1.5.3: Granny's House has its own music)
+setInterval(() => { const g = session && session.game; sound.menuMusic(!g || !!g.endShown, document.documentElement.classList.contains('theme-vi') && settings.viMusic !== false ? 'vitheme' : 'menu'); sound.mapMusic(!!g && !g.endShown && !!session.map && session.map !== 'city'); }, 500); // (1.5.3 Granny's House music; 1.6.0: on every map but the city, louder)
 document.addEventListener('keydown', () => sound.init(), { once: true });
 
 function seg(id, onChange) {

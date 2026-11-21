@@ -31,6 +31,17 @@ function segDist(px, pz, ax, az, bx, bz) {
 }
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+// 1.6.0: a soft cone of lamplight under each street lamp (additive; brightest at the lamp and along the axis, fading to the ground)
+let _beamGeo = null, _beamMat = null;
+const BEAM_GEO = () => _beamGeo || (_beamGeo = (() => { const g = new THREE.ConeGeometry(1.7, 3.05, 24, 1, true); g.translate(0, -1.525, 0); return g; })());
+function lampBeamMat() {
+  return _beamMat || (_beamMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+    uniforms: { col: { value: new THREE.Color(0xffb866) } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; varying float vH; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vH = -position.y / 3.05; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 col; varying vec3 vN; varying vec3 vV; varying float vH; void main(){ float edge = pow(abs(dot(vN, vV)), 1.8); float f = edge * (1.0 - smoothstep(0.05, 1.0, vH)) * smoothstep(0.0, 0.08, vH); gl_FragColor = vec4(col * f * 0.16, 1.0); }',
+  }));
+}
 export function buildWorld(M, quality = 'medium') {
   const HF = M.half || HALF;
   if (M.indoor) return buildMeatWorld(M, quality);
@@ -51,12 +62,12 @@ export function buildWorld(M, quality = 'medium') {
   const moon = new THREE.DirectionalLight(LK.moon[0], LK.moon[1]);
   const fill = new THREE.PointLight(0xa8b4d0, 1.8, 13, 1.2);
   scene.add(fill); W.fill = fill; fill.userData.keep = true; // (follows the player: always a real light)
-  moon.position.set(30, 60, 20);
+  moon.position.set(MOON_OFF.x, MOON_OFF.y, MOON_OFF.z);
   if (q.shadow) {
     moon.castShadow = true;
     const sm = Math.min(2048, realistic() ? q.shadow * 2 : q.shadow); // crisper shadows in the realistic look (1.6.0: at most 2048: 4096 was a big cost)
     moon.shadow.mapSize.set(sm, sm);
-    const s = moon.shadow.camera; s.left = -32; s.right = 32; s.top = 32; s.bottom = -32; s.near = 5; s.far = 160;
+    const s = moon.shadow.camera; s.left = -34; s.right = 34; s.top = 34; s.bottom = -34; s.near = 5; s.far = 170;
     moon.shadow.bias = -0.0006; moon.shadow.normalBias = 0.04;
   }
   scene.add(moon); scene.add(moon.target);
@@ -65,6 +76,8 @@ export function buildWorld(M, quality = 'medium') {
     // realistic: real night contrast. Less flat fill, a stronger moon key, so walls and trees
     // model in light and shadow instead of glowing evenly
     hemi.intensity *= 0.75; W.amb.intensity *= 0.55; moon.intensity *= 1.45; fill.intensity *= 0.9;
+    // 1.6.0: a low moon (long shadows, lit edges on walls and trunks), cooler and brighter, and less flat fill
+    hemi.intensity *= 0.8; W.amb.intensity *= 0.7; moon.intensity *= 1.3; moon.color.lerp(new THREE.Color(0x9fbaff), 0.35);
   }
 
   // ---------- sky: gradient, stars, moon with halo, drifting clouds ----------
@@ -381,6 +394,7 @@ export function buildWorld(M, quality = 'medium') {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), bulbM); bulb.position.set(0.66, 3.16, 0); g.add(bulb);
     const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24), new THREE.MeshBasicMaterial({ map: poolTex, color: LK.lamp, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false }));
     pool.rotation.x = -Math.PI / 2; pool.position.set(0.66, 0.04, 0); g.add(pool);
+    if (!lite) { const beam = new THREE.Mesh(BEAM_GEO(), lampBeamMat()); beam.position.set(0.66, 3.05, 0); beam.renderOrder = 3; g.add(beam); } // (1.6.0: light falling through the mist)
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: poolTex, color: 0xffc070, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
     glow.scale.setScalar(1.1); glow.position.set(0.66, 3.16, 0); g.add(glow);
     let light = null;
@@ -442,13 +456,15 @@ export function addInteractables(W, M) {
 }
 
 // per-frame updates for props, driven by state
+// 1.6.0: the moon sits low (~28 degrees) instead of nearly overhead: long shadows and modelled light instead of a flat wash
+const MOON_OFF = new THREE.Vector3(56, 32, 24);
 export function updateWorld(W, M, S, t, dt, follow) {
   if (W.grassT) W.grassT.value = t;
   if (follow) updateLightPool(W, _v.set(follow.x, 2, follow.z), dt);
   if (follow) {
     W.fill.position.set(follow.x, 3.2, follow.z);
     W.moon.target.position.set(follow.x, 0, follow.z);
-    W.moon.position.set(follow.x + 30, 60, follow.z + 20);
+    W.moon.position.set(follow.x + MOON_OFF.x, MOON_OFF.y, follow.z + MOON_OFF.z);
     W.sky.position.set(follow.x, 0, follow.z);
   }
   if (W.indoor) updateMeatLights(W, follow, t);

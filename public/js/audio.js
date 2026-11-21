@@ -31,7 +31,7 @@ export class Sound {
     this.musicLoading = false;
     return this.musicBuf;
   }
-  // id: 'menu' (public/audio/menu.mp3) or a theme track ('vitheme': the GTA VI theme, played from 0:50 with a slow fade-in,
+  // id: 'menu' (public/audio/menu.mp3) or a theme track ('vitheme': the GTA VI theme, played from 0:50 (the file starts at 0:49) with a 1.2 s fade-in,
   // looping from there). A theme track that isn't there falls back to the menu music.
   menuMusic(on, id = 'menu') {
     this.wantMenu = on;
@@ -47,7 +47,7 @@ export class Sound {
         else if (!this.tracks || this.tracks[id] === undefined) this.loadTrack(id).then(() => { if (this.wantMenu && !this.menuSrc) this.menuMusic(true, id); });
         return;
       }
-      const off = id === 'vitheme' ? Math.min(50, buf.duration * 0.5) : 0, fade = id === 'vitheme' ? 5 : 2.5;
+      const off = id === 'vitheme' ? Math.min(1, buf.duration * 0.5) : 0, fade = id === 'vitheme' ? 1.2 : 2.5; // (1.6.0: vitheme.mp3 is stored from 0:49 of the song, so 1 s in = 0:50; quick fade)
       const src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = off; src.loopEnd = buf.duration;
       const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55, t + fade);
       src.connect(g); g.connect(this.musicBus); src.start(t, off); this.menuSrc = src; this.menuGain = g; this.menuId = id;
@@ -71,7 +71,7 @@ export class Sound {
     this.tracks[id] = buf; // (null: not there, the menu music plays instead)
     return buf;
   }
-  mapMusic(on, id = 'granny3', vol = 0.42) {
+  mapMusic(on, id = 'granny3', vol = 0.8) {
     this.wantMap = on;
     if (!this.ok) return;
     const c = this.ctx, t = c.currentTime;

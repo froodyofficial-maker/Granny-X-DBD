@@ -530,6 +530,10 @@ export const INBOX = [
     id: 'gdbd160', version: '1.6.0', date: 'Nov 2026', title: 'The graphics update', tag: 'Update',
     body: [
       'No more grain: the noisy ambient-occlusion pass, film grain and heavy sharpening are gone, and the resolution no longer drops to 60-70% when the frame rate dips. Smoother on good PCs, and Low now has anti-aliasing.',
+      'New lighting: the moon hangs low over the maps (long shadows, moonlit walls), the street lamps throw beams through the mist, and a new colour grade.',
+      'Faster on gaming laptops: the Windows app now asks for the graphics card instead of the built-in chip, High caps its resolution on 150%-scaled screens, and shadows cost half as much. Turn on the FPS counter to see which GPU is drawing.',
+      "Granny swings her bat properly (wind-up over the shoulder, a full swing through the middle of the screen), Grandpa rifle-butts with his shotgun, and when he aims, the gun comes up to the middle of the screen.",
+      "Granny's House music now plays on every map (it was far too quiet before), and the GTA VI menu music starts straight away.",
       'The Windows app and the APK now have the photo-scanned ground, wood, brick and bark textures (only the browser version had them before). Medium or High quality.',
       "Blood looks like blood: Granny's bat is no longer white, Grandpa's club lost its paint blob, and weapons get a dark wet smear with drips after a hit instead of a red blob.",
       'Angeline looks better: relief on her dress, skin and stains, fabric sheen, and less washed-out white.',

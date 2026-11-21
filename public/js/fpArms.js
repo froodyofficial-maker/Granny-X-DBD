@@ -45,7 +45,7 @@ const shown = o => { for (let x = o; x; x = x.parent) if (x.visible === false) r
 // side: 'R' or 'L'. Returns { group, tip, base, weapon } in viewmodel arm space, or null.
 export function bakeArm(rigRoot, side, opt = {}) {
   rigRoot.updateMatrixWorld(true);
-  const out = new Map(), weaponPts = [];
+  const out = new Map(), weaponPts = [], barrelPts = [];
   let E, W, handPts = [];
   const sideRe = side === 'R' ? /(^|[^a-z])(r|right)([^a-z]|$)|right/i : /(^|[^a-z])(l|left)([^a-z]|$)|left/i;
   let hand = null;
@@ -77,6 +77,7 @@ export function bakeArm(rigRoot, side, opt = {}) {
         const P = o.geometry.attributes.position, pos = k => V().fromBufferAttribute(P, k).applyMatrix4(o.matrixWorld);
         grabTris(o, () => true, pos, out);
         for (let k = 0; k < P.count; k += 7) weaponPts.push(pos(k));
+        if (/pipa|barrel/i.test(o.name || '')) for (let k = 0; k < P.count; k += 3) barrelPts.push(pos(k)); // (1.6.0: a gun's barrel, for its true axis)
       }
     });
   } else if (opt.region) {
@@ -139,6 +140,12 @@ export function bakeArm(rigRoot, side, opt = {}) {
   if (weaponPts.length) {
     let far = null, fd = -1; for (const p of weaponPts) { const q = p.clone().applyMatrix4(M), d = q.length(); if (d > fd) { fd = d; far = q; } }
     tip = far; base = far.clone().multiplyScalar(0.3);
+    // 1.6.0: the weapon's real long axis (principal direction of its points, pointing to the far end) and its middle, for the swings
+    const Q = (barrelPts.length > 12 ? barrelPts : weaponPts).map(p => p.clone().applyMatrix4(M)), c = Q.reduce((a, q) => a.add(q), V()).multiplyScalar(1 / Q.length);
+    let ax = far.clone().sub(c).normalize();
+    for (let it = 0; it < 12; it++) { const n = V(); for (const q of Q) { const d = q.clone().sub(c); n.addScaledVector(d, d.dot(ax)); } if (n.lengthSq() < 1e-12) break; ax = n.normalize(); }
+    if (ax.dot(far.clone().sub(c)) < 0) ax.negate();
+    var axis = ax, mid = c;
   }
-  return { group, tip, base, weapon: weaponPts.length > 0 };
+  return { group, tip, base, weapon: weaponPts.length > 0, axis: typeof axis !== 'undefined' ? axis : null, mid: typeof mid !== 'undefined' ? mid : null };
 }

@@ -29,6 +29,8 @@ const out = await pg.evaluate(async () => {
   const L0 = g.W.lamps[0] && g.W.lamps[0].bulbM ? (() => { let p = null; g.scene.traverse(o => { if (!p && o.material === g.W.lamps[0].bulbM) { p = new o.position.constructor(); o.getWorldPosition(p); } }); return p; })() : null;
   if (L0) shoot(L0.x + 3, 2.2, L0.z + 3.5, L0.x, 2.2, L0.z);
   shoot(G0.x + 8, 0.9, G0.z + 8, G0.x + 2, 0.3, G0.z + 2);
+  // draw calls of one whole frame (scene + shadow maps + post)
+  g.renderer.info.autoReset = false; g.renderer.info.reset(); g.frame(1 / 30); const dc = { calls: g.renderer.info.render.calls, tris: g.renderer.info.render.triangles }; g.renderer.info.autoReset = true;
   // JS only: drawing stubbed out
   const rr = g.renderer.render.bind(g.renderer), cr = g.composer && g.composer.render.bind(g.composer);
   g.renderer.render = () => {}; if (g.composer) g.composer.render = () => {};
@@ -36,7 +38,7 @@ const out = await pg.evaluate(async () => {
   g.renderer.render = rr; if (cr) g.composer.render = cr;
   // simulation + bots step
   const t2 = performance.now(); for (let i = 0; i < 60; i++) { bu(1 / 60); s.sim.update(1 / 60); s.sim.takeEvents(); } const sim = (performance.now() - t2) / 60;
-  const info = g.renderer.info; return { ms: +ms.toFixed(0), js: +js.toFixed(2), sim: +sim.toFixed(2), calls: info.render.calls, tris: info.render.triangles, progs: info.programs.length, tex: info.memory.textures, lights: (() => { const L = []; g.scene.traverse(o => { if (o.isLight) L.push(o.type.replace('Light', '') + (o.castShadow ? '*' + (o.shadow.mapSize.x) : '') + (o.intensity > 0 ? '' : '(off)')); }); return L.join(' '); })(), grass: (() => { let n = 0, m = ''; g.scene.traverse(o => { if (o.isInstancedMesh) { n += o.count; m += o.name + ':' + o.count + (o.castShadow ? '*' : '') + ' '; } }); return m; })(), passes, pr: g.renderer.getPixelRatio(), img, shots };
+  const info = g.renderer.info; return { ms: +ms.toFixed(0), js: +js.toFixed(2), sim: +sim.toFixed(2), calls: dc.calls, tris: dc.tris, progs: info.programs.length, tex: info.memory.textures, lights: (() => { const L = []; g.scene.traverse(o => { if (o.isLight) L.push(o.type.replace('Light', '') + (o.castShadow ? '*' + (o.shadow.mapSize.x) : '') + (o.intensity > 0 ? '' : '(off)')); }); return L.join(' '); })(), grass: (() => { let n = 0, m = ''; g.scene.traverse(o => { if (o.isInstancedMesh) { n += o.count; m += o.name + ':' + o.count + (o.castShadow ? '*' : '') + ' '; } }); return m; })(), passes, pr: g.renderer.getPixelRatio(), img, shots };
 });
 const fs = await import('node:fs'); fs.writeFileSync(pre + '.jpg', Buffer.from(out.img.split(',')[1], 'base64')); (out.shots || []).forEach((d, i) => fs.writeFileSync(pre + '_' + i + '.jpg', Buffer.from(d.split(',')[1], 'base64')));
 const { img, shots, ...rest } = out; console.log(Q, JSON.stringify(rest), 'errors', errs);

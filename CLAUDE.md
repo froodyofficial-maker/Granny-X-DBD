@@ -230,6 +230,21 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
 - Per-character perks (`profile.perkSets[char]`, pin button over the slots), hold +/- on stat points, separate survivor bot difficulty
   (`botsCfg.sdiff` -> Sim `survDifficulty` -> bots.js `SURV_SKILLS`). Grandpa pumps the shotgun with his left hand (`grandpaPump`, 2-bone IK).
 - Freddy is still missing (freddy.glb not in the repo or the uploads): ask the owner for the file.
+- 1.6.0 second build (owner: "graphics still don't look that different", 40 fps on an RTX 4070 laptop, no weapon swings, Grandpa doesn't
+  aim to the centre, match music silent, GTA theme slow to fade in; "this all for the 1.6 update, don't make it 1.6.1"): VERSION stays
+  1.6.0, APK versionCode 29, exe unpackDirName GrannyxDBD-1.6.0-b.
+  - Look: world.js `MOON_OFF` (56, 32, 24) = a low moon (was overhead), cooler/brighter moon, less hemi/ambient fill; lamp beams
+    (`lampBeamMat`, additive cone under each lamp, not on low/potato); PostShader grade: teal shadows / warm highlights, contrast 1.12, sat 1.12.
+  - Speed: Electron `force_high_performance_gpu` (Optimus laptops drew on the iGPU); game.js pixel budget (high 3.7 MP, medium 2.4 MP)
+    so 150%-scaled screens don't render 2.25x; MSAA 2 when the pixel ratio is >= 1.25; directional shadow map redrawn every other frame;
+    the FPS counter names the GPU (`gpuShort`).
+  - First-person swings (models.js `SWING`, `swingSetup`, `animateView`): keys = hand position + weapon direction in camera space, roll
+    chosen so the forearm points back to an off-screen shoulder (`SH`), slerp between keys. Granny: wind-up over the right shoulder ->
+    flat swing through the centre -> follow-through low left. Grandpa: rifle-butt strike (gun flat across the screen) and `aim` (gun to the
+    centre, `roll: 1.57`). Grandpa's weapon axis is the barrel mesh's principal axis (fpArms.js `axis` from /pipa|barrel/ meshes; the old
+    tip/base line is hand->farthest point, ~30 deg off). Test: tools/test/vmtest.mjs <killer> <out.jpg> (SEQ='[...]' poses; prints POSE).
+  - Music: granny3.mp3 re-mastered +13 dB (it peaked at -18 dB: inaudible), `mapMusic` vol 0.8 on every map but the city;
+    vitheme.mp3 is stored from 0:49 of the song (offset 1 s = 0:50), fade 1.2 s. Test: /tmp-style musictest (sound module state in a match).
 - Tests: crowlook.mjs (crow in a match + taser cells), simtest `CROW=1` / `KPERKS=sawedoff`, pump-page.js (Grandpa's pump + sawed-off gun),
   gfx160.mjs, offtex.mjs, crowshot-page.js (the crow's Store picture: frame 0 perched; frames 1-3 flight checks).
 - Devlog banner: tools/test/devlog160-page.js ("THE GRAPHICS UPDATE · AND A CROW THAT WATCHES FOR HER": Grandpa with the sawed-off gun,

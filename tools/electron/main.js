@@ -40,7 +40,12 @@ log(`start v${VERSION} electron ${process.versions.electron} windows ${os.releas
 if (safe) {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('use-angle', 'swiftshader');
-} else app.commandLine.appendSwitch('ignore-gpu-blocklist'); // use the GPU even on older drivers Chromium is wary of
+} else {
+  app.commandLine.appendSwitch('ignore-gpu-blocklist'); // use the GPU even on older drivers Chromium is wary of
+  // 1.6.0: on gaming laptops (NVIDIA Optimus / AMD switchable) Chromium otherwise draws on the weak built-in GPU (~40 fps on an
+  // RTX 4070 laptop): ask Windows for the high-performance one
+  app.commandLine.appendSwitch('force_high_performance_gpu');
+}
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');      // software WebGL is allowed as a fallback
 app.commandLine.appendSwitch('disable-renderer-backgrounding'); // an online host keeps running when alt-tabbed
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
