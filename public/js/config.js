@@ -290,6 +290,8 @@ export const KILLER_PERKS = {
   relentless: { name: 'Relentless',    icon: '⟳', desc: 'Recovery after a successful strike is 35% shorter.' },
   dread:      { name: 'Dread',         icon: '♒', desc: 'Terror radius +8m. Survivors inside your terror radius repair 10% slower.' },
   brute:      { name: 'Brute',         icon: '⚒', desc: 'Break barricades and kick generators 35% faster.' },
+  // 1.6.0 (the owner's idea): Grandpa only
+  sawedoff:   { name: 'Sawed-Off',     icon: '⚔', only: 'grandpa', desc: 'When every generator is done, Grandpa saws his shotgun short (2s). Lighter, he moves 6% faster, and he fires two quick shots before reloading. Range drops to 12m, and the closer he is, the more it hurts.' },
   rust:       { name: 'Rusted Hooks',  icon: '⛓', desc: 'Hook timers run 20% faster and unhooking a survivor takes twice as long.' },
   sentry:     { name: 'Sentry',        icon: '◎', desc: 'When a generator is completed, the survivors who finished it are revealed for 6 seconds.' },
   fury:       { name: 'Endgame Fury',  icon: '♨', desc: 'Once the exit gates are powered, gain +8% movement speed.' },

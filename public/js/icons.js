@@ -110,13 +110,14 @@ const LV_TIERS = [
 export const levelTier = lv => LV_TIERS.reduce((t, x) => (lv >= x.min ? x : t), LV_TIERS[0]);
 let lvUid = 0;
 export function levelEmblem(lv, size = 56, { max = false, label = true } = {}) {
-  const T = levelTier(lv), u = 'lve' + (lvUid++), wings = lv >= 30 || max, n = String(lv), fs = n.length > 2 ? 15 : 19;
+  const T0 = levelTier(lv), T = max ? { ...T0, a: '#fff4b8', b: '#e0a524', c: '#5a3606', glow: 'rgba(255,205,70,.75)' } : T0; // (1.6.0: max level: gold, with gold wings and a crown)
+  const u = 'lve' + (lvUid++), wings = lv >= 30 || max, n = String(lv), fs = n.length > 2 ? 15 : 19;
   return `<svg class="lv-emblem" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="Level ${lv} (${T.name})">
 <defs><linearGradient id="${u}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${T.a}"/><stop offset=".55" stop-color="${T.b}"/><stop offset="1" stop-color="${T.c}"/></linearGradient>
 <linearGradient id="${u}i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1416"/><stop offset="1" stop-color="#050304"/></linearGradient>
 <filter id="${u}g" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="0" stdDeviation="2.2" flood-color="${T.glow}"/></filter></defs>
 <g filter="url(#${u}g)">
-${wings ? `<path d="M10 30 C2 26 1 18 4 12 C7 20 11 22 16 23 Z M54 30 C62 26 63 18 60 12 C57 20 53 22 48 23 Z" fill="url(#${u}m)" opacity=".95"/>` : ''}
+${wings ? (max ? `<path d="M12 32 C2 30 -1 20 2 10 C5 17 8 19 12 20 C6 15 6 10 8 6 C10 13 13 16 16 17 Z M52 32 C62 30 65 20 62 10 C59 17 56 19 52 20 C58 15 58 10 56 6 C54 13 51 16 48 17 Z" fill="url(#${u}m)"/>` : `<path d="M10 30 C2 26 1 18 4 12 C7 20 11 22 16 23 Z M54 30 C62 26 63 18 60 12 C57 20 53 22 48 23 Z" fill="url(#${u}m)" opacity=".95"/>`) : ''}
 ${max ? `<path d="M22 9 L26 3 L29 8 L32 2 L35 8 L38 3 L42 9 Z" fill="url(#${u}m)"/>` : ''}
 <path d="M32 6 L54 18 L54 42 L32 58 L10 42 L10 18 Z" fill="url(#${u}m)"/>
 <path d="M32 11 L49 20.5 L49 39.5 L32 52.5 L15 39.5 L15 20.5 Z" fill="url(#${u}i)" stroke="${T.a}" stroke-opacity=".55" stroke-width="1"/>

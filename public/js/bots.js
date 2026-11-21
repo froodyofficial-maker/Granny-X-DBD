@@ -51,6 +51,8 @@ function nearestIn(M, r, x, z) {
 
 // survivor bots are your teammates: the same steady players at every difficulty (difficulty is how good Granny is)
 const SURV_SKILL = { react: 0.35, skill: 0.94, great: 0.2 };
+// 1.6.0: survivor bots can be set easier or harder than that (bot matches: 'Survivor bot difficulty')
+const SURV_SKILLS = { easy: { react: 0.65, skill: 0.8, great: 0.06 }, normal: SURV_SKILL, hard: { react: 0.2, skill: 0.985, great: 0.38 } };
 
 export class Bots {
   constructor(sim) {
@@ -327,7 +329,7 @@ export class Bots {
 
   // ---------- survivor ----------
   survivor(p, dt) {
-    const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p), D = SURV_SKILL;
+    const sim = this.sim, S = sim.S, M = sim.M, b = this.brain(p), D = SURV_SKILLS[sim.sdiff] || SURV_SKILL;
     const K = nearestKiller(S, p);
     if (p.st === 'carried') {
       this.setE(p, b, false);

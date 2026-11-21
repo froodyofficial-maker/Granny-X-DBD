@@ -483,14 +483,28 @@ function levelHTML(role, char) {
     <div class="lv-acts">${L.max ? '' : `<button class="btn small" data-train>Train +1 level · ${price(cost)}</button>`}${(profile.lvTokens | 0) && !L.max ? `<button class="btn small primary" data-token>Use level token (${profile.lvTokens})</button>` : ''}${statsSpent(C) ? '<button class="btn small" data-respec>Reset points</button>' : ''}</div></div>
     <div class="st-grid">${rows}</div></div>`;
 }
+let statHold = null;
+function stopStatHold() { if (statHold) clearTimeout(statHold.t); statHold = null; }
+addEventListener('pointerup', stopStatHold); addEventListener('pointercancel', stopStatHold); addEventListener('blur', stopStatHold);
 function bindLevel(container, role, char, rerender) {
   const C = charOf(profile, char);
-  container.querySelectorAll('[data-stat]').forEach(b => b.onclick = () => {
-    const d = (STATS[role] || []).find(x => x.id === b.dataset.stat), dv = +b.dataset.d, v = C.st[d.id] | 0;
-    if (dv > 0 && (freePoints(profile, char) <= 0 || v >= d.max)) return;
-    if (dv < 0 && v <= 0) return;
-    C.st[d.id] = v + dv; if (!C.st[d.id]) delete C.st[d.id];
-    saveProfile(); sound.play('click'); rerender();
+  // 1.6.0: hold + or − to keep adding / removing points (the panel is redrawn on every step, so the repeat lives outside it)
+  container.querySelectorAll('[data-stat]').forEach(b => {
+    const id = b.dataset.stat, dv = +b.dataset.d;
+    const step = () => {
+      const d = (STATS[role] || []).find(x => x.id === id), v = C.st[d.id] | 0;
+      if (dv > 0 && (freePoints(profile, char) <= 0 || v >= d.max)) return false;
+      if (dv < 0 && v <= 0) return false;
+      C.st[d.id] = v + dv; if (!C.st[d.id]) delete C.st[d.id];
+      saveProfile(); sound.play('click'); rerender(); return true;
+    };
+    b.onpointerdown = e => {
+      e.preventDefault(); stopStatHold();
+      if (!step()) return;
+      const hold = statHold = {}, rep = ms => { hold.t = setTimeout(() => { if (statHold !== hold) return; if (step()) rep(85); else stopStatHold(); }, ms); };
+      rep(380);
+    };
+    b.onclick = e => { if (e.detail === 0) step(); }; // (keyboard: Enter / Space)
   });
   container.querySelectorAll('[data-train]').forEach(b => b.onclick = () => {
     const L = charLv(C.xp); if (L.max || !spend(CHAR_LEVEL.train(L.lvl), `${charName0(char)} level ${L.lvl + 1}`)) return;
@@ -531,10 +545,18 @@ function kidRowHTML() {
   const D = SIDEKICKS.child, own = !!profile.pets.child, on = kidOf() === 'child';
   return `<div class="kid-row ${on ? 'on' : ''}"><span class="child-art"></span><div><small>Sidekick</small><b>${esc(D.name)}</b><span>${own ? (on ? 'Crawls after you in every match' : 'Not equipped') : 'Get it in the Store'}</span></div><button class="btn ${on ? '' : 'primary'}" data-kideq>${own ? (on ? 'Unequip' : 'Equip') : 'Store'}</button></div>`;
 }
+// 1.6.0: per-character perks. profile.perkSets[char] = that character's own perks (pin icon over the slots); characters
+// without one use the role's shared set (profile[role].shared). profile[role].perks is always the set in use for profile[role].char.
+profile.perkSets ||= {};
+for (const r of ['survivor', 'killer']) if (profile[r] && !Array.isArray(profile[r].shared)) profile[r].shared = (profile[r].perks || []).slice();
+const ownPerks = c => Array.isArray(profile.perkSets[c]);
+function syncPerks(lo) { if (ownPerks(lo.char)) profile.perkSets[lo.char] = lo.perks.slice(); else lo.shared = lo.perks.slice(); }
+function loadPerks(lo) { lo.perks = (ownPerks(lo.char) ? profile.perkSets[lo.char] : lo.shared || lo.perks || []).slice(); }
 function renderLoadout(container, role, compact, onChange) {
   const defs = role === 'killer' ? KILLERS : SURVIVORS;
   const perks = role === 'killer' ? KILLER_PERKS : SURV_PERKS;
   const lo = profile[role];
+  loadPerks(lo); // (1.6.0: the set for this character)
   // drop perks this character can't use (an exclusive perk after switching survivor)
   lo.perks = lo.perks.filter(k => perks[k] && perkFits(k, lo.char) && ownsPerk(k)).slice(0, PERK_SLOTS);
   const rerender = () => { renderLoadout(container, role, compact, onChange); onChange && onChange(); };
@@ -542,7 +564,7 @@ function renderLoadout(container, role, compact, onChange) {
     if (!ownsPerk(k) || !perkFits(k, lo.char)) return;
     const i = lo.perks.indexOf(k);
     if (i >= 0) lo.perks.splice(i, 1); else { if (lo.perks.length >= PERK_SLOTS) lo.perks.shift(); lo.perks.push(k); }
-    saveProfile(); sound.play('click');
+    syncPerks(lo); saveProfile(); sound.play('click');
   };
   if (compact) {
     // lobby / bot setup: just the perks you own and can use
@@ -576,7 +598,7 @@ function renderLoadout(container, role, compact, onChange) {
       ${role === 'killer' ? kidRowHTML() : itemRowHTML() + addonRowHTML()}
       
 
-      <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div></div>
+      <div class="lo2-row"><span class="lo2-lbl">Perks</span><div class="lo2-slots">${slots}</div><button class="perk-pin ${ownPerks(lo.char) ? 'on' : ''}" data-perkpin title="${ownPerks(lo.char) ? `These perks are only for ${esc(charName0(lo.char))}. Click to use the shared set again.` : `Shared by every ${role}. Click to give ${esc(charName0(lo.char))} its own perks.`}">${ownPerks(lo.char) ? '📌 Own set' : '📌 Shared'}</button></div>
       <div class="lo2-inv-t"><span>Inventory · Perks</span><span>${Object.keys(perks).filter(ownsPerk).length} / ${Object.keys(perks).length} owned · ${price(profile.stats.embers)}</span></div>
       <div class="lo2-inv">${grid}</div>
       <div class="lo2-detail"><span class="diamond ${role === 'killer' ? 'k' : ''} ${P.only ? 'ex' : ''}">${icon(loSel)}</span><div><b>${esc(P.name)}</b>${P.only ? `<em>${esc(charName0(P.only))} only</em>` : ''}<small>${esc(P.desc)}</small><div class="row">${act}</div></div></div>
@@ -614,9 +636,14 @@ function renderLoadout(container, role, compact, onChange) {
     });
     if (menu) { menu.setShowcase(lo.char, skinId(lo.char), 0.42, petOf(role)); menu.setMode('show'); }
   }
+  container.querySelectorAll('[data-perkpin]').forEach(b => b.onclick = () => {
+    if (ownPerks(lo.char)) { delete profile.perkSets[lo.char]; loadPerks(lo); toast(`${charName0(lo.char)} uses the shared perks again.`); }
+    else { profile.perkSets[lo.char] = lo.perks.slice(); toast(`${charName0(lo.char)} now has its own perks: change them freely, the others keep theirs.`); }
+    saveProfile(); sound.play('click'); rerender();
+  });
   container.querySelectorAll('.char, .lo2-por').forEach(el => el.onclick = () => {
     if (!ownsChar(el.dataset.c)) { sound.play('click'); if (LIMITED(el.dataset.c)) openStore('characters', el.dataset.c); else openStore('characters'); return; }
-    lo.char = el.dataset.c; saveProfile(); sound.play('click');
+    lo.char = el.dataset.c; loadPerks(lo); saveProfile(); sound.play('click');
     if (menu) { if (role === 'killer') menu.setKiller(lo.char, skinId(lo.char)); else menu.setSurvivor(lo.char, skinId(lo.char)); }
     if (compact) setScene(role);
     rerender();
@@ -1037,7 +1064,7 @@ if (profile.lastVersion !== VERSION) {
 }
 
 // ---------- bot match ----------
-const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', killer2: 'random', diff: 'normal', map: 'granny', gm: 'classic' };
+const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', killer2: 'random', diff: 'normal', sdiff: 'normal', map: 'granny', gm: 'classic' };
 // game mode pickers (bot match and lobby)
 const gmOptions = () => Object.entries(MODES).filter(([id]) => modeOpen(id)).map(([id, m]) => `<option value="${id}">${m.event ? '★ ' : ''}${m.name} (${m.short})</option>`).join('');
 $('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
@@ -1048,6 +1075,7 @@ seg('bots-role', v => { botsCfg.role = v; setScene(v); $('panel-title').textCont
 seg('bots-team', v => { botsCfg.team = +v; });
 seg('bots-surv', v => { botsCfg.surv = +v; });
 seg('bots-diff', v => { botsCfg.diff = v; });
+seg('bots-sdiff', v => { botsCfg.sdiff = v; }); // (1.6.0: survivor bots have their own difficulty)
 $('bots-map').addEventListener('change', e => { botsCfg.map = e.target.value; });
 // (killers who aren't out yet, like Slendrina's Father before Season 2, aren't on the lists)
 for (const id of ['bots-killer', 'bots-killer2']) for (const o of [...$(id).options]) if (KILLERS[o.value] && !PLAY_K.includes(o.value)) o.remove();
@@ -1146,7 +1174,7 @@ $('btn-bots-start').addEventListener('click', () => {
   const meRole = botsCfg.role;
   if (meRole === 'survivor' && !ownsChar(profile.survivor.char)) { toast(`${charName(profile.survivor.char)} is locked. Unlock them in the Store, or pick another survivor.`, 5000); profile.survivor.char = 'mara'; saveProfile(); return; }
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
-  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: profile[meRole].perks, item: meRole === 'survivor' ? myItem() : 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
+  roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: (loadPerks(profile[meRole]), profile[meRole].perks), item: meRole === 'survivor' ? myItem() : 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
   const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
   if (meRole === 'survivor') {
@@ -1156,7 +1184,7 @@ $('btn-bots-start').addEventListener('click', () => {
     for (let i = 1; i < nk; i++) roster.push(botKiller(i === 1 ? botsCfg.killer2 : 'random', i, [profile.killer.char]));
     for (let i = 0; i < (ns || botsCfg.surv); i++) roster.push(botSurvivor(i + 1, used));
   }
-  const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, net: null, kind: 'bots', map, mode: gm });
+  const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, survDifficulty: botsCfg.sdiff, net: null, kind: 'bots', map, mode: gm });
   botsCfg.map = $('bots-map').value || botsCfg.map; // what the dropdown shows is what you get
   if (MODES[gm].map) go(MODES[gm].map); else if (botsCfg.map === 'vote') botVote(gm, roster.filter(r => r.bot).length, go); else go(botsCfg.map);
 });
@@ -1231,7 +1259,7 @@ class HostSession {
     holdLoading(true); await nextFrame(); await nextFrame(); // (the reel holds still while the match is built: no stutter)
     this.M = buildMap(this.seed, this.map);
     await nextFrame();
-    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, mode: this.opts.mode });
+    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, survDifficulty: this.opts.survDifficulty, mode: this.opts.mode });
     if (this.opts.passive) for (const q of this.sim.S.players) if (q.bot && q.role === 'killer') q.harmless = true;
     if (this.opts.taser) { const q = this.sim.S.players.find(x => x.id === this.myId); if (q) { q.item = 'taser'; q.tasers = 3; q.flash = 0; q.traps = 0; } }
     this.bots = new Bots(this.sim);
@@ -1741,7 +1769,7 @@ function renderLobby() {
 }
 const playableSurvivor = () => ownsChar(profile.survivor.char) ? profile.survivor.char : 'mara';
 const playableKiller = () => PLAY_K.includes(profile.killer.char) ? profile.killer.char : 'granny';
-function myLoadouts() { return { survivor: { ...profile.survivor, char: playableSurvivor(), skin: skinId(playableSurvivor()), pet: petOf('survivor'), ...extrasOf('survivor', playableSurvivor()) }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()), pet: petOf('killer'), ...killerExtras(playableKiller()), ...extrasOf('killer', playableKiller()) } }; }
+function myLoadouts() { loadPerks(profile.survivor); loadPerks(profile.killer); return { survivor: { ...profile.survivor, char: playableSurvivor(), skin: skinId(playableSurvivor()), pet: petOf('survivor'), ...extrasOf('survivor', playableSurvivor()) }, killer: { ...profile.killer, char: playableKiller(), skin: skinId(playableKiller()), pet: petOf('killer'), ...killerExtras(playableKiller()), ...extrasOf('killer', playableKiller()) } }; }
 function sendMyLoadout(role) {
   const me = myLobbyPlayer();
   if (!me) return;

@@ -9,11 +9,14 @@ import {
 
 const POSSESSION = true;
 
+// Sawed-Off (1.6.0): the short shotgun: 12m, two shots 0.35s apart, then the usual reload; damage falls with distance
+const SAWED = { cooldown: 2.6, between: 0.35, raise: 0.3, range: 12, minDmg: 22, maxDmg: 62, near: 2, far: 12, reveal: 3, stagger: 0.8, slow: 0.65 };
 export class Sim {
   constructor(M, roster, opts = {}) {
     this.M = M;
     this.opts = opts;
     this.diff = DIFFICULTY[opts.difficulty || 'normal'];
+    this.sdiff = ['easy', 'normal', 'hard'].includes(opts.survDifficulty) ? opts.survDifficulty : 'normal'; // 1.6.0: survivor bots' own difficulty
     const nSurv = roster.filter(r => r.role === 'survivor').length;
     const mode = MODES[opts.mode] ? opts.mode : 'classic';
     this.mode = mode;
@@ -798,6 +801,7 @@ export class Sim {
     this.updateAngeline(dt);
     this.updateFather(dt);
     this.updateTeddy(dt);
+    this.updateSawedOff(dt);
     viceUpdate(this, dt);
     this.updateKids(dt);
 
@@ -1851,13 +1855,24 @@ export class Sim {
   }
   // Grandpa's shotgun: a hitscan blast. Survivors carry a second health bar against him (shp, 100):
   // the farther the shot, the more it takes, and at 0 they go down.
+  // 1.6.0: Sawed-Off (Grandpa perk): once the gates are powered he stops for 2s and saws the barrel short
+  updateSawedOff(dt) {
+    const S = this.S; if (!S.gatesPowered) return;
+    for (const K of S.players) {
+      if (K.role !== 'killer' || K.char !== 'grandpa' || K.sawed || !has(K, 'sawedoff')) continue;
+      if (K.sawT == null) { if (K.act || K.carry != null || K.stun > 0 || K.dash) continue; K.sawT = 2; K.aim = false; this.ev({ k: 'sawing', id: K.id, x: K.x, z: K.z }); }
+      K.sawT -= dt; K.stun = Math.max(K.stun, 0.05); // (stands still while he saws)
+      if (K.sawT <= 0) { K.sawed = true; K.sawShots = 2; K.stun = 0; this.ev({ k: 'sawedoff', id: K.id, x: K.x, z: K.z }); }
+    }
+  }
   shotgun(K, m) {
-    const S = this.S, M = this.M, G = KILLERS.grandpa.shotgun;
+    const S = this.S, M = this.M, G = K.sawed ? SAWED : KILLERS.grandpa.shotgun;
     const raised = K.aim && K.abT >= G.raise;
     K.aim = false; K.abT = 0;
     if (!raised || K.abCd > 0 || K.dash || K.stun > 0 || K.act || K.carry != null || K.tele) return;
     const yaw = num(m.yaw, K.yaw), f = fwd(yaw);
     K.yaw = yaw; K.abCd = G.cooldown;
+    if (K.sawed) { K.sawShots = (K.sawShots || 2) - 1; if (K.sawShots > 0) K.abCd = SAWED.between; else K.sawShots = 2; } // two quick shots, then the reload
     let best = null, bd = G.range;
     for (const s of S.players) {
       if (s.role !== 'survivor' || s.st !== 'ok' || !levelsMeet(K, s)) continue;
@@ -1877,7 +1892,7 @@ export class Sim {
     let dmg = 0;
     if (best) {
       const k = Math.max(0, Math.min(1, (bd - G.near) / (G.far - G.near)));
-      dmg = Math.round(G.minDmg + (G.maxDmg - G.minDmg) * k);
+      dmg = Math.round(K.sawed ? G.maxDmg - (G.maxDmg - G.minDmg) * k : G.minDmg + (G.maxDmg - G.minDmg) * k); // (sawed off: closer = harder)
       best.shp = Math.max(0, (best.shp ?? 100) - dmg); best.shpT = S.t;
       best.lastHitBy = K.id; K.score.a += 50 + dmg * 4;
       best.reveal = Math.max(best.reveal, G.reveal);

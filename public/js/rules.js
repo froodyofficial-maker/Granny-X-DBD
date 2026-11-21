@@ -70,6 +70,7 @@ export function speedOf(p, S, sprint, crouch) {
   let s = p.disguise ? SPEED.run * 1.04 : K.speed;
   if (p.carry != null) s = SPEED.carry;
   if (S.gatesPowered && has(p, 'fury')) s *= 1.08;
+  if (p.sawed) s *= 1.06; // Sawed-Off (1.6.0): a lighter gun
   if (p.haste > 0) s *= 1.12;
   if (p.atk === 1) s *= RULES.lungeMul * (1 + statK(p, 'reach')); // Reach (character stats): a longer lunge
   else if (p.atk === 2) s *= p.atkHit ? 0.22 : 0.5;

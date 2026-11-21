@@ -14,6 +14,7 @@ import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
 import { updateVice, SEAT_DROP, COLL } from './vice.js';
+import { sawOffGun } from './grannyGlb.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady, fatherReady, makeTeddy } from './grannyGlb.js';
 import { Sidekick, TED_LINES, TED_CAPTIONS, resetVoices } from './sidekicks.js';
 import { remapCode, label as keyLabel, moveLabel } from './keybinds.js';
@@ -1105,6 +1106,7 @@ export class Game {
       const flashOn = p.role === 'survivor' && p.st === 'ok' && !p.act && p.flash > 0 && (p.item || 'flashlight') === 'flashlight' && (local ? !!this.flashHeld : p.flashOn);
       st.flash = flashOn;
       animate(R, st, dt);
+      if (p.sawed && !c.sawn) { c.sawn = true; sawOffGun(R.root); } // (1.6.0: Sawed-Off: the barrel gets short)
       // placement
       R.root.position.set(c.x, y + c.lift + c.h, c.z);
       R.root.rotation.set(0, c.yaw, 0);
@@ -2398,6 +2400,9 @@ export class Game {
           break;
         }
         case 'teddygone': if (e.id === this.myId) this.feed('Your Teddy is spent for this match.'); break;
+        // 1.6.0: Sawed-Off (Grandpa perk)
+        case 'sawing': if (e.id === this.myId) this.feed('Every generator is done: sawing the barrel off…', 'big'); else if (me && me.role === 'survivor') this.feed('You hear a hacksaw somewhere…'); sound.play('chainsaw', e.x, e.z, { pitch: 1.8, vol: 0.4 }); break;
+        case 'sawedoff': if (e.id === this.myId) this.feed('Sawed-Off: two quick shots, 12m, deadlier up close.', 'big'); else this.feed(`${name(e.id)} sawed off his shotgun!`, 'big'); break;
         // 1.5.3: GTA VI (PlayStation), collectables
         case 'psthrow': sound.play('throw', e.x, e.z, { pitch: 1.3 }); break;
         case 'psland': sound.play('thunk', e.x, e.z); break;

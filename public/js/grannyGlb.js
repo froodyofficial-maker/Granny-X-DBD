@@ -840,3 +840,16 @@ function grandpaPump(R, f) {
     P.slide.position.copy(P.slide.parent.worldToLocal(w));
   }
 }
+
+// 1.6.0: Sawed-Off: shorten Grandpa's shotgun (and its slide) along the barrel, from the stock end
+export function sawOffGun(root) {
+  root.traverse(o => {
+    if (!o.isMesh || !/^Shotgun(GP|PipaGP)_/.test(o.name || '')) return;
+    const g = o.geometry; if (!g.boundingBox) g.computeBoundingBox();
+    const b = g.boundingBox, sz = b.getSize(new THREE.Vector3()), ax = sz.x > sz.y && sz.x > sz.z ? 'x' : sz.y > sz.z ? 'y' : 'z';
+    o.geometry = g.clone(); const P = o.geometry.attributes.position, lo = b.min[ax], hi = b.max[ax], cut = lo + (hi - lo) * 0.55;
+    // everything past 55% of the length (the muzzle end: the end farthest from the grip, the larger coordinate here) is pulled back to the cut
+    for (let i = 0; i < P.count; i++) { const v = P.getComponent(i, ax === 'x' ? 0 : ax === 'y' ? 1 : 2); if (v > cut) P.setComponent(i, ax === 'x' ? 0 : ax === 'y' ? 1 : 2, cut + (v - cut) * 0.12); }
+    P.needsUpdate = true; o.geometry.computeBoundingSphere();
+  });
+}
