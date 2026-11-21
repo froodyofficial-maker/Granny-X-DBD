@@ -110,12 +110,12 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
     me.x = P.x; me.z = P.z; g.hideMe = true;
     const fwd = CFG.map === 'granny' ? dirTo(P, H) : { x: 0, z: 1 };
     if (SHOT === 'c_granny') {
-      // Granny under the lamp, seen from the ground: the house and the moon behind her
-      K.x = P.x + fwd.z * 0.6; K.z = P.z - fwd.x * 0.6; K.yaw = Math.atan2(-fwd.x, -fwd.z);
-      const c = at(K, { x: -fwd.x, z: -fwd.z }, 2.6, 0.5); cam = new THREE.Vector3(c.x, 0.35, c.z); look = new THREE.Vector3(K.x + fwd.x * 0.6, 1.75, K.z + fwd.z * 0.6);
+      // Granny in the east yard, seen from the ground: the house, the wreck and the lamps behind her
+      const k = spot(15.8, 10.4, 15.8, 10.4); K.x = k.x; K.z = k.z; K.yaw = Math.PI / 2 + 0.25; me.x = K.x + 2; me.z = K.z;
+      cam = new THREE.Vector3(K.x + 3.4, 0.42, K.z + 1.3); look = new THREE.Vector3(K.x - 1.5, 2.3, K.z - 0.3);
     } else if (SHOT === 'c_hunt') {
       // over Granny's shoulder: a survivor at a generator under the lamp, unaware
-      const G = M.gens.slice().sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
+      const Y = { x: 16, z: 10 }, G = M.gens.filter(q => !(M.isIndoors && M.isIndoors(q.x, q.z)) && open(q.x, q.z, 3) >= 8).sort((a, b) => Math.hypot(a.x - Y.x, a.z - Y.z) - Math.hypot(b.x - Y.x, b.z - Y.z))[0] || M.gens[0];
       const A = sv.find(o => o !== me) || sv[0], d = { x: Math.sin(G.rot || 0), z: Math.cos(G.rot || 0) };
       const a = spot(G.x + d.x, G.z + d.z, G.x, G.z); A.x = a.x; A.z = a.z; A.yaw = yawTo(A, G); A.act = { k: 'repair', id: M.gens.indexOf(G), t: 2 };
       const k = at(A, dirTo(G, A), 4.2, 1.2); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A);
@@ -123,8 +123,8 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
       cam = new THREE.Vector3(c.x, 1.75, c.z); look = new THREE.Vector3(A.x, 0.9, A.z); me.x = G.x; me.z = G.z;
     } else if (SHOT === 'c_crow') {
       // June's crow close up, the killer coming out of the dark behind her
-      me.x = P.x; me.z = P.z; me.yaw = Math.atan2(fwd.x, fwd.z); me.crowF = 0; g.hideMe = false;
-      const k = at(me, { x: -fwd.x, z: -fwd.z }, 7.5, -1.2); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, me);
+      const j = spot(18.5, 9.2, 18.5, 9.2); me.x = j.x; me.z = j.z; me.yaw = Math.PI / 2 - 0.35; me.crowF = 0; g.hideMe = false;
+      const k = spot(11.5, 9.8, 11.5, 9.8); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, me);
       const fr = { x: Math.sin(me.yaw), z: Math.cos(me.yaw) }, lf = { x: Math.cos(me.yaw), z: -Math.sin(me.yaw) };
       cam = new THREE.Vector3(me.x + fr.x * 0.9 + lf.x * 0.55, 1.45, me.z + fr.z * 0.9 + lf.z * 0.55); look = new THREE.Vector3(me.x + lf.x * 0.18 - fr.x * 3, 1.5, me.z + lf.z * 0.18 - fr.z * 3);
     } else if (SHOT === 'c_grandpa') {
