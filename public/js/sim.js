@@ -77,7 +77,7 @@ export class Sim {
         charges: r.char === 'butcher' ? KILLERS.butcher.ability.charges : 0, chargeT: 0,
         ammo: r.char === 'harrower' ? KILLERS.harrower.ability.ammo : r.char === 'bateman' ? 1 : 0, ammoT: 0,
         ambush: 0, atkAmbush: false, tele: null, teleCd: 0, ab2Cd: 0, reel: null, pull: null, soundT: 0,
-        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.role === 'survivor' && (r.item === 'teddy' || r.item === 'gtaps') ? r.item : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' && r.item !== 'teddy' && r.item !== 'gtaps' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
+        item: mode === 'bloodmoon' && r.role === 'survivor' ? 'taser' : r.role === 'survivor' && (r.item === 'teddy' || r.item === 'gtaps') ? r.item : 'flashlight', flash: r.role === 'survivor' && mode !== 'bloodmoon' && r.item !== 'teddy' && r.item !== 'gtaps' ? RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery : 0, flashMax: RULES.flashBattery * (mode === 'dark' ? 0.5 : 1) * addonMods(r.addons, 'flashlight').battery, traps: false ? (r.char === 'raghuvir' || r.char === 'abeer' ? 3 : 2) + ((r.perks || []).includes('containment') ? 1 : 0) : 0, flashOn: false, glare: 0, blind: 0, blindImm: 0, tasers: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, taserMax: mode === 'bloodmoon' && r.role === 'survivor' ? 2 + addonMods(r.addons, 'taser').shots : 0, zap: 0, spied: 0, fl: 0, sp: 0, reach: r.role === 'killer' && POWER_LV[r.char] ? (r.char === 'granny' && r.og ? 999 : powerReach(r.char, r.lv)) : 0, og: r.char === 'granny' && !!r.og, heard: 0, webbed: 0, webs: r.role === 'survivor' && r.char === 'spiderman' ? SURVIVORS.spiderman.web.shots : 0, webK: 0, dash: null, swapCd: 0,
         score: { a: 0, b: 0, c: 0, d: 0 }, outcome: '', diffMul: r.role === 'killer' && r.bot ? this.diff.killerSpeed : 1,
         possCd: 0, disguise: false, harmless: false, pdowns: 0, pcages: 0, noCage: false, split: false,
         pet: '', gaze: 0, curse: 0, cursed: 0, doomed: 0, spotT: 0, spotted: 0, drowsy: 0, inBeam: false,
@@ -128,7 +128,7 @@ export class Sim {
       }
       case 'in': {
         const inp = this.inputs.get(id);
-        inp.e = !!m.e;
+        inp.e = !!m.e || !!m.b; p.battKey = !!m.b; // (1.6.0: R at a chest = take a flashlight's batteries)
         if (!inp.e) inp.latch = false;
         if ('flash' in m && p.role === 'survivor') p.flashOn = !!m.flash && p.flash > 0 && p.st === 'ok' && !p.act && !p.vault && (p.item || 'flashlight') === 'flashlight'; // (1.5.3: a Pepper Spray / Taser / Teddy / GTA VI from a chest doesn't shine)
         if (p.role === 'killer' && p.char === 'foreman') p.aim = !!m.aim && p.abCd <= 0 && !p.pull && p.carry == null && !p.act && p.stun <= 0;
@@ -303,8 +303,9 @@ export class Sim {
       case 'taser': {
         // Taser: a short-range shot along the aim; the first killer it reaches is electrocuted
         if (p.role !== 'survivor' || p.st !== 'ok' || p.act || p.vault || p.item !== 'taser' || !(p.tasers > 0) || ((this.taserCd ||= new Map()).get(p.id) || 0) > S.t) return;
-        p.tasers--; this.taserCd.set(p.id, S.t + 0.8);
-        const yaw = num(m.yaw, p.yaw), f = fwd(yaw), am = addonMods(p.addons, 'taser'), T = { ...ITEMS.taser, range: ITEMS.taser.range * am.range, stun: ITEMS.taser.stun + am.stun };
+        const am = addonMods(p.addons, 'taser');
+        p.tasers--; this.taserCd.set(p.id, S.t + 0.8 * am.cd);
+        const yaw = num(m.yaw, p.yaw), f = fwd(yaw), T = { ...ITEMS.taser, range: ITEMS.taser.range * am.range, stun: ITEMS.taser.stun + am.stun };
         let hit = null, hd = T.range;
         for (const K of S.players) {
           if (K.role !== 'killer' || K.st === 'dead' || K.disguise) continue;
@@ -1375,6 +1376,15 @@ export class Sim {
         this.ev({ k: 'chest', id: a.id, by: p.id, item: cs.it.k });
         break;
       }
+      case 'batts': {
+        // 1.6.0 (Battery Replacement): the flashlight's batteries go into the taser; the flashlight stays, empty
+        const cs = S.chests[a.id]; if (!cs || !cs.it || cs.it.k !== 'flashlight' || p.item !== 'taser') break;
+        const mx = p.taserMax || ITEMS.taser.shots + addonMods(p.addons, 'taser').shots;
+        const add = Math.min(mx - (p.tasers || 0), Math.max(1, Math.round(cs.it.n / RULES.flashBattery * mx)));
+        p.tasers = (p.tasers || 0) + add; cs.it = { k: 'flashlight', n: 0 };
+        this.ev({ k: 'battswap', id: a.id, by: p.id, n: add });
+        break;
+      }
       case 'swap': {
         // trade what you're holding (used up or not) for what's in the chest
         const cs = S.chests[a.id]; if (!cs || !cs.it) break;
@@ -1383,6 +1393,7 @@ export class Sim {
         // a new item out of the chest gets your add-ons for it (more battery, an extra taser shot)
         const gm = addonMods(p.addons, got.k), gn = got.fresh ? (got.k === 'flashlight' ? got.n * gm.battery : got.k === 'taser' ? got.n + gm.shots : got.n) : got.n;
         p.item = got.k; p.flash = got.k === 'flashlight' ? gn : 0; p.traps = got.k === 'trap' ? got.n : 0; p.tasers = got.k === 'taser' ? gn : 0; p.pepper = got.k === 'pepper' ? gn : 0;
+        p.taserMax = got.k === 'taser' ? Math.max(gn, ITEMS.taser.shots + gm.shots) : 0; // (1.6.0: the battery's size, for Battery Replacement)
         if (got.k === 'flashlight') p.flashMax = Math.max(gn, RULES.flashBattery * gm.battery);
         p.flashOn = false;
         cs.it = mine;

@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { loadStatic } from './glbModels.js';
 
-export const LEN = 0.44; // beak to tail, metres
+export const LEN = 0.38; // beak to tail, metres (a big raven next to the survivors' heads)
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // shapes in the xz plane (ShapeGeometry is xy; y becomes -z = backwards)
 function flat(pts) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const [x, y] of pts.slice(1)) s.lineTo(x, y); const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); return g; }

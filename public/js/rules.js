@@ -1,5 +1,5 @@
 // Rules shared by host simulation, client prediction and bots.
-import { SPEED, RULES, KILLERS, HALF, ITEMS, statK } from './config.js';
+import { SPEED, RULES, KILLERS, HALF, ITEMS, statK, addonMods } from './config.js';
 import { cityInteraction, CITY_TIMES } from './city.js';
 import { barBox } from './map.js';
 
@@ -155,7 +155,12 @@ function baseInteraction(M, S, p) {
       const cs = S.chests && S.chests[c.id], d = dist(p, c);
       if (!cs || d > 1.5) continue;
       if (!cs.open) consider('chest', c.id, 'Search the chest', 1, d);
-      else if (cs.it && p.item !== 'teddy' && p.item !== 'gtaps') consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n), 1, d);
+      else if (cs.it && p.item !== 'teddy' && p.item !== 'gtaps') {
+        // 1.6.0 (Battery Replacement): hold R instead to take a flashlight's batteries for the taser
+        const batt = p.item === 'taser' && cs.it.k === 'flashlight' && cs.it.n > 0.5 && (p.tasers || 0) < (p.taserMax || 3) && addonMods(p.addons, 'taser').batt;
+        if (batt && p.battKey) consider('batts', c.id, "Take the flashlight's batteries for your taser", 1, d);
+        else consider('swap', c.id, 'Swap your ' + itemLabel(p.item, itemCharge(p)) + ' for the ' + itemLabel(cs.it.k, cs.it.n) + (batt ? ' · hold R: take its batteries' : ''), 1, d);
+      }
     }
     if (!best && p.hp === 1 && has(p, 'medic')) return { k: 'self', id: p.id, label: 'Heal yourself' };
     return best;
@@ -202,6 +207,7 @@ export function actionTime(k, p, S) {
     case 'snuff': return RULES.snuffTime;
     case 'chest': return RULES.chestTime;
     case 'swap': return RULES.swapTime;
+    case 'batts': return RULES.battTime;
     case 'cage': return RULES.cageTime / (1 + statK(p, 'brut'));
     case 'kick': return RULES.kickTime * (has(p, 'brute') ? 0.65 : 1) / (1 + statK(p, 'brut'));
     case 'break': return RULES.breakTime * (has(p, 'brute') ? 0.65 : 1) / (1 + statK(p, 'brut'));

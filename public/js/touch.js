@@ -19,7 +19,7 @@ export function touchName(id) {
   switch (id) {
     case 'forward': case 'back': case 'left': case 'right': return 'JOYSTICK';
     case 'run': return 'RUN'; case 'crouch': return 'CROUCH'; case 'interact': return 'USE'; case 'space': return 'VAULT';
-    case 'item': return 'CREEP'; case 'ability2': return R_BTN[ctxChar] || 'POWER 2'; case 'drop': return 'DROP';
+    case 'item': return 'CREEP'; case 'ability2': return ctxRole === 'survivor' ? 'BATTERY' : R_BTN[ctxChar] || 'POWER 2'; case 'drop': return 'DROP';
     case 'execute': return ctxRole === 'killer' ? 'EXECUTE' : 'NEXT'; case 'takeover': return 'TAKE OVER'; case 'status': return 'STATUS';
     case 'emotes': return 'EMOTE'; case 'shoulder': return 'CAMERA';
     case 'LMB': return 'ATTACK'; case 'RMB': return ctxRole === 'killer' ? 'POWER' : itemBtn()[0]; case 'V': return 'SWAP';
@@ -54,6 +54,7 @@ const TC_ICONS = {
   drop: SV('<path d="M32 10v32M20 32l12 12 12-12M14 54h36"/>'),
   take: SV('<circle cx="32" cy="16" r="6"/><path d="M22 54l4-20h12l4 20M10 28a24 24 0 0 1 8-12M54 28a24 24 0 0 0-8-12"/>'),
   next: SV('<path d="M14 32h34M36 18l14 14-14 14"/>'),
+  batt: SV('<rect x="12" y="20" width="36" height="24" rx="3"/><path d="M48 28h4v8h-4M20 26v12M28 26v12M36 26v12"/>'),
   bat: SV('<path d="M14 52l6 6 30-34a9 9 0 0 0-12-12z"/><path d="M14 52l-4 4"/><path d="M40 16l8 8" stroke-dasharray="3 4"/>'),
   // Slendrina's Father: a tall faceless figure (Faceless Step) and his tendrils (Tendril Lash)
   step: SV('<path d="M32 6a6 7 0 1 1 0 14a6 7 0 1 1 0-14z"/><path d="M26 22h12l2 20h-4l-2 16h-4l-2-16h-4z"/><path d="M20 30l6-6M44 30l-6-6"/>'),
@@ -84,6 +85,7 @@ const BTN = {
   atk: ['ATTACK', 'mouse', 0], power: ['POWER', 'mouse', 2], light: ['LIGHT', 'mouse', 2],
   use: ['USE', 'hold', 'KeyE'], jump: ['VAULT', 'hold', 'Space'], run: ['RUN', 'toggle', 'ShiftLeft'], crouch: ['CROUCH', 'toggle', 'ControlLeft'],
   hear: ['HEAR', 'key', 'KeyR'], trap: ['TRAP', 'key', 'KeyR'], gaze: ['GAZE', 'key', 'KeyR'], lull: ['LULLABY', 'key', 'KeyR'], night: ['NIGHTFALL', 'key', 'KeyR'], step: ['STEP', 'key', 'KeyR'], creep: ['CREEP', 'hold', 'KeyG'], swap: ['SWAP', 'hold', 'KeyV'], exec: ['EXECUTE', 'key', 'KeyF'], drop: ['DROP', 'key', 'KeyQ'],
+  batt: ['BATTERY', 'hold', 'KeyR'], // (1.6.0: Battery Replacement)
   take: ['TAKE OVER', 'key', 'KeyT'], next: ['NEXT', 'key', 'KeyF'], status: ['STATUS', 'hold', 'Tab'], emote: ['EMOTE', 'key', 'KeyB'],
 };
 // 1.3.3: players can move / resize the buttons (Settings > Edit touch controls). Saved per device:
@@ -92,7 +94,7 @@ const TL_KEY = 'gdbd_touchlayout';
 let TL = { pos: {}, scale: 1, op: 1 };
 try { const t = JSON.parse(localStorage.getItem(TL_KEY) || 'null'); if (t && typeof t === 'object') TL = { pos: t.pos || {}, scale: +t.scale || 1, op: +t.op || 1 }; } catch {}
 const saveTL = () => { try { localStorage.setItem(TL_KEY, JSON.stringify(TL)); } catch {} };
-const groupOf = kind => kind.startsWith('killer') ? 'killer' : kind;
+const groupOf = kind => kind.startsWith('killer') ? 'killer' : kind.startsWith('survivor') ? 'survivor' : kind;
 const slotOf = id => ['hear', 'trap', 'gaze', 'lull'].includes(id) ? 'rpower' : id; // the four killers' R buttons share one spot
 function applyLayout(box, kind) {
   if (ui) ui.style.setProperty('--tc-op', TL.op);
@@ -111,6 +113,7 @@ const LAYOUT = {
   'killer-nosferatu': ['atk', 'power', 'use', 'jump', 'night', 'exec', 'drop'],
   'killer-father': ['atk', 'power', 'use', 'jump', 'step', 'exec', 'drop'],
   survivor: ['light', 'use', 'jump', 'run', 'crouch', 'status', 'emote'],
+  'survivor-batt': ['light', 'use', 'jump', 'run', 'crouch', 'status', 'emote', 'batt'],
   dead: ['take', 'next', 'status'],
 };
 
@@ -282,7 +285,7 @@ export function initTouch() {
     if (!on) return;
     const me = g.mine && g.mine();
     if (me) setTouchCtx(me.st === 'dead' || me.st === 'out' ? 'spectator' : me.role, me.char, me.item);
-    layout(!me || me.st === 'dead' || me.st === 'out' || me.st === 'ghost' ? 'dead' : me.role === 'killer' ? (LAYOUT['killer-' + me.char] ? 'killer-' + me.char : 'killer') : 'survivor');
+    layout(!me || me.st === 'dead' || me.st === 'out' || me.st === 'ghost' ? 'dead' : me.role === 'killer' ? (LAYOUT['killer-' + me.char] ? 'killer-' + me.char : 'killer') : me.item === 'taser' && (me.addons || []).includes('cellswap') ? 'survivor-batt' : 'survivor');
     { const lb = ui.querySelector('[data-b=light]'), [lt, li] = itemBtn(); if (lb && lb.dataset.it !== ctxItem) { lb.dataset.it = ctxItem; lb.querySelector('.tc-lb').textContent = lt; lb.querySelector('.tc-ic').innerHTML = icon(li); } }
     const jb = ui.querySelector('[data-b=jump]'), skill = $('skill') && !$('skill').classList.contains('hidden');
     const jl = jb && jb.querySelector('.tc-lb'); if (jl) jl.textContent = skill ? 'HIT!' : 'VAULT';

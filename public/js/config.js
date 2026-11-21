@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 17;
+export const NET_PROTOCOL = 18;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -40,16 +40,20 @@ export const ADDONS = {
   heavy: { name: 'Heavy-Duty Bulb', item: 'flashlight', rarity: 'rare', price: 4000, blind: 1.35, battery: 0.85, desc: 'The killer stays blinded and stunned 35% longer. The battery runs out 15% sooner.' },
   cell: { name: 'Extra Cell', item: 'taser', rarity: 'rare', price: 3500, shots: 1, desc: 'A taser you find in a chest holds one more shot.' },
   volt: { name: 'High Voltage', item: 'taser', rarity: 'very rare', price: 5000, stun: 1, range: 0.85, desc: 'Taser: 1s more on the stun, but 15% less reach.' },
+  // 1.6.0 (community ideas): more for the taser
+  cellswap: { name: 'Battery Replacement', item: 'taser', rarity: 'rare', price: 4000, batt: true, desc: 'The taser runs on a battery, one cell per shot [ | | ]. At a chest with a flashlight in it, hold R to take its batteries and refill the taser (3s: slower than swapping, but you keep the taser).' },
+  probes: { name: 'Long Probes', item: 'taser', rarity: 'uncommon', price: 2500, range: 1.25, desc: 'Taser: 25% more reach.' },
+  trigger: { name: 'Hair Trigger', item: 'taser', rarity: 'common', price: 1500, cd: 0.55, desc: 'Taser: the next shot is ready sooner (0.45s instead of 0.8s).' },
 };
 export const ADDON_SLOTS = 2;
 export const cleanAddons = a => Array.isArray(a) ? [...new Set(a.filter(k => ADDONS[k]))].slice(0, ADDON_SLOTS) : [];
 // the combined effect of a list of add-ons on one item
 export function addonMods(list, item) {
-  const m = { range: 1, speed: 1, battery: 1, cone: 1, blind: 1, shots: 0, stun: 0 };
+  const m = { range: 1, speed: 1, battery: 1, cone: 1, blind: 1, shots: 0, stun: 0, cd: 1, batt: false };
   for (const k of cleanAddons(list)) {
     const A = ADDONS[k]; if (A.item !== item) continue;
     for (const f of ['range', 'speed', 'battery', 'cone', 'blind']) if (A[f] != null) m[f] *= A[f];
-    if (A.shots) m.shots += A.shots; if (A.stun) m.stun += A.stun;
+    if (A.shots) m.shots += A.shots; if (A.stun) m.stun += A.stun; if (A.cd) m.cd *= A.cd; if (A.batt) m.batt = true;
   }
   return m;
 }
@@ -80,7 +84,7 @@ export const RULES = {
   stunBarricade: 2.0,
   execTime: 4.2,
   flashBattery: 12, flashRange: 9, flashTime: 1.0, flashStun: 1.6, blindTime: 2.4, blindImmune: 12, // survivor flashlights
-  chestTime: 2.2, swapTime: 0.4,                                          // searching a chest, swapping items with it
+  chestTime: 2.2, swapTime: 0.4, battTime: 3,                                          // searching a chest, swapping items with it
   teleTime: 1.2, teleCd: 18, lanternRadius: 9, snuffTime: 2.5,           // length of a killer's execution finisher
 };
 
@@ -530,7 +534,15 @@ export const INBOX = [
       "Blood looks like blood: Granny's bat is no longer white, Grandpa's club lost its paint blob, and weapons get a dark wet smear with drips after a hit instead of a red blob.",
       'Angeline looks better: relief on her dress, skin and stains, fabric sheen, and less washed-out white.',
       'The GTA VI theme is yours to keep: buy it in the Store (or get it with the GTA VI Pass) and switch it on any time, even after the event. Every character now has its own GTA-style loading screen, and yours comes first.',
-      'New look for the menus and the Store, and new level emblems: iron, bronze, silver, gold, crimson and iridescent.',
+      'New look for the menus and the Store, and new level emblems: iron, bronze, silver, gold, crimson and iridescent. Max level gets golden wings.',
+      'GTA VI menu music: with the GTA VI theme on, the menu plays Justice - Flower In A Hurricane (from GTA VI), fading in from 0:50. Turn it off in Settings.',
+      'New sidekick for survivors: the Tamed Crow (15,000 Embers, Store > Sidekicks). It rides on your shoulder and every minute or so flies up, caws, and shows you where the killer is for 5s.',
+      "New Grandpa perk: Sawed-Off. Once every generator is done he saws his shotgun short: 6% faster, two quick shots before each reload, 12m range, and the closer you are the more it hurts.",
+      'New taser add-ons: Battery Replacement (the taser runs on cells [ | | ], and you can take a chest flashlight\'s batteries with R), Long Probes and Hair Trigger.',
+      'Loadout: give any character its own perks with the pin over the perk slots (otherwise they share one set). Hold + or - to move stat points quickly.',
+      'Bot matches: the killer bots and the survivor bots each get their own difficulty.',
+      'New models: a lantern-style lamp, a proper generator, a pepper spray can, a bigger chest lid, and the Rusty Padlock key has a U-shaped bow. Grandpa pumps his shotgun with his left hand.',
+      'Fixes: the item text no longer shows the last match\'s item (e.g. [TASE] on a flashlight); the item glow under chests is gone; Safe Graphics mode in the Windows app no longer sticks forever.',
     ],
   },
   {

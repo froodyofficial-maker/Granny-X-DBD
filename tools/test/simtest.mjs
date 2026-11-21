@@ -19,7 +19,7 @@ window.run = (map, killer, minutes, diff, seed) => {
   const roster = [{ id: 'k', name: 'K', role: 'killer', char: killer, skin: 'default', perks: window.__kperks || [], bot: true, kid: window.__kid ? 'child' : '' }];
   if (duo) roster.push({ id: 'k2', name: 'K2', role: 'killer', char: ['granny', 'grandpa', 'slendrina', 'angeline'].filter(c => c !== killer)[seed % 3], skin: 'default', perks: [], bot: true });
   const chars = ['mara', 'eli', 'june', 'tomas'];
-  for (let i = 0; i < (duo ? 8 : 4); i++) roster.push({ id: 's' + i, name: 'S' + i, role: 'survivor', char: chars[i % 4], skin: 'default', perks: [], item: window.__item && i % 2 === 0 ? window.__item : 'flashlight', bot: true });
+  for (let i = 0; i < (duo ? 8 : 4); i++) roster.push({ id: 's' + i, name: 'S' + i, role: 'survivor', char: chars[i % 4], skin: 'default', perks: [], item: window.__item && i % 2 === 0 ? window.__item : 'flashlight', bot: true, kid: window.__crow ? 'crow' : '', addons: window.__crow ? ['cellswap', 'trigger'] : [] });
   const sim = new Sim(M, roster, { difficulty: diff, mode }), bots = new Bots(sim), S = sim.S;
   const dt = 1 / 30, stall = {}, log = [], evc = {}; let stallSec = 0, insideT = 0, upT = 0, falls = 0; const hg = M.gens.find(g => g.x > -5.6 && g.x < 12.5 && g.z > 3.9 && g.z < 15.8);
   let t = 0;
@@ -38,7 +38,7 @@ window.run = (map, killer, minutes, diff, seed) => {
       still.set(p.id, w);
     }
   }
-  const res = { t: +t.toFixed(0), phase: S.phase, gens: S.gensDone, need: S.gensNeeded, out: S.players.filter(p => p.role === 'survivor').map(p => p.st + (p.outcome ? ':' + p.outcome : '')), evc, stalls: log, stallSec: +stallSec.toFixed(0), insideT: +insideT.toFixed(0), upT: +upT.toFixed(0), falls, sawed: S.players.some(p => p.sawed), houseGen: hg ? (S.gens[hg.id].done ? 'DONE' : S.gens[hg.id].p.toFixed(2)) : 'none' };
+  const res = { t: +t.toFixed(0), phase: S.phase, gens: S.gensDone, need: S.gensNeeded, out: S.players.filter(p => p.role === 'survivor').map(p => p.st + (p.outcome ? ':' + p.outcome : '')), evc, stalls: log, stallSec: +stallSec.toFixed(0), insideT: +insideT.toFixed(0), upT: +upT.toFixed(0), falls, sawed: S.players.some(p => p.sawed), crowCaws: evc.crowcaw || 0, houseGen: hg ? (S.gens[hg.id].done ? 'DONE' : S.gens[hg.id].p.toFixed(2)) : 'none' };
   return res;
 };
 window.ready = true;
@@ -58,7 +58,7 @@ await pg.waitForFunction(() => window.ready, null, { timeout: 30000 });
 let tot = 0;
 for (let i = 0; i < +N; i++) {
   const t0 = Date.now();
-  const r = await pg.evaluate(([a, b, c, d, s, m, kid, it, kp]) => { window.__mode = m; window.__kid = kid; window.__item = it; window.__kperks = kp; return window.run(a, b, c, d, s); }, [map, killer, +MIN, diff, 1000 + i * 7919, process.env.MODE || 'classic', !!+(process.env.KID || 0), process.env.ITEM || '', (process.env.KPERKS || '').split(',').filter(Boolean)]);
+  const r = await pg.evaluate(([a, b, c, d, s, m, kid, it, kp, cr]) => { window.__mode = m; window.__kid = kid; window.__item = it; window.__kperks = kp; window.__crow = cr; return window.run(a, b, c, d, s); }, [map, killer, +MIN, diff, 1000 + i * 7919, process.env.MODE || 'classic', !!+(process.env.KID || 0), process.env.ITEM || '', (process.env.KPERKS || '').split(',').filter(Boolean), !!+(process.env.CROW || 0)]);
   tot += r.stallSec; console.log(`#${i} ${map}/${killer} ${((Date.now() - t0) / 1000).toFixed(1)}s real:`, JSON.stringify({ ...r, stalls: r.stalls.length }));
   for (const s of r.stalls) console.log('   STALL', JSON.stringify(s));
 }

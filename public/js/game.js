@@ -8,7 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { initPhoto } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
-import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF, SIDEKICKS } from './config.js';
+import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF, SIDEKICKS, addonMods } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
@@ -691,7 +691,7 @@ export class Game {
       if (on !== !!this.flashHeld) { this.flashHeld = on; this.sendIn(); }
     } else if (e.button === 0 && down && (me.st === 'dead' || me.st === 'out')) this.cycleSpectate();
   }
-  sendIn() { this.send({ t: 'in', e: this.eHeld, aim: this.aimHeld, flash: !!this.flashHeld }); }
+  sendIn() { this.send({ t: 'in', e: this.eHeld, b: !!this.bHeld, aim: this.aimHeld, flash: !!this.flashHeld }); }
   updateBeam(c, p, R) {
     const on = !!p.aim && R.root.visible !== false;
     if (!c.beam) {
@@ -883,7 +883,9 @@ export class Game {
 
     // hold E / aim
     const eHeld = this.keys.has('KeyE') && !this.paused;
-    if (eHeld !== this.eHeld) { this.eHeld = eHeld; this.sendIn(); }
+    // 1.6.0 (Battery Replacement): R held by a survivor with a taser = take a flashlight's batteries at a chest
+    const bHeld = this.keys.has('KeyR') && !this.paused && me.role === 'survivor' && me.item === 'taser';
+    if (eHeld !== this.eHeld || bHeld !== !!this.bHeld) { this.eHeld = eHeld; this.bHeld = bHeld; this.sendIn(); }
 
     // City Mode: at the wheel (the car is driven here, on my own machine, and its position sent like walking)
     if (me.car >= 0 && S.cars && S.phase === 'play') {
@@ -2505,6 +2507,7 @@ export class Game {
           else if (e.by === this.myId && e.ram) this.feed('You rammed the killer!', 'big');
           break;
         }
+        case 'battswap': { const c = this.M.chests && this.M.chests[e.id]; if (c) sound.play('zap', c.x, c.z, { len: 0.25 }); if (e.by === this.myId) this.feed(`Batteries in: +${e.n} taser shot${e.n === 1 ? '' : 's'}.`); break; }
         case 'crowcaw': { // 1.6.0: the Tamed Crow
           const owner = S && playerById(S, e.id), K = S && playerById(S, e.by);
           if (owner) sound.play('caw', owner.x, owner.z, { n: 2 + (Math.random() < 0.4 ? 1 : 0) });
@@ -2775,7 +2778,10 @@ export class Game {
     if (me.item === 'pepper') return `<div class="iti">${icon('pepper')}</div><div class="itt"><div class="itn">Pepper Spray ${cnt(me.pepper)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> spray the killer's face (3.6m)</div>${web}</div>`;
     if (me.item === 'gtaps') return `<div class="iti"><span class="gtaps-art"></span></div><div class="itt"><div class="itn">GTA VI (PlayStation) ${cnt(me.gtaps)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> throw it at the killer (5s)</div>${web}</div>`;
     if (me.item === 'teddy') return `<div class="iti"><span class="teddy-art"></span></div><div class="itt"><div class="itn">Teddy ${cnt(me.teddy)}</div><div class="keyl"><kbd>${B('RMB')}</kbd> hold it up to the killer</div>${web}</div>`;
-    if (me.item === 'taser') return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser <span id="trapn"></span></div><div class="keyl"><kbd>${B('RMB')}</kbd> fire at the killer (3s stun)</div>${web}</div>`;
+    if (me.item === 'taser') {
+      const batt = addonMods(me.addons, 'taser').batt; // (1.6.0: Battery Replacement: one cell per shot, [ | | ])
+      return `<div class="iti">${icon('taser')}</div><div class="itt"><div class="itn">Taser ${batt ? '<span class="tcells" id="tcells"></span>' : '<span id="trapn"></span>'}</div><div class="keyl"><kbd>${B('RMB')}</kbd> fire at the killer (3s stun)${batt ? ` · ${kbd('ability2')} at a chest: a flashlight's batteries` : ''}</div>${web}</div>`;
+    }
     return me.item === 'trap' ? `<div class="iti">${icon('gen')}</div><div class="itt"><div class="itn"><span id="trapn"></span></div><div class="keyl">${kbd('item')} set a trap in front of you</div>${web}</div>`
       : `<div class="iti">${icon('flashlight')}</div><div class="itt"><div class="itn">${SURVIVORS[me.char] && SURVIVORS[me.char].gb ? 'Proton Stream' : 'Flashlight'}</div><div class="itb"><div></div></div><div class="keyl"><kbd>${B('RMB')}</kbd> hold to blind the killer</div>${web}</div>`;
   }
@@ -2790,6 +2796,8 @@ export class Game {
       $('item').classList.toggle('active', !!this.flashHeld && me.flash > 0);
       $('item').classList.toggle('empty', me.item === 'trap' ? !(me.traps > 0) : me.item === 'taser' ? !(me.tasers > 0) : me.item === 'pepper' ? !(me.pepper > 0) : me.item === 'gtaps' ? !(me.gtaps > 0) : me.item === 'teddy' ? !(me.teddy > 0) : me.flash <= 0);
       const wn = document.getElementById('webn'); if (wn) wn.textContent = '×' + (me.webs || 0);
+      const tc = document.getElementById('tcells');
+      if (tc) { const mx = Math.max(me.taserMax || 3, me.tasers || 0), k = mx + ':' + (me.tasers || 0); if (tc.dataset.k !== k) { tc.dataset.k = k; tc.innerHTML = '[' + Array.from({ length: mx }, (_, i) => `<i class="${i < (me.tasers || 0) ? 'on' : ''}"></i>`).join('') + ']'; } }
       const tn = document.getElementById('trapn'); if (tn) tn.textContent = '×' + ((me.item === 'taser' ? me.tasers : me.item === 'pepper' ? me.pepper : me.item === 'gtaps' ? me.gtaps : me.item === 'teddy' ? me.teddy : me.traps) || 0);
       $('crosshair').classList.toggle('hidden', !((this.flashHeld && me.flash > 0) || (me.item === 'taser' && me.tasers > 0 && me.st === 'ok') || (me.char === 'spiderman' && me.webs > 0 && me.st === 'ok')));
     }

@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 17`, `VERSION = '1.5.3'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 18`, `VERSION = '1.6.0'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,7 +205,35 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.5.3 (current; APK versionCode 27, Windows 1.5.3, NET_PROTOCOL 17):
+1.6.0 (current; APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
+- Performance/look: no film grain, GTAO only if `settings.ao`, MSAA render target per quality (`QUALITY[q].msaa`), dynamic resolution only
+  below 40 fps; light pool (world.js `poolLights` / `updateLightPool`: only 2/4/6 real PointLights follow the nearest lamps); grass in 4x4
+  chunked InstancedMeshes; shadows max 2048; offline builds embed the KTX2 photo scans (`#nb-tex`, pbr.js `texManager`); Safe Graphics mode
+  in the exe expires per version (`gdbd-gpu` IPC turns it off). Lamps = cast-iron lanterns; `makeGenerator()` in models.js.
+- bloodfx.js: `fixModelBlood` (Granny's bat "Blood" shell = alpha-tested dark blood, no more white bat), `weaponBlood` smear. matfx.js
+  `enhanceCharacter` (relief/roughness maps from the colour texture; Angeline).
+- GTA VI theme as an owned item (`themes.vi`, 20,000, in the pass), per-character GTA loading art (img/ls/*.jpg, `setLoadingCast`), menu
+  music public/audio/vitheme.mp3 (owner's file: Justice - Flower In A Hurricane, from GTA VI) played from 0:50 with a 5 s fade
+  (`sound.menuMusic(on, 'vitheme')`, Settings toggle `settings.viMusic`), embedded as `#nb-vitheme-mp3`.
+- UI/Store revamp (glass panels), `levelEmblem` (icons.js; max level = gold wings + crown).
+- **Tamed Crow** (`SIDEKICKS.crow`, 15,000, survivors; `profile.pets.crow`, `profile.survivor.pet === 'crow'`, roster `kid: 'crow'`): sim
+  `updateCrows` (crowCd 50-80 s, flies `crowF` 3.4 s if a killer is within 45 m, at the top `crowSee` 5 s = the killer's outline for its
+  owner, events crowfly / crowcaw; bots get the spot as `intel`). crow.js: public/models/crow.glb ("Granny granny 3 crow dvloper" by
+  Gsjeijenjd, CC BY 4.0, owner's upload, texture repacked as JPEG) = static mesh rigged in code (SkinnedMesh, head/tail bones; flight
+  feathers drawn in code open on the wing bones). game.js `updateCrows` perches it on `R.j.shL`. Store art img/crow.jpg (crowshot-page.js).
+  Bots bring one 20% of the time.
+- **Sawed-Off** (Grandpa perk `sawedoff`): once the gates are powered he saws for 2 s (`sawT`), then `sawed`: `SAWED` shotgun stats in sim.js
+  (two quick shots, 12 m, more damage up close), +6% speed (rules.js). `sawOffGun(root)` (grannyGlb.js) shortens the barrel mesh
+  (ShotgunPipaGP, the end away from his right hand). Bot killers now roll character-only perks too (`randomPerks(..., c)`).
+- Taser add-ons: `cellswap` Battery Replacement (HUD cells `#tcells`, R / phone BATTERY button at a chest with a flashlight = act `batts`,
+  `RULES.battTime` 3 s, needs `p.battKey` from the 'in' message `b`), `probes` (+25% range), `trigger` (cooldown x0.55). `p.taserMax`.
+- Per-character perks (`profile.perkSets[char]`, pin button over the slots), hold +/- on stat points, separate survivor bot difficulty
+  (`botsCfg.sdiff` -> Sim `survDifficulty` -> bots.js `SURV_SKILLS`). Grandpa pumps the shotgun with his left hand (`grandpaPump`, 2-bone IK).
+- Freddy is still missing (freddy.glb not in the repo or the uploads): ask the owner for the file.
+- Tests: crowlook.mjs (crow in a match + taser cells), simtest `CROW=1` / `KPERKS=sawedoff`, pump-page.js (Grandpa's pump + sawed-off gun),
+  gfx160.mjs, offtex.mjs.
+
+1.5.3 ( APK versionCode 27, Windows 1.5.3, NET_PROTOCOL 17):
 - **Everything GTA VI ends 1 Dec 2026** (`VI.until` = Date.UTC(2026, 11, 1), owner's request): theme, Vice Nights card, the item, the pass and the
   two GTA VI collectables' spawning (`COLLECTABLES[].until`). Earned badges and found collectables stay on profiles.
 - The VI badge is the official GTA VI logo (owner's choice): `viBadge(size)` = a `<span class="vi-badge">` with public/img/gta6.png through
