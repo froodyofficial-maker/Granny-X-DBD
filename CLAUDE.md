@@ -231,7 +231,12 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
   (`botsCfg.sdiff` -> Sim `survDifficulty` -> bots.js `SURV_SKILLS`). Grandpa pumps the shotgun with his left hand (`grandpaPump`, 2-bone IK).
 - Freddy is still missing (freddy.glb not in the repo or the uploads): ask the owner for the file.
 - Tests: crowlook.mjs (crow in a match + taser cells), simtest `CROW=1` / `KPERKS=sawedoff`, pump-page.js (Grandpa's pump + sawed-off gun),
-  gfx160.mjs, offtex.mjs.
+  gfx160.mjs, offtex.mjs, crowshot-page.js (the crow's Store picture: frame 0 perched; frames 1-3 flight checks).
+- Devlog banner: tools/test/devlog160-page.js ("THE GRAPHICS UPDATE · AND A CROW THAT WATCHES FOR HER": Grandpa with the sawed-off gun,
+  the new generator with the crow on it, the new lamp, the official Granny × Dead by Daylight logos; `PAGE=devlog160-page.js
+  OUT=devlog160.png node render-devlog.mjs` from tools/test: OUT is relative to tools/test, 2560x1440).
+- Builds handed over: GrannyxDBD-1.6.0-Windows.zip (portable exe, unpackDirName GrannyxDBD-1.6.0) and the APK (VC 28, VN 1.6.0, signed with
+  grannyxdbd-1.3.jks: `KS=... KS_PASS=$(cat <password file>) VC=28 VN=1.6.0 tools/android/build-apk.sh GrannyDBD.html`).
 
 1.5.3 ( APK versionCode 27, Windows 1.5.3, NET_PROTOCOL 17):
 - **Everything GTA VI ends 1 Dec 2026** (`VI.until` = Date.UTC(2026, 11, 1), owner's request): theme, Vice Nights card, the item, the pass and the
@@ -432,6 +437,17 @@ stalls, texture/program counts), `ctxloss.mjs` (lose + restore the context mid-m
 the menu), `onlinestart.mjs` (host + client start a match through the local broker; run `node broker.mjs` first).
 
 ## Where things stand / next steps
+- **1.6.0 is shipped** (pushed to `main` and `claude/beautiful-keller-gvarx6`; builds + devlog banner handed to the owner).
+- Open from 1.6.0:
+  - **Freddy Fazbear skin** still shows plain Granny: freddy.glb is not in the repo (gitignored, Sketchfab Standard licence) and the owner
+    hasn't uploaded it yet. Ask for the file (or an old GrannyDBD.html that still has `#nb-freddy-glb`), drop it in public/models/, rebuild.
+  - Faint scrambled text shows through the glass Store panel next to the crow card while the GTA theme is on (something in `#vi-sky`
+    behind the panel). Not fixed yet.
+  - The crow's flight was only checked from the side and from below (crowshot-page.js); the owner may report how the wings look.
+  - Nothing tested on a real phone / real GPU yet: only SwiftShader + Chromium phone emulation.
+  - Season 2 starts by itself on 1 Dec 2026 (Father, Pages, Shuffle, Teddy); all GTA VI things except the owned theme end then.
+- Working method that suits the owner: they send lists of features/bugs (often from their Discord community) plus files (GLBs, mp3s,
+  logos) as chat uploads; build everything, check it headless (screenshots), then hand over the exe zip + APK, push, and update this file.
 - The "textures go missing / very dark" report (EXE + APK) is not reproduced in SwiftShader; fixes above cover the likely
   causes (GPU reset after the long first frame, context loss on phones). Ask the owner for a screenshot + quality setting
   if it still happens.
