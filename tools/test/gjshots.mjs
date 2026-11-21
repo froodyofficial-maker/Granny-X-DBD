@@ -14,14 +14,14 @@ const CFG = {
   c_granny: { map: 'granny', role: 'survivor', killer: 'granny', surv: 'mara' },
   c_hunt: { map: 'granny', role: 'survivor', killer: 'granny', surv: 'mara' },
   c_crow: { map: 'granny', role: 'survivor', killer: 'granny', surv: 'june', crow: true },
-  c_grandpa: { map: 'granny1', role: 'survivor', killer: 'grandpa', surv: 'eli' },
+  c_grandpa: { map: 'granny', role: 'survivor', killer: 'grandpa', surv: 'eli' },
   c_forest: { map: 'forest', role: 'survivor', killer: 'nosferatu', surv: 'tomas' },
-  c_angeline: { map: 'granny1', role: 'survivor', killer: 'angeline', surv: 'mara' },
+  c_angeline: { map: 'granny', role: 'survivor', killer: 'angeline', surv: 'mara' },
 }[SHOT];
 const srv = http.createServer(async (q, r) => { let u = decodeURIComponent(q.url.split('?')[0]); try { const b = await readFile(join(ROOT, u)); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' }[extname(u)] || 'application/octet-stream' }); r.end(b); } catch { r.writeHead(404); r.end(); } }).listen(0);
 const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
 const pg = await br.newPage({ viewport: { width: +W, height: +H } }); pg.setDefaultTimeout(600000);
-const errs = []; pg.on('pageerror', e => errs.push(e.message));
+const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.text().startsWith('DBG')) console.log(m.text()); });
 await pg.addInitScript(c => {
   localStorage.setItem('gdbd_profile', JSON.stringify({ seen: { intro: true, help: true, tut: true }, pets: { crow: true }, killer: { char: c.killer, perks: [] }, survivor: { char: c.surv, perks: [], pet: c.crow ? 'crow' : '' } }));
   localStorage.setItem('gdbd_settings', JSON.stringify({ quality: 'high', name: 'Tester', dynres: false, viTheme: false }));
@@ -120,16 +120,18 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
       const bk = dirTo(A, K); cam = new THREE.Vector3(K.x + bk.x * 1.25 - bk.z * 0.55, 1.85, K.z + bk.z * 1.25 + bk.x * 0.55); look = new THREE.Vector3(A.x, 0.8, A.z);
       me.x = (A.x + K.x) / 2; me.z = (A.z + K.z) / 2;
     } else if (SHOT === 'c_crow') {
-      // June's crow close up, the killer coming out of the dark behind her
-      const j = spot(18.5, 9.2, 18.5, 9.2); me.x = j.x; me.z = j.z; me.yaw = Math.PI / 2 - 0.35; me.crowF = 0; g.hideMe = false;
-      const k = spot(11.5, 9.8, 11.5, 9.8); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, me);
+      // June's crow up close on her shoulder, Granny walking out of the dark behind her
+      const j = spot(19.6, 9.0, 19.6, 9.0); me.x = j.x; me.z = j.z; me.yaw = Math.PI / 2 - 0.5; me.crowF = 0; me.crowCd = 999; g.hideMe = false;
+      const k = spot(13.5, 7.8, 13.5, 7.8); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, me);
       const fr = { x: Math.sin(me.yaw), z: Math.cos(me.yaw) }, lf = { x: Math.cos(me.yaw), z: -Math.sin(me.yaw) };
-      cam = new THREE.Vector3(me.x + fr.x * 0.9 + lf.x * 0.55, 1.45, me.z + fr.z * 0.9 + lf.z * 0.55); look = new THREE.Vector3(me.x + lf.x * 0.18 - fr.x * 3, 1.5, me.z + lf.z * 0.18 - fr.z * 3);
+      cam = new THREE.Vector3(me.x + fr.x * 1.05 + lf.x * 0.85, 1.3, me.z + fr.z * 1.05 + lf.z * 0.85); look = new THREE.Vector3(me.x + lf.x * 0.05 - fr.x * 1.2, 1.48, me.z + lf.z * 0.05 - fr.z * 1.2);
     } else if (SHOT === 'c_grandpa') {
-      // Grandpa raising the shotgun, low and close
-      K.x = P.x + 0.7; K.z = P.z; K.yaw = 0.4; K.aim = true; K.abT = 1;
-      const fr = { x: Math.sin(K.yaw), z: Math.cos(K.yaw) };
-      cam = new THREE.Vector3(K.x + fr.x * 2.3 + fr.z * 1.1, 0.55, K.z + fr.z * 2.3 - fr.x * 1.1); look = new THREE.Vector3(K.x, 1.45, K.z);
+      // Grandpa raising the shotgun at Eli by the wreck, from low at his side
+      const A = sv.find(o => o !== me) || sv[0]; const a = spot(16.6, 11.6, 16.6, 11.6); A.x = a.x; A.z = a.z; A.yaw = -Math.PI / 2; A.mv = 2;
+      const k = spot(21.2, 8.6, 21.2, 8.6); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A); K.aim = true; K.abT = 1;
+      const fr = { x: Math.sin(K.yaw), z: Math.cos(K.yaw) }, rt = { x: -Math.cos(K.yaw), z: Math.sin(K.yaw) };
+      cam = new THREE.Vector3(K.x + fr.x * 1.6 + rt.x * 1.9, 0.7, K.z + fr.z * 1.6 + rt.z * 1.9); look = new THREE.Vector3(K.x + fr.x * 0.3, 1.35, K.z + fr.z * 0.3);
+      me.x = K.x; me.z = K.z;
     } else if (SHOT === 'c_forest') {
       // a crane shot: Tomás and his flashlight in the mist, Nosferatu among the trees
       me.x = P.x + 1; me.z = P.z; me.yaw = 2.2; me.flashOn = true; me.flash = 10; me.mv = 2; g.hideMe = false;
@@ -137,11 +139,11 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
       const k = at(me, { x: -fr.x, z: -fr.z }, 6.5, 1.5); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, me);
       cam = new THREE.Vector3(me.x + fr.x * 3.5 - fr.z * 2.5, 6.5, me.z + fr.z * 3.5 + fr.x * 2.5); look = new THREE.Vector3((me.x + K.x) / 2, 0.6, (me.z + K.z) / 2);
     } else if (SHOT === 'c_angeline') {
-      // Angeline's Yellow Eyes finding a survivor
-      const A = sv.find(o => o !== me) || sv[0]; A.x = P.x + 0.6; A.z = P.z; A.yaw = 1.2; A.mv = 2;
-      const k = at(A, { x: Math.sin(A.yaw + Math.PI), z: Math.cos(A.yaw + Math.PI) }, 5.5); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A); K.aim = true; K.abT = 1;
-      const mid = { x: (A.x + K.x) / 2, z: (A.z + K.z) / 2 }, n = dirTo(K, A);
-      cam = new THREE.Vector3(mid.x - n.z * 5.2, 1.3, mid.z + n.x * 5.2); look = new THREE.Vector3(mid.x, 1.3, mid.z); me.x = mid.x; me.z = mid.z;
+      // Angeline's Yellow Eyes find Mara: seen from behind Mara, the beam coming at the camera
+      const A = sv.find(o => o !== me) || sv[0]; const a = spot(17.6, 10.4, 17.6, 10.4); A.x = a.x; A.z = a.z; A.mv = 0;
+      const k = spot(22.4, 8.0, 22.4, 8.0); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A); K.aim = true; K.abT = 1; A.yaw = yawTo(A, K);
+      const d = dirTo(K, A); cam = new THREE.Vector3(A.x + d.x * 2.1 - d.z * 0.7, 1.55, A.z + d.z * 2.1 + d.x * 0.7); look = new THREE.Vector3(K.x, 1.9, K.z);
+      me.x = (A.x + K.x) / 2; me.z = (A.z + K.z) / 2;
     }
   }
   // settle the characters (poses, crow) and render
@@ -151,6 +153,7 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
   for (const arr of [g.W.gens, g.W.cages, g.W.gates]) for (const o of arr || []) if (o.userData.aura) o.userData.aura.visible = false; // (no prop outlines in a cinematic)
   for (const [id, c] of g.chars) { if (c.rig && c.rig.setAura) c.rig.setAura(null); c.aura = null; if (id === 'me' && g.hideMe && c.rig) c.rig.root.visible = false; }
   if (g.composer) g.composer.render(1 / 30); else g.renderer.render(g.scene, g.camera);
+  console.log('DBG crows', g.crows ? g.crows.size : -1, 'kid', me.kid);
   return [g.renderer.domElement.toDataURL('image/png')];
 }, [SHOT, CFG]);
 const { mkdirSync, writeFileSync } = await import('node:fs'); mkdirSync(OUT, { recursive: true });
