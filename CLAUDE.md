@@ -255,6 +255,12 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
     materials that differ only in colour batched via vertex colours (`batchMats`): a survivor ~45 -> ~10 draws. Aura meshes still sit on
     the joints (skinfx `frames()` measures them). `R.skinned(meshes)` turns the wound blobs into one skinned mesh per set.
   - Same test view (gfx160 high): 1,316 -> 369 draw calls. Draw-call breakdown script pattern: count meshes per top-level scene group.
+- Game Jolt browser build for iPhone/iPad (owner: "do the game jolt browser version for ios"): `node tools/build.mjs` then
+  `node tools/gamejolt/build-web.mjs` -> tools/gamejolt/GrannyxDBD-<ver>-Web.zip (index.html at the root + public/models, audio, tex, img,
+  fonts and the KTX2 transcoder; ~73 MB). On touch screens the page writes a 1280-px viewport (like the APK) and sets `__forceTouch` /
+  `html.mobile`; apple-mobile-web-app tags + manifest + icons for Add to Home Screen. iPhones default to Low (detectQuality).
+  Test: Chromium 'iPhone 13 landscape' emulation against tools/gamejolt/out (boots, mobile layout, bot match). Not tested on a real
+  iPhone or inside Game Jolt's iframe (a viewport tag has no effect inside an iframe: the Game Jolt embed size decides the layout).
 - Ember codes (owner asked for 10 x 100,000): config.js `EMBER_CODES` = salted SHA-256 ('gdbd-embers:' + code), `EMBER_CODE_AMOUNT`;
   codes.js readCode -> { kind: 'embers' }, main.js redeem adds them once per device (`profile.redeemed['em:...']`). The plain codes
   were handed to the owner as a file only (not in the repo).
