@@ -866,7 +866,15 @@ export class Game {
     { const sm = this.renderer.shadowMap; if (sm.enabled) { if (sm.autoUpdate) sm.autoUpdate = false; this.shTick = (this.shTick + 1) % 2 || 0; sm.needsUpdate = this.shTick === 0; } }
     if (this.benching) this.benchFrames = (this.benchFrames || 0) + 1;
     if (this.benchNoDraw) { /* (Performance test: nothing drawn) */ }
-    else if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
+    else if (this.composer) {
+      // 1.6.0: copy only the colour out of the multisampled buffer. three.js also resolves its depth + stencil by default; on Windows
+      // (Chrome/Electron draw WebGL through Direct3D 11) that depth-stencil resolve goes through a slow CPU round trip that cost
+      // ~25 ms a frame on an RTX 4070 whatever the resolution (owner's Performance test: 28 fps with post-processing, 95 without).
+      // Nothing reads them afterwards (the outlines use the stencil while the scene is drawn). The flag is dropped whenever a target
+      // is resized, so it's set every frame.
+      const P = this.renderer.properties; for (const t of [this.composer.renderTarget1, this.composer.renderTarget2]) if (t && t.samples > 0) P.get(t).__ignoreDepthValues = true;
+      this.post.uniforms.time.value = this.t; this.composer.render(dt);
+    }
     else this.renderer.render(this.scene, this.camera);
     this.perf(dt);
     if (S.phase === 'end' && !this.ended) { this.ended = true; this.endAt = performance.now() + 2500; sound.play('end'); }
@@ -2633,9 +2641,9 @@ export class Game {
     if (this.composer) { const c = this.composer; await step('No post-processing (glow, rays, colour, AA)', () => { this.composer = null; }, () => { this.composer = c; }); }
     if (this.bloom) await step('No glow (bloom)', () => { this.bloom.enabled = false; }, () => { this.bloom.enabled = true; });
     if (this.rays) await step('No moon rays', () => { this.rays.enabled = false; }, () => { this.rays.enabled = true; });
-    if (W.moon && W.moon.castShadow) await step('No shadows', () => { W.moon.castShadow = false; }, () => { W.moon.castShadow = true; }, 1500);
+    if (W.moon && W.moon.castShadow) await step('No shadows', () => { W.moon.castShadow = false; }, () => { W.moon.castShadow = true; }, 3500);
     if (W.pool && W.pool.length) await step('No lamp lights', () => { W.benchOff = true; }, () => { W.benchOff = false; });
-    if (sc.environment) { const e = sc.environment; await step('No reflections', () => { sc.environment = null; }, () => { sc.environment = e; }, 1500); }
+    if (sc.environment) { const e = sc.environment; await step('No reflections', () => { sc.environment = null; }, () => { sc.environment = e; }, 3500); }
     await step('No grass', () => { un = hide(o => o.name === 'grass'); }, () => un && un());
     await step('No lamp beams / fog / glows', () => { un = hide(o => (o.material && (o.material.blending === THREE.AdditiveBlending || (o.material.transparent && o.renderOrder === 2))) || o.isSprite); }, () => un && un());
     { const pr = R.getPixelRatio(), set = p => { R.setPixelRatio(p); R.setSize(innerWidth, innerHeight); if (this.composer) { this.composer.setPixelRatio(p); this.composer.setSize(innerWidth, innerHeight); } };

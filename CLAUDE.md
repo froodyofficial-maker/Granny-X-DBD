@@ -265,6 +265,14 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
   - Performance test: pause menu button / F9 -> game.js `runBench()`: ~20 s, one effect off per step (post, bloom, rays, shadows, lamp
     lights via `W.benchOff`, reflections, grass, additive/fog/sprites, half resolution, nothing drawn), fps table + GPU + settings, Copy.
     Ask the owner for that table to find the real cost on their machine.
+- 1.6.0 fifth build (APK VC 32, exe unpackDirName GrannyxDBD-1.6.0-e): the owner's Performance test on the RTX 4070 laptop (D3D11 ANGLE):
+  28 fps on High, 95 with post-processing off, bloom off +1, half resolution +1 -> a fixed ~25 ms per frame in the composer path, not
+  fill rate. Cause: three r160 `updateMultisampleRenderTarget` blits COLOR|DEPTH|STENCIL out of the MSAA target; ANGLE's D3D11
+  depth-stencil resolve is a slow CPU round trip. Fix (game.js frame): `renderer.properties.get(rt).__ignoreDepthValues = true` on the
+  composer's renderTarget1/2 every frame (the flag is lost when a target is resized) -> colour-only blit (checked by hooking
+  blitFramebuffer: only COLOR bits). Outlines still work (stencil is used while drawing the scene, not after). Performance test waits 3.5 s
+  before measuring the shadows / reflections steps (shader rebuilds made those numbers negative). "Nothing drawn" was 105 fps on that
+  laptop: some CPU/compositor cost per frame is left (not investigated yet).
 - Game Jolt browser build for iPhone/iPad (owner: "do the game jolt browser version for ios"): `node tools/build.mjs` then
   `node tools/gamejolt/build-web.mjs` -> tools/gamejolt/GrannyxDBD-<ver>-Web.zip (index.html at the root + public/models, audio, tex, img,
   fonts and the KTX2 transcoder; ~73 MB). On touch screens the page writes a 1280-px viewport (like the APK) and sets `__forceTouch` /
