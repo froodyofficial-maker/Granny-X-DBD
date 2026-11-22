@@ -22,7 +22,7 @@ window.frame = () => {
   x.font = '132px "Bebas Neue"'; x.fillStyle = '#f2ebdf'; x.shadowColor = 'rgba(200,30,20,.45)'; x.shadowBlur = 30; x.fillText('MORE FPS.', 52, 356); x.fillText('SAME FEAR.', 52, 468);
   x.shadowColor = 'rgba(0,0,0,.9)'; x.shadowBlur = 14;
   x.font = '38px "Bebas Neue"'; x.fillStyle = '#e8241c'; x.fillText('THE SMOOTHEST NIGHT IN GRANNY\'S HOUSE', 58, 518);
-  const items = ['Up to 3x less work per frame', 'New moonlight & lamp beams', 'Real bat swings · Grandpa aims true', 'Tamed Crow & Sawed-Off'];
+  const items = ['Up to 3x the frame rate on High', 'Advanced graphics settings + Performance test', 'Now playable on iPhone & iPad (browser)', 'Real bat swings · Grandpa aims true'];
   x.font = '600 24px "Barlow Condensed"'; x.letterSpacing = '1px';
   items.forEach((t, i) => { const y = 572 + i * 34; x.fillStyle = '#e8241c'; x.fillRect(60, y - 13, 9, 9); x.fillStyle = '#d8cfc2'; x.fillText(t.toUpperCase(), 82, y); });
   x.letterSpacing = '0px';
