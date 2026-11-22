@@ -534,6 +534,7 @@ export const INBOX = [
     body: [
       'No more grain: the noisy ambient-occlusion pass, film grain and heavy sharpening are gone, and the resolution no longer drops to 60-70% when the frame rate dips. Smoother on good PCs, and Low now has anti-aliasing.',
       'New lighting: the moon hangs low over the maps (long shadows, moonlit walls), the street lamps throw beams through the mist, and a new colour grade.',
+      'Settings > Advanced graphics: set resolution, anti-aliasing, shadows, lamp lights, reflections, glow, moon rays, lamp beams, fog and grass one by one. High is calmer now (softer glow, no moon rays unless you turn them on). Pause > Performance test (or F9) measures what each effect costs on your device.',
       'Much faster: every prop on the map (generators, lamps, hooks, gates, pallets) and every survivor is now drawn in a handful of pieces instead of dozens, so a frame needs about a third of the work it did, with the same look. The Windows app also asks for the graphics card instead of the built-in chip, High caps its resolution on 150%-scaled screens, and shadows cost half as much. Turn on the FPS counter to see which GPU is drawing.',
       "Granny swings her bat properly (wind-up over the shoulder, a full swing through the middle of the screen), Grandpa rifle-butts with his shotgun, and when he aims, the gun comes up to the middle of the screen.",
       "Granny's House music now plays on every map (it was far too quiet before), and the GTA VI menu music starts straight away.",

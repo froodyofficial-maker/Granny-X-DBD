@@ -9,7 +9,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { initPhoto } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF, SIDEKICKS, addonMods } from './config.js';
-import { buildWorld, updateWorld, pointBlocked, QUALITY } from './world.js';
+import { buildWorld, updateWorld, pointBlocked, QUALITY, qualityOf, GFXO } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
@@ -404,7 +404,7 @@ export class Game {
 
   start() {
     resetVoices(); KB_SETTINGS = this.settings;
-    let q = QUALITY[this.settings.quality] || QUALITY.medium;
+    let q = qualityOf(this.settings.quality); // (1.6.0: the preset + Settings > Advanced graphics)
     initPhoto(this.renderer, this.settings.quality);
     this.W = buildWorld(this.M, this.settings.quality);
     // Blood Moon mode: a red moon, red-tinged fog and moonlight
@@ -420,7 +420,7 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(this.settings.fov || 75, innerWidth / innerHeight, 0.05, q.far);
     // 1.6.0: a pixel budget: laptop screens at 150% scaling made High draw 2.25x the pixels (2560x1600 and more, with 4x MSAA)
     { const budget = { high: 3.7e6, medium: 2.4e6, low: 1.6e6, potato: 1.0e6 }[this.settings.quality] || 2.4e6, cap = Math.sqrt(budget / Math.max(1, innerWidth * innerHeight));
-      if (q.pixel > cap) q = { ...q, pixel: Math.max(0.75, +cap.toFixed(2)), minPixel: Math.min(q.minPixel, Math.max(0.7, +cap.toFixed(2) - 0.1)) }; }
+      if (q.pixel > cap && !q.fixedRes) q = { ...q, pixel: Math.max(0.75, +cap.toFixed(2)), minPixel: Math.min(q.minPixel, Math.max(0.7, +cap.toFixed(2) - 0.1)) }; }
     this.q = q; this.pr = q.pixel; this.ftAvg = 1 / 60; this.drT = 0; this.fpsT = 0; this.fpsN = 0;
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
@@ -446,10 +446,12 @@ export class Game {
     // realistic look: faint night-sky reflections on every lit surface
     if (realistic() && q.shadow && !this.M.indoor) { const LK = this.W.look; this.scene.environment = nightEnv(r, LK && LK.sky ? LK.sky[0] : 0x1a2436, LK && LK.fog != null ? LK.fog : 0x0c1018); }
     else if (realistic() && q.shadow) this.scene.environment = nightEnv(r, 0x2a1a14, 0x100806);
+    // Settings > Advanced graphics > Reflections: 0 = none (no night-sky reflections at all), else their strength
+    if (GFXO.reflect != null) { if (+GFXO.reflect <= 0) this.scene.environment = null; else this.envK = +GFXO.reflect; }
     if (q.post) {
       // multisampled render target: the post-processing chain otherwise loses anti-aliasing
       // (with a stencil buffer: the aura outlines are masked with it)
-      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: Math.min(q.msaa || 0, r.getPixelRatio() >= 1.25 ? 2 : 4), stencilBuffer: true }); // (dense screens need less MSAA)
+      const rt = new THREE.WebGLRenderTarget(innerWidth * r.getPixelRatio(), innerHeight * r.getPixelRatio(), { type: THREE.HalfFloatType, samples: q.fixedAA ? (q.msaa || 0) : Math.min(q.msaa || 0, r.getPixelRatio() >= 1.25 ? 2 : 4), stencilBuffer: true }); // (dense screens need less MSAA)
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
       if (real && this.settings.ao) { // (1.6.0: off unless asked for: it was the grain and a big cost)
@@ -463,7 +465,7 @@ export class Game {
       // guard: one bad (NaN / infinite) pixel would otherwise be smeared by bloom into growing black squares
       this.composer.addPass(new ShaderPass(SanitizeShader));
       if (real && q.rays && !this.M.indoor) { this.rays = new ShaderPass(RaysShader); this.composer.addPass(this.rays); }
-      if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.8); this.composer.addPass(this.bloom); }
+      if (q.bloom) { this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), q.bloomK ?? 0.4, 0.5, 0.8); this.composer.addPass(this.bloom); } // (1.6.0: softer glow by default: 0.6 was busy)
       this.post = new ShaderPass(PostShader); this.post.uniforms.real.value = real ? 1 : 0; this.post.uniforms.sharp.value = q.sharp || 0; this.composer.addPass(this.post);
       this.composer.addPass(new OutputPass());
     } else { this.composer = null; this.post = null; }
@@ -587,6 +589,7 @@ export class Game {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
     if (['Space', 'Tab', 'KeyE', 'ShiftLeft', 'ControlLeft', 'KeyC', 'KeyQ'].includes(e.code)) e.preventDefault();
     if (e.code === 'Tab') { $('scoreboard').classList.toggle('hidden', !down); if (down) this.renderScoreboard(); return; }
+    if (down && e.code === 'F9' && !e.repeat) { this.runBench(); return; } // (1.6.0: Performance test)
     if (down) {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -857,9 +860,13 @@ export class Game {
       const off = Math.max(Math.abs(v.x), Math.abs(v.y));
       ru.on.value = inFront ? 1 - Math.min(1, Math.max(0, (off - 1) / 1.2)) : 0;
     }
+    // Settings > Advanced graphics > Reflections strength (materials keep their own base value; characters join later, so re-checked)
+    if (this.envK != null && ((this.envT = (this.envT || 0) - dt) <= 0)) { this.envT = 2; const k = this.envK; this.scene.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.envMapIntensity != null && m.userData.envK !== k) { if (m.userData.envBase == null) m.userData.envBase = m.envMapIntensity; m.envMapIntensity = m.userData.envBase * k; m.userData.envK = k; } }); }
     // 1.6.0: the shadow map is redrawn every other frame (it re-renders every caster around the camera; at 60+ fps nobody sees it)
     { const sm = this.renderer.shadowMap; if (sm.enabled) { if (sm.autoUpdate) sm.autoUpdate = false; this.shTick = (this.shTick + 1) % 2 || 0; sm.needsUpdate = this.shTick === 0; } }
-    if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
+    if (this.benching) this.benchFrames = (this.benchFrames || 0) + 1;
+    if (this.benchNoDraw) { /* (Performance test: nothing drawn) */ }
+    else if (this.composer) { this.post.uniforms.time.value = this.t; this.composer.render(dt); }
     else this.renderer.render(this.scene, this.camera);
     this.perf(dt);
     if (S.phase === 'end' && !this.ended) { this.ended = true; this.endAt = performance.now() + 2500; sound.play('end'); }
@@ -2609,6 +2616,40 @@ export class Game {
     if (fps < 40 && pr > this.q.minPixel) pr = Math.max(this.q.minPixel, pr - 0.05);
     else if (fps > 56 && pr < this.q.pixel) pr = Math.min(this.q.pixel, pr + 0.05);
     if (pr !== this.pr) { this.pr = pr; this.renderer.setPixelRatio(pr); this.renderer.setSize(innerWidth, innerHeight); if (this.composer) { this.composer.setPixelRatio(pr); this.composer.setSize(innerWidth, innerHeight); } }
+  }
+
+  // 1.6.0: Performance test (pause menu / F9): ~20 s in the match, one effect off at a time, the fps of each, the GPU and the settings.
+  // Its table tells which effect costs the frame rate on the player's own machine.
+  async runBench() {
+    if (this.benching || this.disposed) return;
+    this.benching = true;
+    const R = this.renderer, sc = this.scene, W = this.W, wait = ms => new Promise(r => setTimeout(r, ms));
+    const box = document.createElement('div'); box.id = 'bench'; box.innerHTML = '<b>Performance test</b><span>Keep still for about 20 seconds…</span>'; document.body.appendChild(box);
+    const measure = async (warm = 700) => { await wait(warm); this.benchFrames = 0; const t0 = performance.now(); await wait(1600); return this.benchFrames / ((performance.now() - t0) / 1000); };
+    const res = [], step = async (name, on, off, warm) => { if (this.disposed) return; box.querySelector('span').textContent = name + '…'; try { on && on(); res.push([name, await measure(warm)]); } finally { off && off(); } };
+    const hide = pred => { const L = []; sc.traverse(o => { if (o.visible && pred(o)) { o.visible = false; L.push(o); } }); return () => L.forEach(o => { o.visible = true; }); };
+    let un = null;
+    await step('As it is', null, null, 400);
+    if (this.composer) { const c = this.composer; await step('No post-processing (glow, rays, colour, AA)', () => { this.composer = null; }, () => { this.composer = c; }); }
+    if (this.bloom) await step('No glow (bloom)', () => { this.bloom.enabled = false; }, () => { this.bloom.enabled = true; });
+    if (this.rays) await step('No moon rays', () => { this.rays.enabled = false; }, () => { this.rays.enabled = true; });
+    if (W.moon && W.moon.castShadow) await step('No shadows', () => { W.moon.castShadow = false; }, () => { W.moon.castShadow = true; }, 1500);
+    if (W.pool && W.pool.length) await step('No lamp lights', () => { W.benchOff = true; }, () => { W.benchOff = false; });
+    if (sc.environment) { const e = sc.environment; await step('No reflections', () => { sc.environment = null; }, () => { sc.environment = e; }, 1500); }
+    await step('No grass', () => { un = hide(o => o.name === 'grass'); }, () => un && un());
+    await step('No lamp beams / fog / glows', () => { un = hide(o => (o.material && (o.material.blending === THREE.AdditiveBlending || (o.material.transparent && o.renderOrder === 2))) || o.isSprite); }, () => un && un());
+    { const pr = R.getPixelRatio(), set = p => { R.setPixelRatio(p); R.setSize(innerWidth, innerHeight); if (this.composer) { this.composer.setPixelRatio(p); this.composer.setSize(innerWidth, innerHeight); } };
+      await step('Half resolution', () => set(pr * 0.5), () => set(pr)); }
+    await step('Nothing drawn (the ceiling)', () => { this.benchNoDraw = true; }, () => { this.benchNoDraw = false; });
+    this.benching = false;
+    if (this.disposed) { box.remove(); return; }
+    let gpu = ''; try { const gl = R.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); gpu = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch {}
+    const base = res[0] ? res[0][1] : 1, g = this.settings.gfx || {};
+    const lines = [`Granny x DBD performance test`, `GPU: ${gpu}`, `Quality: ${this.settings.quality} · screen ${innerWidth}x${innerHeight} @${devicePixelRatio} · drawn at ${Math.round(R.getPixelRatio() * 100)}% · overrides ${JSON.stringify(g)}`]
+      .concat(res.map(([n, f]) => `${n}: ${f.toFixed(0)} fps${n === 'As it is' ? '' : ` (${f >= base ? '+' : ''}${(f - base).toFixed(0)})`}`));
+    box.innerHTML = `<b>Performance test</b><pre>${lines.map(l => l.replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')).join('\n')}</pre><div><button class="btn small primary" data-c>Copy</button> <button class="btn small" data-x>Close</button></div>`;
+    box.querySelector('[data-c]').onclick = () => { try { navigator.clipboard.writeText(lines.join('\n')); box.querySelector('[data-c]').textContent = 'Copied'; } catch {} };
+    box.querySelector('[data-x]').onclick = () => box.remove();
   }
 
   splat(op = 1) {

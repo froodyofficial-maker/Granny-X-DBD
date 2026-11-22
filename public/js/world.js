@@ -20,8 +20,24 @@ export const QUALITY = {
   // 1.6.0: no ambient-occlusion pass, no film grain, little sharpening (the grain players saw), resolution never drops below
   // 85-90% (it used to fall to 60-70% and look blurry), MSAA on both; pixel density capped at 1.5 on high
   medium: { shadow: 1024, grass: 4500, pixel: 1, bloom: true, post: true, outer: 260, fog: 22, density: 0.032, far: 300, minPixel: 0.85, msaa: 2, sharp: 0.08 },
-  high: { shadow: 2048, grass: 8000, pixel: Math.min(1.5, window.devicePixelRatio || 1), bloom: true, post: true, outer: 440, fog: 36, density: 0.03, far: 600, minPixel: 0.9, msaa: 4, sharp: 0.12, rays: true },
+  // (1.6.0, third pass: the owner found High busy and slow on an RTX 4070: pixel density capped at 1.25, moon rays off by default)
+  high: { shadow: 2048, grass: 8000, pixel: Math.min(1.25, window.devicePixelRatio || 1), bloom: true, post: true, outer: 440, fog: 36, density: 0.03, far: 600, minPixel: 0.9, msaa: 4, sharp: 0.1, rays: false },
 };
+// 1.6.0: Settings > Advanced graphics: per-effect overrides on top of the preset (null / missing = the preset's own value).
+//  res: pixel ratio 0.5..1.5, aa: MSAA 0/2/4, shadow: 0/1024/2048, lights: real lamp lights 0..6, reflect: 0..1 (night-sky
+//  reflections), bloom: glow strength 0..0.8, rays: moon rays, beams: lamp beams, fog: ground-fog layers 0..2, grass: blade count
+export const GFXO = {};
+export function setGfxOverrides(o) { for (const k of Object.keys(GFXO)) delete GFXO[k]; for (const [k, v] of Object.entries(o || {})) if (v != null && v !== '') GFXO[k] = v; }
+export function qualityOf(quality) {
+  const q = { ...(QUALITY[quality] || QUALITY.medium) }, o = GFXO;
+  if (o.shadow != null) { q.shadow = +o.shadow; q.shadowFixed = true; }
+  if (o.grass != null) q.grass = +o.grass;
+  if (o.res != null) { q.pixel = +o.res; q.minPixel = Math.min(q.minPixel, +o.res); q.fixedRes = true; }
+  if (o.aa != null) { q.msaa = +o.aa; q.fixedAA = true; }
+  if (o.rays != null) q.rays = !!o.rays;
+  if (o.bloom != null) { q.bloomK = +o.bloom; if (+o.bloom <= 0) q.bloom = false; }
+  return q;
+}
 
 
 // distance from point to segment
@@ -40,14 +56,14 @@ function lampBeamMat() {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
     uniforms: { col: { value: new THREE.Color(0xffb866) } },
     vertexShader: 'varying vec3 vN; varying vec3 vV; varying float vH; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vH = -position.y / 3.05; gl_Position = projectionMatrix * mv; }',
-    fragmentShader: 'uniform vec3 col; varying vec3 vN; varying vec3 vV; varying float vH; void main(){ float edge = pow(abs(dot(vN, vV)), 1.8); float f = edge * (1.0 - smoothstep(0.05, 1.0, vH)) * smoothstep(0.0, 0.08, vH); gl_FragColor = vec4(col * f * 0.16, 1.0); }',
+    fragmentShader: 'uniform vec3 col; varying vec3 vN; varying vec3 vV; varying float vH; void main(){ float edge = pow(abs(dot(vN, vV)), 1.8); float f = edge * (1.0 - smoothstep(0.05, 1.0, vH)) * smoothstep(0.0, 0.08, vH); gl_FragColor = vec4(col * f * 0.11, 1.0); }',
   }));
 }
 export function buildWorld(M, quality = 'medium') {
   const HF = M.half || HALF;
   if (M.indoor) return buildMeatWorld(M, quality);
   const LK = LOOK[M.map] || LOOK.woods, FOG_COLOR = LK.fog;
-  const q = QUALITY[quality] || QUALITY.medium;
+  const q = qualityOf(quality);
   setDetail(quality);
   const lite = quality === 'potato' || quality === 'low';
   const R = rng(M.seed * 7 + 3);
@@ -66,7 +82,7 @@ export function buildWorld(M, quality = 'medium') {
   moon.position.set(MOON_OFF.x, MOON_OFF.y, MOON_OFF.z);
   if (q.shadow) {
     moon.castShadow = true;
-    const sm = Math.min(2048, realistic() ? q.shadow * 2 : q.shadow); // crisper shadows in the realistic look (1.6.0: at most 2048: 4096 was a big cost)
+    const sm = q.shadowFixed ? q.shadow : Math.min(2048, realistic() ? q.shadow * 2 : q.shadow); // crisper shadows in the realistic look (1.6.0: at most 2048: 4096 was a big cost)
     moon.shadow.mapSize.set(sm, sm);
     const s = moon.shadow.camera; s.left = -34; s.right = 34; s.top = 34; s.bottom = -34; s.near = 5; s.far = 170;
     moon.shadow.bias = -0.0006; moon.shadow.normalBias = 0.04;
@@ -395,7 +411,7 @@ export function buildWorld(M, quality = 'medium') {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), bulbM); bulb.position.set(0.66, 3.16, 0); g.add(bulb);
     const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24), new THREE.MeshBasicMaterial({ map: poolTex, color: LK.lamp, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false }));
     pool.rotation.x = -Math.PI / 2; pool.position.set(0.66, 0.04, 0); g.add(pool);
-    if (!lite) { const beam = new THREE.Mesh(BEAM_GEO(), lampBeamMat()); beam.position.set(0.66, 3.05, 0); beam.renderOrder = 3; g.add(beam); } // (1.6.0: light falling through the mist)
+    if (!lite && GFXO.beams !== false) { const beam = new THREE.Mesh(BEAM_GEO(), lampBeamMat()); beam.position.set(0.66, 3.05, 0); beam.renderOrder = 3; g.add(beam); } // (1.6.0: light falling through the mist)
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: poolTex, color: 0xffc070, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
     glow.scale.setScalar(1.1); glow.position.set(0.66, 3.16, 0); g.add(glow);
     let light = null;
@@ -411,7 +427,7 @@ export function buildWorld(M, quality = 'medium') {
   if (M.city) buildCity(W, M, quality);
   addInteractables(W, M);
   // ---------- rolling ground fog: layered planes with scrolling noise ----------
-  const nf = quality === 'potato' ? 0 : quality === 'low' ? 1 : 2;
+  const nf = GFXO.fog != null ? +GFXO.fog : quality === 'potato' ? 0 : quality === 'low' ? 1 : 2;
   for (let i = 0; i < nf; i++) {
     const t = tex('fogtile').map.clone(); t.needsUpdate = true; t.repeat.set(5 + i, 5 + i);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshBasicMaterial({ map: t, color: LK.groundFog, transparent: true, opacity: (0.05 - i * 0.015) * LK.groundFogK, depthWrite: false }));
@@ -556,7 +572,7 @@ export { barBox };
 // pool (a fixed number, so shaders never recompile) is handed to the strongest ones near the camera, fading in and out.
 const POOL_N = { potato: 1, low: 2, medium: 4, high: 6 };
 export function poolLights(W, quality) {
-  const N = POOL_N[quality] ?? 4, scene = W.scene, virt = [];
+  const N = GFXO.lights != null ? +GFXO.lights : POOL_N[quality] ?? 4, scene = W.scene, virt = [];
   scene.updateMatrixWorld(true);
   scene.traverse(o => { if (o.isPointLight && !o.userData.keep) virt.push(o); });
   for (const L of virt) { const wp = L.getWorldPosition(new THREE.Vector3()); L.parent.remove(L); L.position.copy(wp); L.userData.virtual = true; }
@@ -585,7 +601,7 @@ export function updateLightPool(W, cam, dt) {
   for (const P of W.pool) {
     const L = P.src;
     P.k = Math.max(0, Math.min(1, P.k + (L ? dt * 4 : -dt * 4)));
-    if (L) { P.l.position.copy(L.position); P.l.color.copy(L.color); P.l.distance = L.distance; P.l.decay = L.decay; P.l.intensity = L.intensity * P.k; }
+    if (L) { P.l.position.copy(L.position); P.l.color.copy(L.color); P.l.distance = L.distance; P.l.decay = L.decay; P.l.intensity = W.benchOff ? 0 : L.intensity * P.k; }
     else P.l.intensity *= P.k > 0 ? 0.8 : 0;
   }
 }

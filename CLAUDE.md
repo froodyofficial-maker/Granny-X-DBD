@@ -255,6 +255,16 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
     materials that differ only in colour batched via vertex colours (`batchMats`): a survivor ~45 -> ~10 draws. Aura meshes still sit on
     the joints (skinfx `frames()` measures them). `R.skinned(meshes)` turns the wound blobs into one skinned mesh per set.
   - Same test view (gfx160 high): 1,316 -> 369 draw calls. Draw-call breakdown script pattern: count meshes per top-level scene group.
+- 1.6.0 fourth build (owner: 30 fps on High on the RTX 4070 itself, 240 on Low; "High has too much going on"; wants detailed graphics
+  settings): APK VC 31, exe unpackDirName GrannyxDBD-1.6.0-d. Not reproduced here (SwiftShader can't show a real GPU's costs; no recompiles,
+  no transmission/reflector passes found). Added:
+  - Settings > Advanced graphics (`settings.gfx`, world.js `GFXO` / `setGfxOverrides` / `qualityOf(quality)`): res, aa, shadow (exact size,
+    `shadowFixed`), lights (light pool size), reflect (0 = no scene.environment, else game.js `envK` scales each material's envMapIntensity,
+    re-applied every 2 s for new characters), bloom strength, rays, beams, fog layers, grass count. Values '' = the preset.
+  - High preset calmer: pixel cap 1.25, moon rays off, bloom 0.4 (was 0.6), lamp beams 0.11, sharpen 0.1.
+  - Performance test: pause menu button / F9 -> game.js `runBench()`: ~20 s, one effect off per step (post, bloom, rays, shadows, lamp
+    lights via `W.benchOff`, reflections, grass, additive/fog/sprites, half resolution, nothing drawn), fps table + GPU + settings, Copy.
+    Ask the owner for that table to find the real cost on their machine.
 - Game Jolt browser build for iPhone/iPad (owner: "do the game jolt browser version for ios"): `node tools/build.mjs` then
   `node tools/gamejolt/build-web.mjs` -> tools/gamejolt/GrannyxDBD-<ver>-Web.zip (index.html at the root + public/models, audio, tex, img,
   fonts and the KTX2 transcoder; ~73 MB). On touch screens the page writes a 1280-px viewport (like the APK) and sets `__forceTouch` /

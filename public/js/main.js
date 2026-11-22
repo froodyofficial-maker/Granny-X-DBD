@@ -4,7 +4,7 @@ import { buildMap } from './map.js';
 import { Sim } from './sim.js';
 import { Bots } from './bots.js';
 import { Game } from './game.js';
-import { QUALITY } from './world.js';
+import { QUALITY, setGfxOverrides } from './world.js';
 import { setDetail } from './models.js';
 import { setStyle, realistic, nightEnv, refreshEnvs } from './gfx.js';
 import { initPhoto } from './pbr.js';
@@ -690,6 +690,16 @@ const SHINT = {
   classic: 'Classic: the original painted look. Lighter on older ' + (MOBILE ? 'phones' : 'laptops') + '.',
 };
 seg('set-style', v => { settings.style = v; saveSettings(); $('set-style-hint').textContent = SHINT[v]; stopBG(); makeRenderer(); startBG(); });
+// 1.6.0: Settings > Advanced graphics (settings.gfx: per-effect overrides of the preset; '' = the preset's own value)
+{
+  settings.gfx ||= {};
+  const parse = (k, v) => v === '' ? null : (k === 'rays' || k === 'beams') ? v === 'on' : +v;
+  const shown = (k, v) => v == null ? '' : (k === 'rays' || k === 'beams') ? (v ? 'on' : 'off') : String(v);
+  const fill = () => document.querySelectorAll('[data-gfx]').forEach(el => { el.value = shown(el.dataset.gfx, settings.gfx[el.dataset.gfx]); });
+  document.querySelectorAll('[data-gfx]').forEach(el => el.addEventListener('change', () => { const k = el.dataset.gfx, v = parse(k, el.value); if (v == null) delete settings.gfx[k]; else settings.gfx[k] = v; saveSettings(); setGfxOverrides(settings.gfx); }));
+  const rb = document.getElementById('set-adv-reset'); if (rb) rb.onclick = () => { settings.gfx = {}; saveSettings(); setGfxOverrides(settings.gfx); fill(); };
+  setGfxOverrides(settings.gfx); fill();
+}
 seg('set-quality', v => { settings.quality = v; saveSettings(); $('set-quality-hint').textContent = QHINT[v]; stopBG(); makeRenderer(); startBG(); });
 $('set-dynres').addEventListener('change', e => { settings.dynres = e.target.checked; saveSettings(); });
 $('set-fps').addEventListener('change', e => { settings.showFps = e.target.checked; saveSettings(); });
@@ -1499,6 +1509,7 @@ function onMatchEnd(S, me, sess) {
 }
 
 $('btn-resume').addEventListener('click', () => { if (session && session.game) session.game.pause(false); });
+$('btn-bench').addEventListener('click', () => { if (session && session.game) { session.game.pause(false); session.game.runBench(); } });
 $('btn-quit').addEventListener('click', () => {
   if (!session) return;
   if (session.kind === 'bots') { endSession(); show('p-main'); }
