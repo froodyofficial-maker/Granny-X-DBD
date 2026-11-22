@@ -142,7 +142,7 @@ const shots = await pg.evaluate(async ([SHOT, CFG]) => {
       // Angeline's Yellow Eyes find Mara: from behind Mara, the beam coming at the camera, the house behind Angeline
       const A = sv.find(o => o !== me) || sv[0]; const a = spot(23.4, 9.3, 23.4, 9.3); A.x = a.x; A.z = a.z; A.mv = 0;
       const k = spot(19.6, 8.6, 19.6, 8.6); K.x = k.x; K.z = k.z; K.yaw = yawTo(K, A); K.aim = true; K.abT = 1; A.yaw = yawTo(A, K);
-      const d = dirTo(K, A); cam = new THREE.Vector3(A.x + d.x * 1.6 + d.z * 0.65, 1.45, A.z + d.z * 1.6 - d.x * 0.65); look = new THREE.Vector3(K.x, 1.8, K.z);
+      const d = dirTo(K, A), mid = { x: (A.x + K.x) / 2, z: (A.z + K.z) / 2 }; cam = new THREE.Vector3(mid.x - d.z * 4.4 + d.x * 0.6, 1.3, mid.z + d.x * 4.4 + d.z * 0.6); look = new THREE.Vector3(mid.x - d.x * 0.4, 1.5, mid.z - d.z * 0.4); // (from the side: out of the beam)
       me.x = (A.x + K.x) / 2; me.z = (A.z + K.z) / 2;
     }
   }
