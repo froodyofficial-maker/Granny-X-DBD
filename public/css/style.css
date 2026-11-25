@@ -594,7 +594,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 #show-drag { position: fixed; z-index: 45; top: 110px; bottom: 250px; left: 54vw; right: 2vw; cursor: grab; touch-action: none; }
 #show-drag.lo { left: calc(min(760px, 58vw) + 2vw); bottom: 40px; top: 90px; }
 #show-drag.dragging { cursor: grabbing; }
-#show-drag span { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(233,224,208,.45); text-shadow: 0 1px 3px #000; white-space: nowrap; pointer-events: none; }
+#show-drag > span { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(233,224,208,.45); text-shadow: 0 1px 3px #000; white-space: nowrap; pointer-events: none; }
 .hint-inline { font-size: 12px; color: #8d8578; text-transform: none; letter-spacing: 0; font-family: var(--body, inherit); }
 [data-cam="side"] button { font-size: 16px; padding: 6px 12px; }
 #pause .dialog { max-height: 92vh; overflow-y: auto; }
@@ -1358,3 +1358,59 @@ html.theme-vi #store { background: radial-gradient(ellipse 60% 70% at 78% 50%, r
 /* 1.6.0: the per-character perk pin */
 .perk-pin { margin-left: 10px; align-self: center; font: inherit; font-family: var(--cond); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 9px; cursor: pointer; color: var(--dim); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); }
 .perk-pin:hover { color: #fff; } .perk-pin.on { color: var(--gold); border-color: rgba(216,181,106,.55); background: rgba(216,181,106,.1); }
+.sp-collect { display: flex; justify-content: flex-end; margin: 4px 0 8px; }
+/* 1.7.0: first / third person marks on the killer cards */
+.lo2-por .pov, .pov-legend .pov { position: absolute; top: 3px; left: 3px; font-style: normal; font-family: var(--cond); font-size: 10px; letter-spacing: .06em; padding: 1px 4px; border-radius: 2px; line-height: 1.3; }
+.pov.fp { background: rgba(179,32,30,.9); color: #fff; } .pov.tp { background: rgba(40,60,90,.92); color: #dfe8ff; }
+.pov-legend { margin: 6px 0 0; font-size: 12px; color: var(--dim); } .pov-legend .pov { position: static; display: inline-block; margin: 0 3px 0 0; }
+.lo2-head .pov-tag { margin-left: auto; font-size: 11px; padding: 2px 8px; border: 1px solid var(--line); }
+.lo2-head .pov-tag.fp { color: #ff8a80; border-color: rgba(179,32,30,.6); } .lo2-head .pov-tag.tp { color: #a9c4ff; border-color: rgba(90,120,180,.6); }
+.lobby-invite { margin: 10px 0 4px; } .lobby-invite .fr-row { margin-top: 4px; }
+/* 1.7.0: executions are filmed: letterbox bars, the HUD steps aside, the execution's name as a title card */
+body::before, body::after { content: ''; position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 40; pointer-events: none; transition: height .45s ease; }
+body::before { top: 0; } body::after { bottom: 0; }
+body.mori::before, body.mori::after { height: 10.5vh; }
+body.mori #hud > :not(#splat):not(#fx-red):not(#fx-vignette):not(#feed), body.mori #skill, body.mori #touch { opacity: 0; transition: opacity .3s; pointer-events: none; }
+#mori-title { position: fixed; left: 5vw; bottom: calc(10.5vh + 22px); z-index: 41; pointer-events: none; opacity: 0; color: #efe6d6; text-shadow: 0 2px 12px #000; }
+#mori-title small { display: block; font-family: var(--cond, sans-serif); letter-spacing: .32em; text-transform: uppercase; font-size: 13px; color: #c23a30; }
+#mori-title b { display: block; font-family: 'IM Fell English SC', serif; font-weight: 400; font-size: 44px; letter-spacing: .04em; }
+#mori-title.show { animation: moriT 3.2s ease forwards; }
+@keyframes moriT { 0% { opacity: 0; transform: translateX(-14px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+/* 1.7.0: stats grid, executions collection, replay viewer, player cards */
+.pf-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pf-stats div { background: rgba(255,255,255,.04); border: 1px solid var(--line); padding: 8px 10px; }
+.pf-stats b { display: block; font-family: var(--display); font-weight: 400; font-size: 24px; color: var(--bone); line-height: 1.1; }
+.pf-stats span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.pf-moris { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.pf-mori { display: flex; align-items: center; gap: 10px; padding: 8px; background: linear-gradient(90deg, rgba(120,10,8,.22), rgba(255,255,255,.03)); border: 1px solid rgba(179,32,30,.35); }
+.pf-mori img { width: 54px; height: 54px; object-fit: cover; border: 1px solid var(--line); }
+.pf-mori > div { flex: 1; min-width: 0; } .pf-mori b { display: block; font-family: 'IM Fell English SC', serif; font-weight: 400; font-size: 18px; color: var(--bone); }
+.pf-mori small { display: block; color: #c23a30; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; } .pf-mori span { font-size: 12px; color: var(--dim); }
+.pf-mori.locked { background: rgba(255,255,255,.02); border-color: var(--line); } .pf-mori.locked img { filter: grayscale(1) brightness(.35); } .pf-mori.locked b { color: var(--dim); }
+.pf-mori .lock { font-style: normal; width: 34px; text-align: center; color: var(--dim); font-size: 22px; }
+#mori-view, #pcard { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(0,0,0,.82); }
+#mori-view.hidden, #pcard.hidden { display: none; }
+.mv-box { width: min(1100px, 94vw); background: #000; border: 1px solid rgba(179,32,30,.5); box-shadow: 0 20px 80px #000; position: relative; }
+.mv-stage { width: 100%; aspect-ratio: 21 / 9; position: relative; background: #050507; overflow: hidden; } .mv-stage canvas { display: block; width: 100% !important; height: 100% !important; }
+.mv-load { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); letter-spacing: .2em; text-transform: uppercase; font-size: 12px; }
+.mv-cap { position: absolute; left: 0; right: 0; bottom: 92px; text-align: center; color: #efe6d6; font-style: italic; font-size: 18px; text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity .3s; pointer-events: none; } .mv-cap.on { opacity: 1; }
+.mv-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid rgba(179,32,30,.35); background: linear-gradient(180deg, #120808, #070505); }
+.mv-bar > div { flex: 1; min-width: 0; } .mv-bar small { color: #c23a30; letter-spacing: .3em; text-transform: uppercase; font-size: 11px; display: block; }
+.mv-bar b { font-family: 'IM Fell English SC', serif; font-weight: 400; font-size: 28px; color: var(--bone); display: block; } .mv-bar span { color: var(--dim); font-size: 13px; }
+.pc-box { width: min(560px, 92vw); background: rgba(14,10,12,.97); border: 1px solid var(--line); padding: 18px 20px; box-shadow: 0 20px 70px #000; }
+.pc-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; } .pc-top > div { flex: 1; } .pc-top .pf-name { font-size: 28px; color: var(--acc); }
+.pc-top .pf-tl { display: block; color: var(--dim); font-size: 13px; }
+.pc-moris { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 12px; }
+.pc-moris span { text-align: center; } .pc-moris img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(179,32,30,.5); }
+.pc-moris small { display: block; font-size: 10px; color: var(--dim); line-height: 1.2; margin-top: 2px; } .pc-moris .locked img { filter: grayscale(1) brightness(.3); border-color: var(--line); }
+.pc-box .row { display: flex; justify-content: flex-end; }
+#lobby-slots .slot[data-pc], .ldb-row[data-rid] { cursor: pointer; } #lobby-slots .slot[data-pc]:hover, .ldb-row[data-rid]:hover { background: rgba(255,255,255,.06); }
+/* 1.7.0: Custom Game options */
+.custom-cfg { border: 1px solid rgba(224,184,74,.35); background: rgba(224,184,74,.05); padding: 10px 12px; margin: 6px 0 10px; }
+.cg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; } .cg-row > label { min-width: 150px; color: var(--dim); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.cg-num { display: inline-flex; align-items: center; gap: 6px; } .cg-num b { min-width: 28px; text-align: center; font-family: var(--display); font-weight: 400; font-size: 24px; color: var(--bone); } .cg-num small { color: var(--dim); font-size: 11px; }
+.cg-pick { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin: 2px 0 6px; } .cg-pick small { color: var(--dim); font-size: 11px; }
+.cg-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; background: rgba(255,255,255,.04); border: 1px solid var(--line); color: var(--dim); font-size: 12px; cursor: pointer; }
+.cg-chip svg { width: 16px; height: 16px; } .cg-chip.on { color: var(--bone); border-color: var(--gold, #e0b84a); background: rgba(224,184,74,.14); } .cg-chip.ban.on { border-color: #c23a30; background: rgba(194,58,48,.18); text-decoration: line-through; }
+.cg-buy { display: flex; align-items: center; gap: 12px; } .cg-buy > div { flex: 1; } .cg-buy b { display: block; font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--bone); } .cg-buy span { color: var(--dim); font-size: 13px; }
+.cg-art { display: grid; place-items: center; width: 84px; height: 84px; color: var(--gold, #e0b84a); } .cg-art svg { width: 64px; height: 64px; }

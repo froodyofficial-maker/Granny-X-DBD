@@ -107,12 +107,13 @@ export const unpublishMe = p => { if (p.fid) publishBoard(p.fid, null); };
 
 const TABS = [['c', 'Collectables'], ['k', 'Kills'], ['e', 'Escapes'], ['lv', 'Level']];
 let tab = 'c', stopWatch = null, rows = [];
-const clean = E => ({ id: String(E.id), n: String(E.n || 'Player').slice(0, 16), lv: E.lv | 0, k: E.k | 0, e: E.e | 0, m: E.m | 0, c: Math.min(COLLECTABLES.length, E.c | 0), ct: E.ct | 0, sh: (Array.isArray(E.sh) ? E.sh : []).filter(k => COLL[k]).slice(0, 3), acc: /^#[0-9a-f]{3,8}$/i.test(E.acc || '') ? E.acc : '', vi: E.vi === true, t: +E.t || 0 });
+const clean = E => ({ id: String(E.id), n: String(E.n || 'Player').slice(0, 16), lv: E.lv | 0, k: E.k | 0, e: E.e | 0, m: E.m | 0, c: Math.min(COLLECTABLES.length, E.c | 0), ct: E.ct | 0, sh: (Array.isArray(E.sh) ? E.sh : []).filter(k => COLL[k]).slice(0, 3), acc: /^#[0-9a-f]{3,8}$/i.test(E.acc || '') ? E.acc : '', vi: E.vi === true, t: +E.t || 0, mg: E.mg | 0, mf: E.mf | 0, mo: Array.isArray(E.mo) ? E.mo.slice(0, 12).map(String) : [], ti: String(E.ti || '').slice(0, 40), av: String(E.av || '') });
+let onCard = null;
 export function renderBoard(el, me, badge) {
   const sorted = rows.map(clean).filter(r => r.m > 0 && Date.now() - r.t < 120 * 864e5)
     .sort((a, b) => (b[tab] - a[tab]) || (tab === 'c' ? b.ct - a.ct : b.lv - a.lv) || (a.t - b.t));
   const mine = sorted.findIndex(r => r.id === me);
-  const row = (r, i) => `<div class="ldb-row ${r.id === me ? 'me' : ''}"><span class="ldb-rk">${i + 1}</span><span class="ldb-nm" ${r.acc ? `style="color:${r.acc}"` : ''}>${esc(r.n)}${r.vi ? ' ' + badge(16) : ''}</span>
+  const row = (r, i) => `<div class="ldb-row ${r.id === me ? 'me' : ''}" data-rid="${esc(r.id)}" title="See ${esc(r.n)}'s profile"><span class="ldb-rk">${i + 1}</span><span class="ldb-nm" ${r.acc ? `style="color:${r.acc}"` : ''}>${esc(r.n)}${r.vi ? ' ' + badge(16) : ''}</span>
     <span class="ldb-sh">${r.sh.map(k => `<i style="--rc:${RARITY[COLL[k].rarity]}" title="${esc(COLL[k].name)}">${thumbs[k] ? `<img alt="" src="${thumbs[k]}">` : ''}</i>`).join('')}</span>
     <span class="ldb-v">${tab === 'c' ? `${r.c}<small>/${COLLECTABLES.length} · ${r.ct} finds</small>` : tab === 'lv' ? levelEmblem(r.lv, 30, { label: false }) : r[tab].toLocaleString()}</span></div>`;
   el.innerHTML = `<div class="ldb-tabs">${TABS.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-lbt="${k}">${n}</button>`).join('')}</div>
@@ -120,8 +121,10 @@ export function renderBoard(el, me, badge) {
     ${mine >= 100 ? `<div class="ldb-list mine">${row(sorted[mine], mine)}</div>` : ''}
     <p class="hint">Everyone who has played a match is on the board (switch it off in Settings). It updates after every match. ${sorted.length} player${sorted.length === 1 ? '' : 's'} so far.</p>`;
   el.querySelectorAll('[data-lbt]').forEach(b => b.onclick = () => { tab = b.dataset.lbt; renderBoard(el, me, badge); });
+  el.querySelectorAll('[data-rid]').forEach(d => d.onclick = () => { const r = sorted.find(x => x.id === d.dataset.rid); if (r && onCard) onCard(r); }); // (1.7.0: a player's card)
 }
-export function openBoard(el, me, badge) {
+export function openBoard(el, me, badge, cb) {
+  onCard = cb || null;
   if (stopWatch) stopWatch();
   renderBoard(el, me, badge);
   makeThumbs().then(() => renderBoard(el, me, badge)).catch(() => {});

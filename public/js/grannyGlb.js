@@ -168,7 +168,7 @@ export function animateNosferatu(R, s, dt) {
   R.prevAtk = s.atk;
   const A = R.acts, sp = s.speed || 0;
   let want = 'idle', rate = 1, scrub = null, fast = false, crouch = 0, lean = 0;
-  if (s.exec && s.exec.role === 'killer') { want = 'attack'; scrub = 0.25 + Math.min(1, s.exec.f) * 0.3; fast = true; lean = 0.25; }
+  if (s.exec && s.exec.role === 'killer') { want = 'attack'; scrub = s.exec.scrub ?? 0.25 + Math.min(1, s.exec.f) * 0.3; fast = true; lean = s.exec.lean ?? 0.25; }
   else if (s.leap != null) { want = 'attack'; scrub = 0.32 + s.leap * 0.25; fast = true; lean = 0.55; }      // claws out, flying
   else if (s.stun) { want = 'hurt'; rate = 1; fast = true; }
   else if ((s.atk === 1 || s.atk === 2) && R.hitT != null && R.hitT < 2.47) { want = 'attack'; scrub = R.hitT / 2.47; fast = true; }
@@ -269,7 +269,7 @@ export function animateAngeline(R, s, dt) {
   R.ey = (R.ey || 0) + ((s.aim ? 1 : 0) - (R.ey || 0)) * e(7);
   R.st = (R.st || 0) + ((s.stun ? 1 : 0) - (R.st || 0)) * e(10);
   let atk = -1;
-  if (s.exec && s.exec.role === 'killer') atk = Math.min(1, s.exec.f * 1.4);
+  if (s.exec && s.exec.role === 'killer') atk = s.exec.atk ?? Math.min(1, s.exec.f * 1.4);
   else if (R.hitT != null && R.hitT < 0.75) atk = R.hitT / 0.75;
   const t = R.t, gl = R.gl, ey = R.ey;
   // every frame from the rest pose
@@ -308,6 +308,9 @@ export function animateAngeline(R, s, dt) {
     if (wind > 0) { up.lerp(d(-0.25, 0.9, out * 0.35), wind).normalize(); fo.lerp(d(0.3, 0.9, out * 0.15), wind).normalize(); }
     if (lunge > 0) { up.lerp(d(1, -0.05, out * 0.3), lunge).normalize(); fo.lerp(d(1, -0.28, out * 0.1), lunge).normalize(); }
     if (R.st > 0.01) { up.lerp(d(0.2, 0.8, out * 0.6), R.st).normalize(); fo.lerp(d(0, 1, out * 0.3), R.st).normalize(); }
+    // 1.7.0 Hush Now: arms round the survivor, forearms wrapped in behind their back (and pushed in when the claws go in)
+    const hug = s.exec && s.exec.role === 'killer' ? s.exec.hug || 0 : 0;
+    if (hug > 0) { const pin = s.exec.pin || 0; up.lerp(d(0.85, -0.3, out * 0.42), hug).normalize(); fo.lerp(d(0.4 + pin * 0.3, -0.05, -out * (0.95 - pin * 0.25)), hug).normalize(); }
     // the collarbones are shrugged up in the file's pose: level them out (a little up in the wind-up)
     aimBone(A.cl, A.up, d(lunge * 0.25, -0.12 + wind * 0.35, out), 1);
     aimBone(A.up, A.fo, up, 1);
@@ -450,7 +453,7 @@ export function animateSlendrina(R, s, dt) {
   R.mixer.update(dt);
   R.holder.position.y = 0.16 + Math.sin(R.t * 1.7) * 0.07;
   // she leans into a strike, and tips back when stunned
-  const lean = s.atk === 1 ? 0.28 : s.stun ? -0.22 : s.speed > 2 ? 0.1 : 0;
+  const lean = s.exec ? 0.12 : s.atk === 1 ? 0.28 : s.stun ? -0.22 : s.speed > 2 ? 0.1 : 0;
   R.holder.rotation.x += (lean - R.holder.rotation.x) * Math.min(1, dt * 8);
 }
 export function makeGrannyGlb(sk = {}, lite = false) {
@@ -774,7 +777,14 @@ export function animateGranny(R, s, dt) {
   R.prevAtk = s.atk;
   const A = R.acts, sp = s.speed || 0;
   let want = 'idle', rate = 1, scrub = null, fast = false;
-  if (s.exec && s.exec.role === 'killer') {
+  if (s.exec && s.exec.role === 'killer' && R.grandpa) {
+    // 1.7.0 Last Round: the gun comes up and points down at them, two shots, each racked after (mori.js)
+    const E = s.exec;
+    if (E.shot != null) { want = 'Shoot'; scrub = 0.42 + E.shot * 0.5; fast = true; }
+    else if (E.aim || E.pump != null) { want = 'Shoot'; scrub = 0.4; fast = true; }
+    else want = E.f < 0.12 ? 'idle' : 'Look';
+  }
+  else if (s.exec && s.exec.role === 'killer') {
     // Bedtime Trap: bend down and set the trap, then the shove, then stand over them
     const f = s.exec.f;
     if (f < 0.34) { want = 'lookBed'; rate = 1.2; } else if (f < 0.6) { want = 'Hit'; scrub = 0.25 + (f - 0.34) / 0.26 * 0.6; fast = true; } else want = 'Look';
@@ -804,9 +814,26 @@ export function animateGranny(R, s, dt) {
     if (n === want) { if (scrub != null) { a.paused = true; a.time = scrub * a.getClip().duration; } else { a.paused = false; a.timeScale = rate; } }
     else if (R.w[n] === 0) a.paused = true;
   }
+  if (R._spine && R._spineRest) R._spine.quaternion.copy(R._spineRest); // (the clips don't move this bone: undo last frame's bend)
   R.mixer.update(dt);
-  if (R.grandpa && s.pump != null) grandpaPump(R, s.pump);
+  if (R.grandpa && s.exec && s.exec.role === 'killer' && s.exec.bend) bendSpine(R, s.exec.bend);
+  if (R.grandpa && (s.pump != null || (s.exec && s.exec.pump != null))) grandpaPump(R, s.exec && s.exec.pump != null ? s.exec.pump : s.pump);
   if (R.follow) R.follow();
+}
+// 1.7.0: lean the upper body forward about the model's own right axis (Grandpa pointing the gun down at someone on the floor)
+const _bq = new THREE.Quaternion(), _bq2 = new THREE.Quaternion(), _bax = new THREE.Vector3();
+function bendSpine(R, ang) {
+  if (R._spine === undefined) { let b = null; R.root.traverse(o => { if (!b && o.isBone && /^spine/i.test(o.name || '') && !/1|2|3/.test(o.name)) b = o; }); if (!b) R.root.traverse(o => { if (!b && o.isBone && /spine/i.test(o.name || '')) b = o; }); R._spine = b || null; }
+  const b = R._spine; if (!b || !b.parent) return;
+  if (!R._spineRest) R._spineRest = b.quaternion.clone();
+  R.root.updateMatrixWorld(true);
+  R.root.getWorldQuaternion(_bq); _bax.set(1, 0, 0).applyQuaternion(_bq).normalize(); // the model's right (local +x)
+  b.parent.getWorldQuaternion(_bq2);
+  const w = new THREE.Quaternion().setFromAxisAngle(_bax, ang);
+  // world rotation -> the bone's parent space: q' = p^-1 * w * p * q
+  const pinv = _bq2.clone().invert();
+  b.quaternion.premultiply(pinv.multiply(w).multiply(_bq2));
+  b.updateMatrixWorld(true);
 }
 // 1.6.0: Grandpa racks the shotgun with his left hand after a shot: the hand goes onto the fore-end under the barrel and slides
 // back toward him and forward again (two-bone IK on the left arm), the slide (ShotgunPipa) going with it. Bone names lose their

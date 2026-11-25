@@ -28,14 +28,16 @@ import { ACTIONS, bound, keyName, RESERVED } from './keybinds.js';
 import { hostRoom, joinRoom, relayAvailable, watchLobbies } from './net.js';
 import { CHAR_LEVEL, STATS, ITEMS, KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, DEFAULT_SURV_PERKS, DEFAULT_KILLER_PERKS, BOT_NAMES, SNAP_RATE, NET_PROTOCOL, MODES, LORE, PERK_PRICES, PERK_SLOTS, SIDEKICKS, SKINS, VERSION, CHAPTERS, CHAPTER_OF , NEWSLETTER , PLAY_K, PLAY_S, playable, POWER_LV, powerReach } from './config.js';
 import { embersOf } from './rules.js';
-import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS, modeOpen, nowMs, skinOf, INBOX as INBOX_ALL } from './config.js';
+import { ADDONS, ADDON_SLOTS, cleanAddons, GIFT_CHARS, modeOpen, nowMs, skinOf, INBOX as INBOX_ALL, CUSTOM_PRICE, CUSTOM_MAX } from './config.js';
 const INBOX = INBOX_ALL.filter(m => !m.from || nowMs() >= m.from); // (a season's message shows up when it starts)
 import { readCode, makeGift } from './codes.js';
 import { art, forget as forgetArt } from './portraits.js';
 import { levelOf, rankOf, rankBadge, applyMatch, SEASON, seasonTier, seasonEnds, TIERS, PIPS_PER_GRADE, PASS_PRICE, progOf, seasonRoll, charLv, charOf, statsSpent, freePoints, matchStats, trainOne } from './progress.js';
 import { Friends, fmtCode, GIFT_MAX } from './friends.js';
 import { VI, viOpen, viDaysLeft, viOf, viHas, viRecord, viBadge, applyViTheme, ownsViTheme, viThemeAvail } from './vi.js';
-import { addColl, collShelfHTML, showcaseHTML, bindShelf, boardEntry, publishMe, unpublishMe, openBoard, closeBoard } from './collect.js';
+import { addColl, collShelfHTML, showcaseHTML, bindShelf, boardEntry, publishMe, unpublishMe, openBoard, closeBoard, collCount } from './collect.js';
+import { MORI } from './mori.js';
+import { openMoriView } from './moriview.js';
 import { Awards, AWARD, revealOf } from './awards.js';
 
 window.__nbBooted = true;
@@ -321,7 +323,7 @@ function openPanel(id, title, wide = false) {
   if (id === 'p-pass') renderPass();
   if (id === 'p-profile') renderProfile();
   if (id === 'p-vi') renderViPanel();
-  if (id === 'p-lb') { publishMe(profile, myEntry, true); openBoard($('lb-body'), profile.fid, viBadge); } else closeBoard();
+  if (id === 'p-lb') { publishMe(profile, myEntry, true); openBoard($('lb-body'), profile.fid, viBadge, r => openCard(r.id === profile.fid ? myCard() : r)); } else closeBoard();
   if (id === 'p-friends') renderFriends();
 }
 function closePanel(byPlayer) {
@@ -597,8 +599,9 @@ function renderLoadout(container, role, compact, onChange) {
       return `<button class="inv-d ${lo.perks.includes(k) ? 'eq' : ''} ${o ? '' : 'locked'} ${f ? '' : 'other'} ${k === loSel ? 'sel' : ''}" data-perk="${k}" title="${esc(p.name)}"><span class="diamond ${role === 'killer' ? 'k' : ''} ${p.only ? 'ex' : ''}">${icon(k)}</span>${!o ? `<i class="pr">${(perkPrice(k) / 1000).toFixed(1).replace('.0', '')}k</i>` : ''}</button>`;
     }).join('');
     container.innerHTML = `<div class="lo2">
-      <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
-      <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span>` : ''}</div>
+      <div class="lo2-chars">${Object.values(defs).filter(c => shownChar(c.id)).map(c => `<button class="lo2-por ${lo.char === c.id ? 'on' : ''} ${ownsChar(c.id) ? '' : 'locked'}" data-c="${c.id}" title="${esc(c.name)}"><img alt="" src="${art('portrait', c.id, skinId(c.id), 120, 120)}"><span>${esc(c.name.replace(/^The /, ''))}</span>${role === 'killer' ? `<i class="pov ${c.tpv ? 'tp' : 'fp'}" title="${c.tpv ? 'Third person: you see her over the shoulder' : 'First person: you see through their eyes'}">${c.tpv ? '3RD' : '1ST'}</i>` : ''}${ownsChar(c.id) ? '' : `<i class="lock">${LIMITED(c.id) ? 'LIMITED' : 'DLC'}</i>`}</button>`).join('')}</div>
+      <div class="lo2-head"><b>${esc(charName0(lo.char))}</b>${role === 'killer' && defs[lo.char] ? `<span>${icon(POWER_ICON[lo.char])}${esc(defs[lo.char].ability.name)}</span><span class="pov-tag ${defs[lo.char].tpv ? 'tp' : 'fp'}">${defs[lo.char].tpv ? 'Third-person killer' : 'First-person killer'}</span>` : ''}</div>
+      ${role === 'killer' ? '<p class="pov-legend"><i class="pov fp">1ST</i> first person: you see through the killer\'s eyes, like in Dead by Daylight · <i class="pov tp">3RD</i> third person: the camera is over the killer\'s shoulder</p>' : ''}
       ${levelHTML(role, lo.char)}
       ${role === 'killer' ? kidRowHTML() : itemRowHTML() + addonRowHTML() + crowRowHTML()}
       
@@ -889,7 +892,9 @@ function addonsHTML() {
   const G = ITEMS.gtaps, gOwn = ownsPS();
   const ps = viThemeHTML() + (!viOpen() ? '' : viPassHTML() + `<div class="ad-card gtaps-card legendary"><span class="gtaps-art big"></span><div class="ad-b"><small>Vice Nights · survivor item</small><b>${esc(G.name)}</b><p>${esc(G.desc)}</p><em class="hint">Yours until the event ends (30 November). Carry it from the survivor Loadout (Item). Also in the GTA VI Pass.</em></div>
       <div class="ad-buy">${gOwn ? `<button class="btn ${myItem() === 'gtaps' ? '' : 'primary'}" data-pseq>${myItem() === 'gtaps' ? 'Carrying it' : 'Carry it'}</button>` : `<span class="ch-price">${price(G.price)}</span><button class="btn primary" data-psbuy>Buy</button>`}</div></div>`);
-  return `${ps}${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
+  const cg = `<div class="ad-card cg-card legendary"><span class="cg-art big">${icon('card') || ''}</span><div class="ad-b"><small>Game mode · bot matches</small><b>Custom Game</b><p>Your own rules: any number of killers against any number of survivors (up to ${CUSTOM_MAX.k} killers, ${CUSTOM_MAX.s} survivors, ${CUSTOM_MAX.total} in all), the bot killers' and bot teammates' perks and add-ons, and which items the chests may hold.</p></div>
+      <div class="ad-buy">${ownsCustom() ? `<button class="btn primary" data-cgplay>Play it</button>` : `<span class="ch-price">${price(CUSTOM_PRICE)}</span><button class="btn primary" data-cgbuy>Buy</button>`}</div></div>`;
+  return `${cg}${ps}${teddy}<div class="ch-row-title">Add-ons · Dead by Daylight style, for your flashlight (and a taser found in a chest). Two slots in the survivor Loadout. <span class="hint">Add-ons idea by Ommm &amp; WolfSpider.</span></div>
     <div class="ad-grid">${Object.entries(ADDONS).map(card).join('')}</div>`;
 }
 // ---------- codes (1.3.2, back in 1.4.4 with its own main-menu button): secret codes, gift codes, backup codes ----------
@@ -982,6 +987,8 @@ function sidekicksHTML() {
 
 function bindStore(body) {
   bindCodes(body);
+  body.querySelectorAll('[data-cgbuy]').forEach(b => b.onclick = buyCustom);
+  body.querySelectorAll('[data-cgplay]').forEach(b => b.onclick = () => { closeStore(); navActions['play-survivor'](); botsCfg.gm = 'custom'; $('bots-gm').value = 'custom'; $('bots-gm').dispatchEvent(new Event('change')); });
   body.querySelectorAll('[data-teddybuy]').forEach(b => b.onclick = () => { if (ownsTeddy() || !spend(ITEMS.teddy.price, 'Teddy (' + SEASON.name + ')')) return; profile.teddy = SEASON.id; profile.survivor.item = 'teddy'; saveProfile(); sound.play('escaped'); toast('The Teddy is yours for the rest of ' + SEASON.name + '. Hold it up with RMB.'); renderStore(); });
   bindViPass(body);
   body.querySelectorAll('[data-psbuy]').forEach(b => b.onclick = () => { if (ownsPS() || !spend(ITEMS.gtaps.price, ITEMS.gtaps.name)) return; profile.gtaps = true; profile.survivor.item = 'gtaps'; saveProfile(); sound.play('escaped'); toast('GTA VI (PlayStation) is yours. Throw it at the killer with RMB.'); renderStore(); });
@@ -1096,8 +1103,8 @@ if (profile.lastVersion !== VERSION) {
 // ---------- bot match ----------
 const botsCfg = { role: 'survivor', team: 3, surv: 4, killer: 'granny', killer2: 'random', diff: 'normal', sdiff: 'normal', map: 'granny', gm: 'classic' };
 // game mode pickers (bot match and lobby)
-const gmOptions = () => Object.entries(MODES).filter(([id]) => modeOpen(id)).map(([id, m]) => `<option value="${id}">${m.event ? '★ ' : ''}${m.name} (${m.short})</option>`).join('');
-$('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions();
+const gmOptions = lob => Object.entries(MODES).filter(([id, m]) => modeOpen(id) && !(lob && m.botsOnly)).map(([id, m]) => `<option value="${id}">${m.event ? '★ ' : ''}${m.name} (${m.short})</option>`).join('');
+$('bots-gm').innerHTML = gmOptions(); $('lobby-gm').innerHTML = gmOptions(true);
 const gmDesc = gm => (MODES[gm] || MODES.classic).desc;
 $('bots-gm-desc').textContent = gmDesc('classic');
 $('bots-gm').addEventListener('change', e => { botsCfg.gm = e.target.value; $('bots-gm-desc').textContent = gmDesc(botsCfg.gm); renderBotsPanel(); });
@@ -1111,8 +1118,65 @@ $('bots-map').addEventListener('change', e => { botsCfg.map = e.target.value; })
 for (const id of ['bots-killer', 'bots-killer2']) for (const o of [...$(id).options]) if (KILLERS[o.value] && !PLAY_K.includes(o.value)) o.remove();
 $('bots-killer').addEventListener('change', e => { botsCfg.killer = e.target.value; });
 $('bots-killer2').addEventListener('change', e => { botsCfg.killer2 = e.target.value; });
+// ---------- 1.7.0: Custom Game (bought once in the Store, bot matches) ----------
+const ownsCustom = () => !!profile.customGame;
+function customCfg() {
+  const C = profile.customCfg ||= {};
+  const d = { k: 1, s: 4, kPerks: 'random', kPick: [], sPerks: 'random', sPick: [], sAddons: 'random', aPick: [], sItem: 'random', ban: [], kSame: false };
+  for (const key in d) if (C[key] === undefined) C[key] = Array.isArray(d[key]) ? d[key].slice() : d[key];
+  C.k = Math.max(1, Math.min(CUSTOM_MAX.k, C.k | 0)); C.s = Math.max(1, Math.min(CUSTOM_MAX.s, C.s | 0));
+  while (C.k + C.s > CUSTOM_MAX.total) { if (C.s > 1) C.s--; else C.k--; }
+  return C;
+}
+function renderCustom() {
+  const box = $('bots-custom'), on = botsCfg.gm === 'custom';
+  box.classList.toggle('hidden', !on); if (!on) return;
+  if (!ownsCustom()) {
+    box.innerHTML = `<div class="cg-buy"><div><b>Custom Game</b><span>Set every rule yourself: up to ${CUSTOM_MAX.k} killers or ${CUSTOM_MAX.s} survivors (${CUSTOM_MAX.total} in all), the bots' perks and add-ons, and which items the chests may hold. Yours for good.</span></div><span class="ch-price">${price(CUSTOM_PRICE)}</span><button class="btn primary" data-cgbuy>Buy</button></div>`;
+    box.querySelector('[data-cgbuy]').onclick = buyCustom; return;
+  }
+  const C = customCfg(), num = (id, v, max) => `<div class="cg-num"><button class="btn small" data-cgn="${id}" data-d="-1">−</button><b>${v}</b><button class="btn small" data-cgn="${id}" data-d="1">+</button><small>max ${max}</small></div>`;
+  const seg3 = (id, v, opts) => `<div class="seg cg-seg">${opts.map(([k, l]) => `<button data-cgs="${id}" data-v="${k}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const pick = (id, list, pool, max) => `<div class="cg-pick">${Object.entries(pool).map(([k, P]) => `<button class="cg-chip ${list.includes(k) ? 'on' : ''}" data-cgp="${id}" data-k="${k}" title="${esc(P.desc || '')}">${icon(k) || ''}<span>${esc(P.name)}</span></button>`).join('')}<small>${list.length} / ${max}</small></div>`;
+  const flashAddons = Object.fromEntries(Object.entries(ADDONS).filter(([, a]) => a.item === 'flashlight'));
+  const me = botsCfg.role, kTot = C.k, sTot = C.s;
+  box.innerHTML = `
+    <div class="cg-row"><label>Killers</label>${num('k', C.k, CUSTOM_MAX.k)}</div><div class="cg-row"><label>Survivors</label>${num('s', C.s, CUSTOM_MAX.s)}</div>
+    <p class="hint">${kTot} killer${kTot > 1 ? 's' : ''} against ${sTot} survivor${sTot > 1 ? 's' : ''} (you are one of the ${me === 'killer' ? 'killers' : 'survivors'}; everyone else is a bot). Up to ${CUSTOM_MAX.total} players in all.</p>
+    <div class="cg-row"><label>Bot killers' perks</label>${seg3('kPerks', C.kPerks, [['random', 'Random'], ['none', 'None'], ['pick', 'Pick']])}</div>
+    ${C.kPerks === 'pick' ? pick('kPick', C.kPick, Object.fromEntries(Object.entries(KILLER_PERKS).filter(([, P]) => !P.only)), PERK_SLOTS) : ''}
+    <div class="cg-row"><label>Bot survivors' perks</label>${seg3('sPerks', C.sPerks, [['random', 'Random'], ['none', 'None'], ['pick', 'Pick']])}</div>
+    ${C.sPerks === 'pick' ? pick('sPick', C.sPick, Object.fromEntries(Object.entries(SURV_PERKS).filter(([, P]) => !P.only)), PERK_SLOTS) : ''}
+    <div class="cg-row"><label>Bot survivors' add-ons</label>${seg3('sAddons', C.sAddons, [['random', 'Random'], ['none', 'None'], ['pick', 'Pick']])}</div>
+    ${C.sAddons === 'pick' ? pick('aPick', C.aPick, flashAddons, ADDON_SLOTS) : ''}
+    <div class="cg-row"><label>Bot survivors' item</label>${seg3('sItem', C.sItem, [['random', 'Random'], ['flashlight', 'Flashlight']])}</div>
+    <div class="cg-row"><label>Banned from chests</label><div class="cg-pick">${[['taser', 'Taser'], ['pepper', 'Pepper Spray'], ['flashlight', 'Flashlight']].map(([k, l]) => `<button class="cg-chip ban ${C.ban.includes(k) ? 'on' : ''}" data-cgban="${k}">${icon(k) || ''}<span>${l}</span></button>`).join('')}</div></div>`;
+  const save = () => { saveProfile(); renderCustom(); };
+  box.querySelectorAll('[data-cgn]').forEach(b => b.onclick = () => { const id = b.dataset.cgn, d = +b.dataset.d; C[id] = Math.max(1, Math.min(CUSTOM_MAX[id], C[id] + d)); if (C.k + C.s > CUSTOM_MAX.total) { toast(`At most ${CUSTOM_MAX.total} players in a match.`); C[id] -= d; } sound.play('click'); save(); });
+  box.querySelectorAll('[data-cgs]').forEach(b => b.onclick = () => { C[b.dataset.cgs] = b.dataset.v; sound.play('click'); save(); });
+  box.querySelectorAll('[data-cgp]').forEach(b => b.onclick = () => { const L = C[b.dataset.cgp], k = b.dataset.k, max = b.dataset.cgp === 'aPick' ? ADDON_SLOTS : PERK_SLOTS; const i = L.indexOf(k); if (i >= 0) L.splice(i, 1); else if (L.length < max) L.push(k); else { toast(`At most ${max}.`); return; } sound.play('click'); save(); });
+  box.querySelectorAll('[data-cgban]').forEach(b => b.onclick = () => { const k = b.dataset.cgban, i = C.ban.indexOf(k); if (i >= 0) C.ban.splice(i, 1); else C.ban.push(k); sound.play('click'); save(); });
+}
+function buyCustom() {
+  if (ownsCustom()) return;
+  if (!spend(CUSTOM_PRICE, 'Custom Game')) return;
+  profile.customGame = true; saveProfile(); sound.play('escaped'); toast('Custom Game is yours. Pick it under Game mode in Play.', 5000);
+  renderCustom(); try { renderStore(); } catch (e) {}
+}
+// the bots' loadouts in a Custom Game
+function customBot(r) {
+  const C = customCfg();
+  if (r.role === 'killer') { if (C.kPerks === 'none') r.perks = []; else if (C.kPerks === 'pick') r.perks = C.kPick.filter(k => KILLER_PERKS[k] && perkFits(k, r.char)).slice(0, PERK_SLOTS); }
+  else {
+    if (C.sPerks === 'none') r.perks = []; else if (C.sPerks === 'pick') r.perks = C.sPick.filter(k => SURV_PERKS[k] && perkFits(k, r.char)).slice(0, PERK_SLOTS);
+    if (C.sAddons === 'none') r.addons = []; else if (C.sAddons === 'pick') r.addons = C.aPick.filter(k => ADDONS[k]).slice(0, ADDON_SLOTS);
+    if (C.sItem === 'flashlight') r.item = 'flashlight';
+  }
+  return r;
+}
 function renderBotsPanel() {
-  const k = botsCfg.role === 'killer', duo = botsCfg.gm === 'duo';
+  const k = botsCfg.role === 'killer', duo = botsCfg.gm === 'duo' || botsCfg.gm === 'custom';
+  renderCustom();
   $('bots-teammates-row').classList.toggle('hidden', k || duo);
   $('bots-killer-row').classList.toggle('hidden', k);
   $('bots-survivors-row').classList.toggle('hidden', !k || duo);
@@ -1206,7 +1270,9 @@ $('btn-bots-start').addEventListener('click', () => {
   if (meRole === 'killer' && !ownsChar(profile.killer.char)) { toast(`${charName(profile.killer.char)} is part of a chapter. Get it in the Store, or pick another killer.`, 5000); openStore('chapters'); return; }
   roster.push({ id: 'me', name: settings.name, role: meRole, char: profile[meRole].char, skin: skinId(profile[meRole].char), perks: (loadPerks(profile[meRole]), profile[meRole].perks), item: meRole === 'survivor' ? myItem() : 'flashlight', pet: petOf(meRole), bot: false, ...(meRole === 'killer' ? killerExtras(profile.killer.char) : {}), ...extrasOf(meRole, profile[meRole].char) });
   const used = meRole === 'survivor' ? [profile.survivor.char] : [];
-  const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic', nk = MODES[gm].killers || 1, ns = MODES[gm].survivors;
+  const gm = MODES[botsCfg.gm] ? botsCfg.gm : 'classic';
+  if (gm === 'custom' && !ownsCustom()) { toast(`Custom Game is in the Store (${CUSTOM_PRICE.toLocaleString()} Embers).`, 5000); return; }
+  const CC = gm === 'custom' ? customCfg() : null, nk = CC ? CC.k : MODES[gm].killers || 1, ns = CC ? CC.s : MODES[gm].survivors;
   if (meRole === 'survivor') {
     for (let i = 0; i < (ns ? ns - 1 : botsCfg.team); i++) roster.push(botSurvivor(i + 1, used));
     for (let i = 0; i < nk; i++) roster.push(botKiller(i ? botsCfg.killer2 : botsCfg.killer, i, roster.filter(r => r.role === 'killer').map(r => r.char)));
@@ -1214,7 +1280,8 @@ $('btn-bots-start').addEventListener('click', () => {
     for (let i = 1; i < nk; i++) roster.push(botKiller(i === 1 ? botsCfg.killer2 : 'random', i, [profile.killer.char]));
     for (let i = 0; i < (ns || botsCfg.surv); i++) roster.push(botSurvivor(i + 1, used));
   }
-  const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, survDifficulty: botsCfg.sdiff, net: null, kind: 'bots', map, mode: gm });
+  if (CC) for (const r of roster) if (r.bot) customBot(r);
+  const go = map => startHostMatch(roster, { myId: 'me', difficulty: botsCfg.diff, survDifficulty: botsCfg.sdiff, net: null, kind: 'bots', map, mode: gm, custom: CC ? { ban: CC.ban.slice() } : null });
   botsCfg.map = $('bots-map').value || botsCfg.map; // what the dropdown shows is what you get
   if (MODES[gm].map) go(MODES[gm].map); else if (botsCfg.map === 'vote') botVote(gm, roster.filter(r => r.bot).length, go); else go(botsCfg.map);
 });
@@ -1289,7 +1356,7 @@ class HostSession {
     holdLoading(true); await nextFrame(); await nextFrame(); // (the reel holds still while the match is built: no stutter)
     this.M = buildMap(this.seed, this.map);
     await nextFrame();
-    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, survDifficulty: this.opts.survDifficulty, mode: this.opts.mode });
+    this.sim = new Sim(this.M, this.roster, { difficulty: this.opts.difficulty, survDifficulty: this.opts.survDifficulty, mode: this.opts.mode, custom: this.opts.custom || null });
     if (this.opts.passive) for (const q of this.sim.S.players) if (q.bot && q.role === 'killer') q.harmless = true;
     if (this.opts.taser) { const q = this.sim.S.players.find(x => x.id === this.myId); if (q) { q.item = 'taser'; q.tasers = 3; q.flash = 0; q.traps = 0; } }
     this.bots = new Bots(this.sim);
@@ -1541,7 +1608,7 @@ $('btn-host').addEventListener('click', async () => {
     const net = await hostRoom(mode);
     lobby = { isHost: true, net, code: net.code, mode, myId: 'host', players: [], fill: true, diff: 'normal', gm: 'classic', inGame: false, chat: [], vis: hostVis }; lobby.map = 'granny';
     const lo = profile.survivor;
-    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), pet: petOf('survivor'), host: true, loadouts: myLoadouts(), vi: viHas(profile) });
+    lobby.players.push({ id: 'host', name: settings.name, role: 'survivor', char: lo.char, skin: skinId(lo.char), perks: lo.perks.slice(), pet: petOf('survivor'), host: true, loadouts: myLoadouts(), vi: viHas(profile), card: myCard() });
     net.on('msg', (id, m) => hostMsg(id, m));
     net.on('leave', id => {
       const p = lobby && lobby.players.find(x => x.id === id);
@@ -1638,7 +1705,7 @@ function hostMsg(id, m) {
     let role = m.role === 'killer' && !killerTaken ? 'killer' : 'survivor';
     if (role === 'survivor' && survCount >= cap.s) role = 'killer';
     const lo = sanitizeLoadout(role, m.loadouts?.[role]?.char, m.loadouts?.[role]?.perks);
-    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), pet: '', loadouts: m.loadouts || {}, vi: m.vi === true });
+    lobby.players.push({ id, name: String(m.name || 'Player').slice(0, 16), role, ...lo, skin: cleanSkin(lo.char, m.loadouts?.[role]?.skin), pet: '', loadouts: m.loadouts || {}, vi: m.vi === true, card: cleanCard(m.card) });
     lobby.net.send(id, { t: 'welcome', id });
     addChat(null, String(m.name || 'Player').slice(0, 16) + ' joined.');
     broadcastLobby();
@@ -1708,7 +1775,7 @@ async function doJoin(code) {
     net.on('msg', m => clientMsg(m));
     net.on('closed', r => { toast(r); leaveOnline(true); });
     const role = 'survivor';
-    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts(), proto: NET_PROTOCOL, ver: VERSION, vi: viHas(profile) });
+    net.send({ t: 'hello', name: settings.name, role, loadouts: myLoadouts(), proto: NET_PROTOCOL, ver: VERSION, vi: viHas(profile), card: myCard() });
     showLobby();
   } catch (e) { console.error(e); toast(e.message || String(e)); }
   loading(false);
@@ -1768,6 +1835,18 @@ function showLobby() {
   renderLobby();
 }
 function myLobbyPlayer() { return lobby && lobby.players.find(p => p.id === lobby.myId); }
+// 1.7.0: invite online friends straight from the lobby
+const invitedAt = new Map();
+function renderLobbyInvite() {
+  const box = $('lobby-invite'); if (!box) return;
+  if (!lobby || !lobby.code || lobby.inGame || !lobby.net) { box.innerHTML = ''; return; }
+  const on = profile.friends.filter(f => friends.online(f.id));
+  const inLobby = f => lobby.players.some(p => p.name === f.name && !p.bot);
+  box.innerHTML = `<div class="lo-sub"><span>Invite friends</span><span>${on.length} online</span></div>` + (on.length
+    ? on.map(f => { const s = friends.status.get(f.id) || {}, here = inLobby(f), sent = invitedAt.has(f.id) && Date.now() - invitedAt.get(f.id) < 30000; return `<div class="fr-row"><span class="dot on"></span><b>${esc(f.name)}</b><small>${here ? 'In your lobby' : s.state === 'match' ? 'In a match' : s.state === 'lobby' ? 'In a lobby' : 'In the menu'}</small>${here ? '' : `<button class="btn ${sent ? '' : 'primary'}" data-linv="${f.id}">${sent ? 'Sent ✓' : 'Invite'}</button>`}</div>`; }).join('')
+    : `<p class="hint">${profile.friends.length ? 'None of your friends are online right now.' : 'Add friends with their friend code (the people button, top right) to invite them here.'}</p>`);
+  box.querySelectorAll('[data-linv]').forEach(b => b.onclick = () => { friends.invite(b.dataset.linv, lobby.code); invitedAt.set(b.dataset.linv, Date.now()); toast('Invite sent'); sound.play('click'); renderLobbyInvite(); });
+}
 function renderLobby() {
   if (!lobby || $('p-lobby').classList.contains('hidden')) return;
   const ps = lobby.players, cap = lobbyCaps();
@@ -1781,12 +1860,15 @@ function renderLobby() {
   $('lobby-gm-desc').innerHTML = `<b>${esc(MODES[lobby.gm || 'classic'].name)}:</b> ${esc(gmDesc(lobby.gm))}`;
   const charName = p => (p.role === 'killer' ? KILLERS[p.char] : SURVIVORS[p.char])?.name || '';
   const slot = (p, role) => p
-    ? `<div class="slot ${role}"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.vi === true ? ' ' + viBadge(18) : ''}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
+    ? `<div class="slot ${role}" data-pc="${esc(p.id)}" title="See ${esc(p.name)}'s profile"><span class="si">${icon(role === 'killer' ? POWER_ICON[p.char] : 'healthy')}</span><span class="nm">${esc(p.name)}${p.vi === true ? ' ' + viBadge(18) : ''}${p.host ? ' · Host' : ''}${p.id === lobby.myId ? ' (you)' : ''}</span><span class="ch">${esc(charName(p))}</span></div>`
     : `<div class="slot ${role} empty"><span class="si">${icon(role === 'killer' ? 'warrant' : 'healthy')}</span><span class="nm">${lobby.fill ? (role === 'killer' ? 'Bot killer' : 'Bot survivor') : 'Empty slot'}</span></div>`;
   let html = '';
   for (let i = 0; i < cap.k; i++) html += slot(killers[i], 'killer');
   for (let i = 0; i < cap.s; i++) html += slot(survs[i], 'survivor');
   $('lobby-slots').innerHTML = html;
+  // 1.7.0: click a player to see their card
+  $('lobby-slots').querySelectorAll('[data-pc]').forEach(el => el.onclick = () => { const p = lobby.players.find(x => x.id === el.dataset.pc); if (p) openCard(p.id === lobby.myId ? myCard() : p.card || { n: p.name, av: p.char }); });
+  renderLobbyInvite();
   // the map vote happens on its own screen when the host starts the match
   const forced = MODES[lobby.gm] && MODES[lobby.gm].map;
   $('map-vote').classList.toggle('hidden', lobby.map !== 'vote' && !forced);
@@ -1896,7 +1978,7 @@ function leaveOnline(silent) {
 }
 
 // ---------- progress: level, ranks, season pass ----------
-function renderPass() {
+function renderPass(keep) {
   const P = progOf(profile);
   const lv = levelOf(P.xp), tier = seasonTier(P.season.xp), left = Math.max(0, Math.ceil((seasonEnds() - Date.now()) / 864e5));
   const rankCard = role => { const r = rankOf(P.ranks[role] || 0); return `<div class="rk-card">${rankBadge(r, 64)}<div><small>${role === 'killer' ? 'Killer' : 'Survivor'} rank</small><b style="color:${r.tier.color}">${r.name}</b><div class="pips">${Array.from({ length: PIPS_PER_GRADE }, (_, i) => `<i class="${i < r.into || r.top ? 'on' : ''}"></i>`).join('')}</div><span>${r.top ? 'Top rank' : `${PIPS_PER_GRADE - r.into} pip${PIPS_PER_GRADE - r.into === 1 ? '' : 's'} to the next grade`}</span></div></div>`; };
@@ -1906,6 +1988,9 @@ function renderPass() {
     return `<div class="sp-tier ${track} ${got ? 'got' : ''} ${claimed ? 'claimed' : ''} ${rw.kind === 'embers' ? '' : 'big'}"><b>${ic}</b><span>${esc(rw.label)}</span>${claimed ? '<em>Claimed</em>' : got ? `<button class="btn primary" data-claim="${key}">Claim</button>` : `<em>${track === 'prem' && !P.season.prem ? 'Premium' : 'Locked'}</em>`}</div>`;
   };
   const cols = SEASON.tiers.map(t => `<div class="sp-col ${tier >= t.t ? 'reached' : ''}"><small>Tier ${t.t}</small>${cell(t, 'free')}${cell(t, 'prem')}</div>`).join('');
+  // 1.7.0: keep the reward list where it was (claiming used to redraw it scrolled back to tier 1), and a Collect all button
+  const oldScroll = keep && document.querySelector('#pass-body .sp-scroll'), keepX = oldScroll ? oldScroll.scrollLeft : null, pageY = keep && $('pass-body').closest('.panel-body') ? $('pass-body').closest('.panel-body').scrollTop : null;
+  const ready = SEASON.tiers.flatMap(t => ['free', 'prem'].filter(tr => tier >= t.t && (tr === 'free' || P.season.prem) && !P.season.claimed[(tr === 'prem' ? 'p' : '') + t.t]).map(tr => (tr === 'prem' ? 'p' : '') + t.t));
   $('pass-body').innerHTML = `
     <div class="pr-top"><div class="lv-ring em">${levelEmblem(lv.lvl, 104)}</div><div class="lv-info"><b>${esc(settings.name)}</b><div class="bar"><div style="width:${(lv.into / lv.need * 100).toFixed(1)}%"></div></div><span>${lv.into.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.lvl + 1}${profile.lvTokens ? ` · ${profile.lvTokens} level token${profile.lvTokens > 1 ? 's' : ''} (use them in Loadout)` : ''}</span>${Object.keys(P.badges || {}).length ? `<div class="badges">${Object.keys(P.badges).map(b => `<i>${/-final$/.test(b) ? 'Season ' + b.replace(/^s|-.*$/g, '') + ' finale' : 'Season ' + b.replace(/^s|-.*$/g, '')}</i>`).join('')}</div>` : ''}</div></div>
     <div class="rk-row">${rankCard('survivor')}${rankCard('killer')}</div>
@@ -1913,21 +1998,36 @@ function renderPass() {
     <div class="sp-head"><div><b>${esc(SEASON.name)}</b><span>${left} day${left === 1 ? '' : 's'} left · tier ${tier} / ${SEASON.tiers.length}</span></div><div class="bar"><div style="width:${(tier >= SEASON.tiers.length ? 100 : (P.season.xp % SEASON.tierXp) / SEASON.tierXp * 100).toFixed(1)}%"></div></div>
       <span class="hint">Every match earns season XP; ${SEASON.tierXp.toLocaleString()} XP per tier. The free track is for everyone. The premium track adds bigger Ember rewards, level tokens and two outfits (Gilded Mother for Angeline, The Long Night for Granny).</span>
       ${P.season.prem ? '<div class="sp-prem own">Premium pass unlocked for this season</div>' : `<div class="sp-prem"><span>Premium pass · ${price(PASS_PRICE)}</span><button class="btn primary" data-buypass>Unlock premium</button></div>`}</div>
+    <div class="sp-collect">${ready.length ? `<button class="btn primary" data-claimall>Collect all (${ready.length})</button>` : '<span class="hint">Nothing to collect right now.</span>'}</div>
     <div class="sp-tracks"><div class="sp-scroll">${cols}</div></div><p class="hint">Top row: free track. Bottom row: premium track.</p>`;
-  $('pass-body').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
-    const key = b.dataset.claim, prem = key[0] === 'p', t = SEASON.tiers.find(x => x.t === +key.replace('p', '')); if (!t || P.season.claimed[key]) return;
-    if (prem && !P.season.prem) return;
+  const sc = $('pass-body').querySelector('.sp-scroll');
+  if (keepX != null) sc.scrollLeft = keepX;
+  else { const first = sc.querySelector('[data-claim]') || [...sc.querySelectorAll('.sp-col.reached')].pop(); if (first) sc.scrollLeft = Math.max(0, first.closest('.sp-col').offsetLeft - 40); }
+  if (pageY != null) $('pass-body').closest('.panel-body').scrollTop = pageY;
+  const claim = key => {
+    const prem = key[0] === 'p', t = SEASON.tiers.find(x => x.t === +key.replace('p', '')); if (!t || P.season.claimed[key]) return null;
+    if (prem && !P.season.prem) return null;
     const rw = prem ? t.prem : t.free;
     P.season.claimed[key] = true;
     if (rw.embers) profile.stats.embers += rw.embers;
     if (rw.kind === 'badge') P.badges[rw.id] = true;
     if (rw.kind === 'token') profile.lvTokens = (profile.lvTokens | 0) + (rw.n || 1);
     if (rw.kind === 'skin') { profile.owned[rw.char + ':' + rw.skin] = true; }
-    saveProfile(); sound.play('escaped'); toast(`Claimed: ${rw.label}`); renderPass(); renderShowcase();
+    return rw;
+  };
+  $('pass-body').querySelectorAll('[data-claim]').forEach(b => b.onclick = () => {
+    const rw = claim(b.dataset.claim); if (!rw) return;
+    saveProfile(); sound.play('escaped'); toast(`Claimed: ${rw.label}`); renderPass(true); renderShowcase();
+  });
+  $('pass-body').querySelectorAll('[data-claimall]').forEach(b => b.onclick = () => {
+    let n = 0, em = 0;
+    for (const key of ready) { const rw = claim(key); if (rw) { n++; em += rw.embers || 0; } }
+    if (!n) return;
+    saveProfile(); sound.play('escaped'); toast(`Collected ${n} reward${n > 1 ? 's' : ''}${em ? ` · +${em.toLocaleString()} Embers` : ''}`); renderPass(true); renderShowcase();
   });
   $('pass-body').querySelectorAll('[data-buypass]').forEach(b => b.onclick = () => {
     if (P.season.prem || !spend(PASS_PRICE, SEASON.name + ' premium pass')) return;
-    P.season.prem = true; saveProfile(); sound.play('escaped'); renderPass();
+    P.season.prem = true; saveProfile(); sound.play('escaped'); renderPass(true);
   });
 }
 
@@ -1955,6 +2055,69 @@ function avatarHTML(size) {
   const c = KILLERS[profile.avatar] || SURVIVORS[profile.avatar] ? profile.avatar : profile.survivor.char;
   return `<img class="pav" alt="" width="${size}" height="${size}" src="${art('portrait', c, skinId(c), 96, 96)}">`;
 }
+// ---------- 1.7.0: executions collection, stats, player cards ----------
+const MORI_K = () => Object.keys(MORI).filter(k => KILLERS[k]);
+function moriStats(p) { const M = p.moris || {}; let mg = 0, mf = 0; const mo = []; for (const k of Object.keys(M)) { if (!MORI[k]) continue; mg += M[k].given | 0; mf += M[k].faced | 0; if ((M[k].given | 0) + (M[k].faced | 0) > 0) mo.push(k); } return { mg, mf, mo }; }
+// what other players see about you (lobby, leaderboard)
+function myCard() { const st = profile.stats || {}, ms = moriStats(profile); return { n: settings.name, lv: levelOf(progOf(profile).xp).lvl, m: st.matches | 0, e: st.escapes | 0, k: st.kills | 0, ...ms, c: collCount(profile), ti: titleOf(), acc: profile.accent || '', av: KILLERS[profile.avatar] || SURVIVORS[profile.avatar] ? profile.avatar : profile.survivor.char, vi: viHas(profile) }; }
+function cleanCard(C) {
+  if (!C || typeof C !== 'object') return null;
+  const n = v => Math.max(0, Math.min(1e7, v | 0));
+  return { n: String(C.n || 'Player').slice(0, 16), lv: n(C.lv), m: n(C.m), e: n(C.e), k: n(C.k), mg: n(C.mg), mf: n(C.mf), mo: (Array.isArray(C.mo) ? C.mo : []).filter(k => MORI[k]).slice(0, 12), c: n(C.c), ti: String(C.ti || '').slice(0, 40), acc: /^#[0-9a-f]{3,8}$/i.test(C.acc || '') ? C.acc : '', av: KILLERS[C.av] || SURVIVORS[C.av] ? C.av : 'mara', vi: C.vi === true };
+}
+function statsHTML(C) {
+  const cell = (v, l) => `<div><b>${(v | 0).toLocaleString()}</b><span>${l}</span></div>`;
+  return `<div class="pf-stats">${cell(C.lv, 'Level')}${cell(C.m, 'Matches')}${cell(C.e, 'Escapes')}${cell(C.k, 'Kills')}${cell(C.mg, 'Executions given')}${cell(C.mf, 'Executions faced')}${cell(C.mo.length, 'Executions collected')}${cell(C.c, 'Collectables')}</div>`;
+}
+function morisHTML() {
+  const M = profile.moris || {};
+  return MORI_K().map(k => {
+    const r = M[k] || {}, got = (r.given | 0) + (r.faced | 0) > 0;
+    return `<div class="pf-mori ${got ? '' : 'locked'}"><img alt="" src="${art('portrait', k, skinId(k), 96, 96)}"><div><b>${esc(MORI[k].title)}</b><small>${esc(KILLERS[k].name)}</small><span>${got ? `Given ${r.given | 0} · Faced ${r.faced | 0}` : 'Not seen yet: give or face it in a match'}</span></div>${got ? `<button class="btn small primary" data-mori="${k}">Watch</button>` : '<i class="lock">?</i>'}</div>`;
+  }).join('');
+}
+const MORI_LOAD = { granny: () => loadGranny(), grandpa: () => loadGrandpa(), slendrina: () => loadSlendrina(), angeline: () => loadAngeline(), nosferatu: () => loadNosferatu(), father: () => loadFather() };
+let moriV = null;
+async function watchMori(k) {
+  if (!MORI[k]) return;
+  let ov = $('mori-view');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'mori-view'; ov.className = 'overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="mv-box"><div class="mv-stage" id="mv-stage"><div class="mv-load">Loading…</div></div><div class="mv-cap" id="mv-cap"></div><div class="mv-bar"><div><small>Execution</small><b>${esc(MORI[k].title)}</b><span>${esc(KILLERS[k].name)} · ${esc(KILLERS[k].exec ? KILLERS[k].exec.desc : '')}</span></div><button class="btn" id="mv-replay">Replay</button><button class="btn primary" id="mv-close">Close</button></div></div>`;
+  ov.classList.remove('hidden');
+  const close = () => { if (moriV) { moriV.close(); moriV = null; } ov.classList.add('hidden'); ov.innerHTML = ''; };
+  $('mv-close').onclick = () => { sound.play('click'); close(); };
+  ov.onclick = e => { if (e.target === ov) close(); };
+  try { await Promise.race([MORI_LOAD[k] ? MORI_LOAD[k]() : null, new Promise(r => setTimeout(r, 20000))]); } catch (e) {}
+  if (ov.classList.contains('hidden')) return;
+  const st = $('mv-stage'); st.innerHTML = '';
+  const r = (profile.moris || {})[k] || {}, vic = r.victim && SURVIVORS[r.victim] ? r.victim : (SURVIVORS[profile.survivor.char] ? profile.survivor.char : 'mara');
+  let capT = 0;
+  moriV = openMoriView(st, k, vic, skinOf(k, skinId(k)), t => { const c = $('mv-cap'); if (!c) return; c.textContent = t; c.classList.add('on'); clearTimeout(capT); capT = setTimeout(() => c.classList.remove('on'), 2200); });
+  $('mv-replay').onclick = () => { sound.play('click'); moriV && moriV.replay(); };
+}
+addEventListener('gdbd-mori', e => {
+  const d = e.detail || {}; if (!MORI[d.k]) return;
+  const M = profile.moris ||= {}, r = M[d.k] ||= { given: 0, faced: 0 };
+  const first = (r.given | 0) + (r.faced | 0) === 0;
+  if (d.role === 'given') r.given = (r.given | 0) + 1; else r.faced = (r.faced | 0) + 1;
+  if (d.victim && SURVIVORS[d.victim]) r.victim = d.victim;
+  r.at = Date.now();
+  saveProfile();
+  if (first) setTimeout(() => toast(`New execution collected: ${MORI[d.k].title}. Watch it again on your Profile.`, 6000), 6500);
+});
+// another player's card: name, title, level, stats, the executions they have collected
+function openCard(C0) {
+  const C = cleanCard(C0); if (!C) return;
+  let ov = $('pcard'); if (!ov) { ov = document.createElement('div'); ov.id = 'pcard'; ov.className = 'overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="pc-box" style="--acc:${C.acc || '#efe6d6'}"><div class="pc-top"><img class="pav" alt="" width="72" height="72" src="${art('portrait', C.av, skinId(C.av), 96, 96)}"><div><b class="pf-name">${esc(C.n)}${C.vi ? ' ' + viBadge(22) : ''}</b><span class="pf-tl">${esc(C.ti || 'No title')}</span></div>${levelEmblem(C.lv, 54)}</div>
+    ${statsHTML(C)}
+    <div class="lo-sub"><span>Executions collected</span><span>${C.mo.length} / ${MORI_K().length}</span></div>
+    <div class="pc-moris">${MORI_K().map(k => `<span class="${C.mo.includes(k) ? '' : 'locked'}" title="${esc(MORI[k].title)} (${esc(KILLERS[k].name)})"><img alt="" src="${art('portrait', k, skinId(k), 96, 96)}"><small>${esc(MORI[k].title)}</small></span>`).join('')}</div>
+    <div class="row"><button class="btn primary" id="pc-close">Close</button></div></div>`;
+  ov.classList.remove('hidden');
+  $('pc-close').onclick = () => { sound.play('click'); ov.classList.add('hidden'); };
+  ov.onclick = e => { if (e.target === ov) ov.classList.add('hidden'); };
+}
 // a backup code: the whole profile (and name), so progress can be carried to another device or restored after a reinstall
 const backupCode = () => 'GDBD1:' + btoa(unescape(encodeURIComponent(JSON.stringify({ n: settings.name, p: profile }))));
 function readBackup(code) {
@@ -1975,6 +2138,8 @@ function renderProfile() {
     <div class="field"><label>Title</label><div class="pf-titles">${titles}</div></div>
     ${collShelfHTML(profile)}
     <div class="field"><label>Name colour</label><div class="pf-accs">${ACCENTS.map(a => `<button class="pf-acc ${(profile.accent || ACCENTS[0]) === a ? 'on' : ''}" data-acc="${a}" style="background:${a}"></button>`).join('')}</div></div>
+    <div class="field"><label>Stats</label>${statsHTML(myCard())}</div>
+    <div class="field"><label>Executions <span class="hint-inline">(every execution you have given or faced in a match: watch it again)</span></label><div class="pf-moris">${morisHTML()}</div></div>
     <div class="field"><label>Character levels</label><div class="pf-lvls">${levels}</div></div>
     <div class="field"><label>Backup <span class="hint-inline">(keep your progress: copy the code somewhere safe, or paste it on another device)</span></label>
       <div class="pf-bk"><button class="btn small" id="pf-copy">Copy backup code</button><button class="btn small" id="pf-show">Show code</button><button class="btn small" id="pf-restore">Restore from a code…</button></div>
@@ -1982,6 +2147,7 @@ function renderProfile() {
       <textarea id="pf-code" class="hidden" rows="3" spellcheck="false"></textarea><div class="pf-bk hidden" id="pf-apply-row"><button class="btn small primary" id="pf-apply">Restore this backup</button><span class="hint">Replaces everything on this device with the backup.</span></div></div>`;
   const B = $('profile-body');
   bindShelf(B, profile, saveProfile, renderProfile);
+  B.querySelectorAll('[data-mori]').forEach(b => b.onclick = () => { sound.play('click'); watchMori(b.dataset.mori); });
   $('pf-name').oninput = e => { settings.name = e.target.value.trim().slice(0, 16) || 'Player'; saveSettings(); $('set-name').value = settings.name; renderShowcase(); B.querySelector('.pf-name').textContent = settings.name; };
   B.querySelectorAll('[data-av]').forEach(b => b.onclick = () => { profile.avatar = b.dataset.av; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
   B.querySelectorAll('[data-title]').forEach(b => b.onclick = () => { profile.title = b.dataset.title; saveProfile(); sound.play('click'); renderProfile(); renderShowcase(); });
@@ -2087,7 +2253,7 @@ function renderFriends() {
     const log = $('fr-chat-log'); log.scrollTop = 1e6; if (chatFocus) ci.focus();
   }
 }
-friends.on('change', () => { renderFriendsBadge(); renderFriends(); });
+friends.on('change', () => { renderFriendsBadge(); renderFriends(); if (lobby && !$('p-lobby').classList.contains('hidden')) renderLobbyInvite(); });
 // gifting Embers to a friend: pick an amount, confirm, and they arrive even if the friend is offline
 function giftDialog(id) {
   const f = profile.friends.find(x => x.id === id); if (!f) return;
@@ -2128,7 +2294,7 @@ friends.on('invite', (id, name, code) => {
 });
 $('friends-btn').onclick = () => { sound.init(); sound.play('click'); openPanel('p-friends', 'Friends'); };
 // 1.5.3: the leaderboard (trophy button) and collectables found in a match
-function myEntry() { return settings.lb === false ? null : boardEntry(profile, settings.name, levelOf(progOf(profile).xp).lvl, viHas(profile)); }
+function myEntry() { if (settings.lb === false) return null; const e = boardEntry(profile, settings.name, levelOf(progOf(profile).xp).lvl, viHas(profile)), C = myCard(); return { ...e, mg: C.mg, mf: C.mf, mo: C.mo, ti: C.ti, av: C.av }; }
 $('lb-btn').onclick = () => { sound.init(); sound.play('click'); openPanel('p-lb', 'Leaderboard', true); };
 addEventListener('gdbd-coll', e => { const id = e.detail && e.detail.c; if (addColl(profile, id)) toast('New collectable! See it in 3D on your Profile.'); saveProfile(); publishMe(profile, myEntry, true); });
 setTimeout(() => { if (settings.lb !== false) publishMe(profile, myEntry, true); }, 8000);
@@ -2148,7 +2314,7 @@ function awardsHTML() {
     ${last ? `<p class="hint">Last winners: ${last.s ? `Best Survivor <b>${esc(last.s.n)}</b>` : 'no Best Survivor'} · ${last.k ? `Best Killer <b>${esc(last.k.n)}</b>` : 'no Best Killer'}</p>` : ''}</div>`;
 }
 let awT = 0;
-awards.on('live', () => { if ($('p-pass').classList.contains('hidden') || Date.now() - awT < 1500) return; awT = Date.now(); renderPass(); });
+awards.on('live', () => { if ($('p-pass').classList.contains('hidden') || Date.now() - awT < 1500) return; awT = Date.now(); renderPass(true); });
 awards.on('reveal', (w, r) => showAwards(w, r));
 function showAwards(w, r) {
   closePanel(); sound.play('escaped');

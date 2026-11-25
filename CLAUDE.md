@@ -69,7 +69,7 @@ three.js r160, plain ES modules in `public/js/`, bundled with esbuild into singl
 
 ## Identity / namespacing (keep separate from Nightbound)
 - localStorage prefix `gdbd_` (e.g. `gdbd_settings`, `gdbd_profile`).
-- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 18`, `VERSION = '1.6.0'` (config.js).
+- Relay topics `grannydbd/v1/...`, PeerJS prefix `grannydbd-v1-`. `NET_PROTOCOL = 19`, `VERSION = '1.7.0'` (config.js).
 - Public lobbies (1.3): the host publishes a retained message on `grannydbd/v1/pub/<4-char stem>` (`H.advertise(info|null)`
   in net.js, refreshed on every lobby change and each 60 s) with an MQTT last will that clears it if the host drops.
   `watchLobbies(cb)` subscribes `grannydbd/v1/pub/+` on every broker; main.js renders the list + Quick Join.
@@ -205,7 +205,34 @@ graphics (anisotropy, PCF soft shadows on medium, unsharp mask in PostShader), p
 Discord link, mobile-only controls + APK 1.3.0 (versionCode 13). The 1.3.0 APK was signed with a NEW key (the owner's
 release.jks wasn't available), so players uninstall older APKs first; re-sign with release.jks for later updates.
 Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
-1.6.0 (current; APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
+1.7.0 (current; NET_PROTOCOL 19): executions, gore, Custom Game + the owner's Discord list.
+- **Executions (moris)**: mori.js `MORI[killer]` = { title, place(f) -> victim {d, side, y, yaw} in the killer's frame, victim(P, f, t) pose
+  (survivor rig keys; `headY`/`headZ` added to models.js animate), killer(f) -> hints merged into `st.exec` (Grandpa: aim/bend/pump/shot,
+  Nosferatu: scrub/lean, Angeline: atk), shots[] }. `RULES.execTime` 6.2 s (was 4.2). Each shot = f0, camera c0->c1, look l0->l1, fov, roll in the
+  killer frame [right, up, forward]. game.js updateCamera: per shot, `camRoom` (pointBlocked + ray against W.glb) picks mirrored / turned-round-the-
+  subject variants, else `moriHigh` (overhead); letterbox (`body.mori`, CSS ::before/::after), HUD hidden, exposure x1.45, title card `#mori-title`.
+  `moriFx` = the beats (sounds, gushes, gibs, pools, wounds) per killer; old killers keep `execGore`. Grandpa's spine is bent in code (`bendSpine`,
+  grannyGlb.js; the clips don't animate Spine1, so the rest quaternion is restored before each mixer update). Crow flies off during an execution.
+  Test: tools/test/moritest.mjs <killer> <map> <outprefix> (Q=low; drives act.t by hand, 9 frames).
+- **Gore** (gore.js): `bloodBody(R)` = survivor materials get a shader (rest-pose position `vGoreP`; up to 8 wounds: centre+radius, gash
+  dir/len/width, fresh, drip length) -> soaked cloth, open gashes, streaks running down; `R.gore.add/heal/clear/update`, `hitWound`, `jointWound`,
+  `torsoPoint`, `slashAt`. game.js `bodyGore` (per survivor: hits via the 'hit' event, hook through the left shoulder + drips/pool, heal -> dried).
+  `Gibs` (instanced flesh chunks, bounce, decal on landing). `BloodDecals` is now ONE InstancedMesh (aCell atlas cell, aDry dryness/opacity) with a
+  floor height (`add(x, z, size, cell, rot, y)`); Particles/BloodDrops land on `this.ground` (set before spawning). Finer droplets, no red mist.
+- **Executions collection**: game.js dispatches `gdbd-mori` {k, role given/faced, victim}; main.js `profile.moris[k] = {given, faced, victim, at}`.
+  Profile panel: stats grid (`statsHTML(myCard())`) + Executions cards with Watch -> moriview.js `openMoriView(el, killer, victim)` (own renderer,
+  foggy stage, runs `Game.prototype.execFx` on a stand-in object so the film/gore are the same as in a match; loops). Player cards: `myCard()` /
+  `cleanCard` / `openCard` — lobby slots (hello carries `card`) and leaderboard rows (`myEntry` adds mg/mf/mo/ti/av; collect.js openBoard(..., cb)).
+  Test: tools/test/ui170b.mjs (Profile, viewer, Custom Game panel).
+- **Custom Game** (`MODES.custom`, botsOnly: not in online lobbies; `CUSTOM_PRICE` 40,000, `CUSTOM_MAX` k 17 / s 16 / total 24): Store > Add-ons card,
+  `profile.customGame`, options `profile.customCfg` (k, s, kPerks/kPick, sPerks/sPick, sAddons/aPick, sItem, ban) in the Play panel (`renderCustom`),
+  `customBot` applies them to the bots; `opts.custom.ban` -> sim chest roll skips banned items (all banned = empty chest). simtest `MODE=custom NK= NS= BAN=`.
+- Small: pass `Collect all` + scroll kept (`renderPass(keep)`); counter-clockwise skill checks (`skill.dir`); 1ST/3RD marks on killer cards; lobby
+  invite list (`renderLobbyInvite`); chest lid underside; first-person sawed-off (`killerViewParts(.., sawed)` + rebuild); take over after escaping;
+  bots skip far rescues once a gate is open; `#show-drag > span` (the scrambled text was its nested span positioned on top of itself).
+- Devlog banner: tools/test/devlog170-page.js (Grandpa's Last Round).
+
+1.6.0 (APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
 - Performance/look: no film grain, GTAO only if `settings.ao`, MSAA render target per quality (`QUALITY[q].msaa`), dynamic resolution only
   below 40 fps; light pool (world.js `poolLights` / `updateLightPool`: only 2/4/6 real PointLights follow the nearest lamps); grass in 4x4
   chunked InstancedMeshes; shadows max 2048; offline builds embed the KTX2 photo scans (`#nb-tex`, pbr.js `texManager`); Safe Graphics mode
@@ -489,7 +516,10 @@ stalls, texture/program counts), `ctxloss.mjs` (lose + restore the context mid-m
 the menu), `onlinestart.mjs` (host + client start a match through the local broker; run `node broker.mjs` first).
 
 ## Where things stand / next steps
-- **1.6.0 is shipped** (pushed to `main` and `claude/beautiful-keller-gvarx6`; builds + devlog banner handed to the owner).
+- **1.7.0 is shipped** (pushed to `main` and `claude/beautiful-keller-gvarx6`; exe zip (unpackDirName GrannyxDBD-1.7.0), APK VC 33 / VN 1.7.0
+  (grannyxdbd-1.3.jks), Game Jolt web zip and devlog banner handed to the owner).
+- Open from 1.7.0: the executions were checked in a cramped spot by the house walls (moritest uses the killer spawn); worth a look in the
+  open and on upper floors. Custom Game is bot-matches only (online lobbies would need the counts synced). Freddy still needs freddy.glb.
 - Open from 1.6.0:
   - **Freddy Fazbear skin** still shows plain Granny: freddy.glb is not in the repo (gitignored, Sketchfab Standard licence) and the owner
     hasn't uploaded it yet. Ask for the file (or an old GrannyDBD.html that still has `#nb-freddy-glb`), drop it in public/models/, rebuild.

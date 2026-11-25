@@ -17,10 +17,12 @@ window.run = (map, killer, minutes, diff, seed) => {
   const M = buildMap(seed, map);
   const mode = window.__mode || 'classic', duo = mode === 'duo';
   const roster = [{ id: 'k', name: 'K', role: 'killer', char: killer, skin: 'default', perks: window.__kperks || [], bot: true, kid: window.__kid ? 'child' : '' }];
+  const NK = window.__nk || 1, NS = window.__ns || 0; // (1.7.0 Custom Game counts: NK=.. NS=..)
+  for (let i = 1; i < NK; i++) roster.push({ id: 'k' + (i + 1), name: 'K' + (i + 1), role: 'killer', char: ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu'][i % 5], skin: 'default', perks: [], bot: true });
   if (duo) roster.push({ id: 'k2', name: 'K2', role: 'killer', char: ['granny', 'grandpa', 'slendrina', 'angeline'].filter(c => c !== killer)[seed % 3], skin: 'default', perks: [], bot: true });
   const chars = ['mara', 'eli', 'june', 'tomas'];
-  for (let i = 0; i < (duo ? 8 : 4); i++) roster.push({ id: 's' + i, name: 'S' + i, role: 'survivor', char: chars[i % 4], skin: 'default', perks: [], item: window.__item && i % 2 === 0 ? window.__item : 'flashlight', bot: true, kid: window.__crow ? 'crow' : '', addons: window.__crow ? ['cellswap', 'trigger'] : [] });
-  const sim = new Sim(M, roster, { difficulty: diff, mode }), bots = new Bots(sim), S = sim.S;
+  for (let i = 0; i < (NS || (duo ? 8 : 4)); i++) roster.push({ id: 's' + i, name: 'S' + i, role: 'survivor', char: chars[i % 4], skin: 'default', perks: [], item: window.__item && i % 2 === 0 ? window.__item : 'flashlight', bot: true, kid: window.__crow ? 'crow' : '', addons: window.__crow ? ['cellswap', 'trigger'] : [] });
+  const sim = new Sim(M, roster, { difficulty: diff, mode, custom: window.__ban ? { ban: window.__ban } : null }), bots = new Bots(sim), S = sim.S;
   const dt = 1 / 30, stall = {}, log = [], evc = {}; let stallSec = 0, insideT = 0, upT = 0, falls = 0; const hg = M.gens.find(g => g.x > -5.6 && g.x < 12.5 && g.z > 3.9 && g.z < 15.8);
   let t = 0;
   const still = new Map();
@@ -58,7 +60,7 @@ await pg.waitForFunction(() => window.ready, null, { timeout: 30000 });
 let tot = 0;
 for (let i = 0; i < +N; i++) {
   const t0 = Date.now();
-  const r = await pg.evaluate(([a, b, c, d, s, m, kid, it, kp, cr]) => { window.__mode = m; window.__kid = kid; window.__item = it; window.__kperks = kp; window.__crow = cr; return window.run(a, b, c, d, s); }, [map, killer, +MIN, diff, 1000 + i * 7919, process.env.MODE || 'classic', !!+(process.env.KID || 0), process.env.ITEM || '', (process.env.KPERKS || '').split(',').filter(Boolean), !!+(process.env.CROW || 0)]);
+  const r = await pg.evaluate(([a, b, c, d, s, m, kid, it, kp, cr, NKK, NSS, BAN]) => { window.__mode = m; window.__nk = NKK; window.__ns = NSS; window.__ban = BAN; window.__kid = kid; window.__item = it; window.__kperks = kp; window.__crow = cr; return window.run(a, b, c, d, s); }, [map, killer, +MIN, diff, 1000 + i * 7919, process.env.MODE || 'classic', !!+(process.env.KID || 0), process.env.ITEM || '', (process.env.KPERKS || '').split(',').filter(Boolean), !!+(process.env.CROW || 0), +(process.env.NK || 1), +(process.env.NS || 0), process.env.BAN ? process.env.BAN.split(',') : null]);
   tot += r.stallSec; console.log(`#${i} ${map}/${killer} ${((Date.now() - t0) / 1000).toFixed(1)}s real:`, JSON.stringify({ ...r, stalls: r.stalls.length }));
   for (const s of r.stalls) console.log('   STALL', JSON.stringify(s));
 }

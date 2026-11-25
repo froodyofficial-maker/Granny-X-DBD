@@ -58,6 +58,7 @@
         <section id="p-play" class="hidden">
           <div class="field"><label>Game mode</label><select id="bots-gm"></select></div>
           <p class="hint gm-desc" id="bots-gm-desc"></p>
+          <div id="bots-custom" class="custom-cfg hidden"></div>
           <div class="field"><label>Role</label>
             <div class="seg" id="bots-role"><button data-v="survivor" class="on">Survivor</button><button data-v="killer">Killer</button></div></div>
           <div class="field" id="bots-teammates-row"><label>Bot teammates</label>
@@ -126,6 +127,7 @@
           <div class="lobby-grid">
             <div>
               <div class="slots" id="lobby-slots"></div>
+          <div id="lobby-invite" class="lobby-invite"></div>
               <div class="map-vote hidden" id="map-vote"></div>
               <div class="host-opts" id="lobby-host-opts">
                 <div class="field"><label>Visibility</label><div class="seg" id="lobby-vis"><button data-v="public">Public</button><button data-v="private">Private</button></div></div>

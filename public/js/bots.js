@@ -457,15 +457,19 @@ export class Bots {
 
     const others = S.players.filter(o => o.role === 'survivor' && o !== p);
     // rescue caged teammates when the killer is away from the cage
+    // (1.7.0: once a gate is open, a bot nearer that gate than the hook just leaves, unless the hook is close by:
+    // bots at the exit no longer ran across the whole map for a rescue)
+    const openGate = S.gatesPowered ? M.gates.find(g => S.gates[g.id].open) : null;
     for (const o of others) if (o.st === 'caged') {
       const c = M.cages[o.cage];
+      if (openGate) { const dc = dist(p, c), dg = Math.hypot(openGate.x - p.x, openGate.z - p.z); if (dc > 18 && dg < dc) continue; }
       const kFar = !K || dist(K, c) > 11 || K.carry != null;
       const someoneElse = others.some(x => x.bot && x !== o && x.st === 'ok' && this.brain(x).mode === 'rescue' && this.brain(x).modeId === o.id && dist(x, c) < dist(p, c));
       const urgent = o.cageT < 28 || o.stage === 2;
       if ((kFar || (urgent && dist(K, c) > 5)) && !someoneElse) { goal = { mode: 'rescue', modeId: o.id, x: c.x, z: c.z, kind: 'rescue', id: o.cage }; break; }
     }
     // help downed teammates
-    if (!goal) for (const o of others) if (o.st === 'down' && (!K || dist(K, o) > 12) && dist(p, o) < 40 && !avoid('help', o.id)) { goal = { mode: 'help', modeId: o.id, x: o.x, z: o.z, kind: 'heal', id: o.id }; break; }
+    if (!goal) for (const o of others) if (o.st === 'down' && (!K || dist(K, o) > 12) && dist(p, o) < (openGate ? 16 : 40) && !avoid('help', o.id)) { goal = { mode: 'help', modeId: o.id, x: o.x, z: o.z, kind: 'heal', id: o.id }; break; }
     // snuff cursed lanterns near us when the killer is far
     if (!goal && K && kd > 22) for (const L of S.lanterns || []) {
       if (Math.hypot(L.x - p.x, L.z - p.z) < 9 && Math.random() < 0.7) { goal = { mode: 'snuff', modeId: L.id, x: L.x, z: L.z, kind: 'snuff', id: L.id }; break; }

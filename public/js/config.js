@@ -3,7 +3,7 @@
 export const HALF = 56;                 // map spans -HALF..HALF on x and z
 export const TICK = 1 / 60;
 // bump when host and clients can no longer understand each other's network messages
-export const NET_PROTOCOL = 18;
+export const NET_PROTOCOL = 19;
 export const SNAP_RATE = 30;            // snapshots per second sent to clients (relay players get ~15)
 
 export const SPEED = {
@@ -82,7 +82,7 @@ export const RULES = {
   hitRange: 2.0,
   terror: 32,
   stunBarricade: 2.0,
-  execTime: 4.2,
+  execTime: 6.2, // (1.7.0: was 4.2; the executions are short films now, mori.js)
   flashBattery: 12, flashRange: 9, flashTime: 1.0, flashStun: 1.6, blindTime: 2.4, blindImmune: 12, // survivor flashlights
   chestTime: 2.2, swapTime: 0.4, battTime: 3,                                          // searching a chest, swapping items with it
   teleTime: 1.2, teleCd: 18, lanternRadius: 9, snuffTime: 2.5,           // length of a killer's execution finisher
@@ -101,8 +101,11 @@ export const MODES = {
   // Season 2 (1 Dec 2026 - 12 Jan 2027): its headline mode and Chaos Shuffle
   pages: { name: 'The Pages', short: 'Season 2', event: true, season: 'Season 2', from: Date.UTC(2026, 11, 1), until: Date.UTC(2027, 0, 12), desc: "No generators tonight: pages are nailed up round the map, and the survivors collect every one of them to power the gates. Pages take seconds, but the killer can't kick them back. Every page they take, he gets a little faster and the fog comes in a little closer, and for 6s after each one he is silent." },
   shuffle: { name: 'Chaos Shuffle', short: 'Season 2', event: true, season: 'Season 2', from: Date.UTC(2026, 11, 1), until: Date.UTC(2027, 0, 12), desc: 'A normal match, until it isn\'t: every minute or so the killer and one survivor swap bodies. You could be hunting one second and running the next. Your Embers stay yours.' },
+  // 1.7.0: bought in the Store (CUSTOM_PRICE); bot matches only: you set the numbers, the bots' perks and add-ons, the chest items
+  custom: { name: 'Custom Game', short: 'Yours', custom: true, botsOnly: true, desc: 'Your rules: any number of killers against any number of survivors (17 killers against 2 survivors, if you like), the bots\' perks and add-ons, and which items the chests may hold.' },
   bloodmoon: { name: 'Blood Moon', short: 'Tasers', desc: 'A red moon over the map. Every 45 seconds the killer sees every survivor for 4 seconds, but every survivor starts with a 2-shot Taser instead of their item.' },
 };
+export const CUSTOM_PRICE = 40000, CUSTOM_MAX = { k: 17, s: 16, total: 24 };
 // event modes (City Mode, the Season 2 modes) are only on between their dates. window.__now (ms) fakes the clock for tests
 export const nowMs = () => (typeof window !== 'undefined' && window.__now) || Date.now();
 export const modeOpen = (id, now = nowMs()) => { const m = MODES[id]; return !!m && !(m.until && now >= m.until) && !(m.from && now < m.from); };
@@ -513,7 +516,7 @@ export const NEWSLETTER = '';
 export const PLAY_K = ['granny', 'grandpa', 'slendrina', 'angeline', 'nosferatu', 'father'].filter(k => !KILLERS[k].from || nowMs() >= KILLERS[k].from), PLAY_S = ['mara', 'eli', 'june', 'tomas'];
 export const playable = c => PLAY_K.includes(c) || PLAY_S.includes(c);
 export const DISCORD = 'https://discord.gg/WXvAJ2sgVP';
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 // 1.5.3: collectables. Each one may turn up somewhere on the map at the start of a match (its chance), lying in a random
 // spot; whoever walks over it first keeps it (it counts on their profile, can be shown in 3D, and goes on the leaderboard).
 // glb: a model in public/models; else made in code (collect.js)
@@ -529,6 +532,21 @@ export const RARITY = { common: '#b8b0a4', uncommon: '#6fcf6a', rare: '#5aa7ff',
 // Inbox entries with `email: true` are big updates: they are emailed to newsletter subscribers
 // automatically (tools/email-updates.mjs). Small tweaks leave it out and are never mailed.
 export const INBOX = [
+  {
+    id: 'gdbd170', version: '1.7.0', date: 'Nov 2026', title: 'Executions, gore and Custom Games', tag: 'Update',
+    body: [
+      'Executions are short films now. Every killer has their own, with camera cuts like a Dead by Daylight mori: Bedtime Trap (Granny), Last Round (Grandpa), Look at Me (Slendrina), Hush Now (Angeline), The Last Feed (Nosferatu) and Into the Trees (Slendrina\'s Father). Before, five of the six borrowed an old script and the survivor floated in the air.',
+      'Gore overhaul: blood soaks into clothes and skin round open gashes and runs down from them, instead of red blobs stuck on the body. Hits throw blood and bits of flesh; the hook goes through the shoulder and drips into a pool; blood lands on the floor you are on (upstairs too).',
+      'Profile > Executions: every execution you give or face is collected, and you can watch it again. Your Profile also shows all your stats.',
+      'Click a player in a lobby or on the leaderboard to see their profile card: level, title, stats and the executions they have collected.',
+      'Custom Game (Store > Add-ons, 40,000 Embers): any number of killers against any number of survivors (17 killers against 2 survivors, if you like, up to 24 players), the bot killers\' and bot teammates\' perks and add-ons, and items banned from the chests. Bot matches.',
+      'Season pass: a Collect all button, and claiming a reward no longer scrolls the list back to tier 1.',
+      'Skill checks sometimes run counter-clockwise, like in Dead by Daylight.',
+      'Loadout: killer cards are marked 1ST (first person) or 3RD (third person).',
+      'Invite online friends straight from the lobby.',
+      'Fixes: the open chest lid is no longer see-through from below; Sawed-Off now shortens the gun in first person too; you can take over a bot after escaping as well; bots at an open exit gate no longer run across the map for a rescue; the scrambled text next to the menu character is gone.',
+    ],
+  },
   {
     id: 'gdbd160', version: '1.6.0', date: 'Nov 2026', title: 'The graphics update', tag: 'Update',
     body: [

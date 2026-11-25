@@ -165,7 +165,7 @@ export class Sim {
 
   onAct(p, m) {
     const S = this.S, M = this.M;
-    if ((p.car >= 0 || p.hide >= 0) && m.a !== 'emote') return; // (at the wheel / hiding: nothing but getting out)
+    if ((p.car >= 0 || p.hide >= 0) && m.a !== 'emote' && m.a !== 'takeover') return; // (at the wheel / hiding: nothing but getting out)
     switch (m.a) {
       case 'vault': {
         const kind = m.kind === 'bar' ? 'bar' : 'win';
@@ -200,7 +200,7 @@ export class Sim {
       }
       case 'takeover': {
         // a fallen survivor steps into a bot's body and plays on
-        if (p.role !== 'survivor' || p.st !== 'dead' || p.bot) return;
+        if (p.role !== 'survivor' || (p.st !== 'dead' && p.st !== 'out') || p.bot) return;
         const b = this.P(m.id);
         if (!b || !b.bot || b.role !== 'survivor' || !['ok', 'down', 'carried', 'caged'].includes(b.st)) return;
         const was = b.name.replace(/ \(bot\)$/, '');
@@ -1369,9 +1369,14 @@ export class Sim {
       case 'chest': {
         // what's inside is rolled now: a Taser one time in five, otherwise a fresh flashlight or ghost traps
         const cs = S.chests[a.id]; if (!cs || cs.open) break;
-        const r = Math.random();
         cs.open = true;
-        cs.it = r < ITEMS.taser.chance ? { k: 'taser', n: ITEMS.taser.shots, fresh: true } : r < ITEMS.taser.chance + ITEMS.pepper.chance ? { k: 'pepper', n: ITEMS.pepper.uses, fresh: true } : { k: 'flashlight', n: RULES.flashBattery, fresh: true };
+        // (1.7.0 Custom Game: items banned from the chests are never in them; with all three banned the chest is empty)
+        const ban = (this.opts.custom && this.opts.custom.ban) || [], pool = [['taser', ITEMS.taser.chance], ['pepper', ITEMS.pepper.chance], ['flashlight', 1 - ITEMS.taser.chance - ITEMS.pepper.chance]].filter(([k]) => !ban.includes(k));
+        const tot = pool.reduce((a, [, c]) => a + c, 0); let r = Math.random() * tot, pick = null;
+        for (const [k, c] of pool) { if (r < c) { pick = k; break; } r -= c; }
+        if (!pick && pool.length) pick = pool[pool.length - 1][0];
+        cs.it = pick === 'taser' ? { k: 'taser', n: ITEMS.taser.shots, fresh: true } : pick === 'pepper' ? { k: 'pepper', n: ITEMS.pepper.uses, fresh: true } : pick === 'flashlight' ? { k: 'flashlight', n: RULES.flashBattery, fresh: true } : null;
+        if (!cs.it) { this.ev({ k: 'msg', text: 'The chest is empty.' }); break; }
         p.score.c += 150;
         this.ev({ k: 'chest', id: a.id, by: p.id, item: cs.it.k });
         break;

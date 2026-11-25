@@ -2,6 +2,8 @@
 // "aura" twin (fresnel glow, drawn through walls) that can be toggled on.
 import { weaponBlood } from './bloodfx.js';
 import * as THREE from 'three';
+import { bloodBody } from './gore.js';
+import { MORI } from './mori.js';
 import { tex } from './textures.js';
 import { makeForemanGlb, animateGlb } from './foremanGlb.js';
 import { makeChuckyGlb, animateChucky } from './chuckyGlb.js';
@@ -353,7 +355,8 @@ export function makeSurvivor(def, sk = {}) {
   for (const s of [-1, 1]) R.mesh('spine', G.box(0.03, 0.3, 0.012), mat(0x2a2218, { rough: 0.8 }), s * 0.09, 0.35, 0.11, 0, 0, 0, 1, 1, 1, false);
   R.kind = 'survivor';
   R.finalize();
-  // wounds: wet blood on clothes and skin, shown when injured / dying (not merged so they can toggle)
+  // 1.7.0: wounds soak into the clothes and skin (gore.js); the old blobs only where that can't be done
+  if (!bloodBody(R)) {
   const bloodM = new THREE.MeshStandardMaterial({ color: 0x6a0606, emissive: 0x2a0000, roughness: 0.18, metalness: 0.08 });
   const ws = new THREE.SphereGeometry(1, 10, 8);
   const part = (jn, x, y, z, sx, sy, sz, rz = 0) => { const m = new THREE.Mesh(ws, bloodM); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.z = rz; m.visible = false; R.j[jn].add(m); return m; };
@@ -362,6 +365,7 @@ export function makeSurvivor(def, sk = {}) {
     light: group([part('spine', 0.04, 0.32, -0.108, 0.05, 0.12, 0.02, 0.3), part('spine', 0.158, 0.16, 0.02, 0.02, 0.09, 0.06), part('shL', 0.03, -0.16, 0.035, 0.03, 0.07, 0.03), part('spine', -0.06, 0.12, -0.1, 0.07, 0.05, 0.02, -0.4)]),
     heavy: group([part('spine', 0.02, 0.22, 0.106, 0.09, 0.14, 0.02, 0.2), part('lgR', 0.02, -0.22, 0.066, 0.035, 0.13, 0.025), part('handL', 0, -0.05, 0.01, 0.045, 0.055, 0.03), part('head', 0.05, 0.16, 0.08, 0.025, 0.05, 0.02, -0.5), part('kn' + 'L', 0.0, -0.12, 0.05, 0.03, 0.1, 0.02)]),
   };
+  }
   if (def.big) R.root.scale.set(1.13, 1.05, 1.16);
   applySkinFx(R, sk);
   // realistic outfits: a rigged model posed from this (hidden) procedural rig
@@ -696,7 +700,7 @@ export function animate(R, s, dt) {
   if (R.glb) return animateGlb(R, s, dt);
   R.t += dt;
   const t = R.t;
-  const P = { hipsY: 0, tiltX: 0, tiltY: 0, spineX: R.hunch || 0, spineY: 0, headX: 0, shL: 0.08, shR: 0.08, shLz: 0.08, shRz: -0.08, elL: -0.15, elR: -0.15, lgL: 0, lgR: 0, knL: 0.05, knR: 0.05, lgLz: 0, lgRz: 0 };
+  const P = { hipsY: 0, tiltX: 0, tiltY: 0, spineX: R.hunch || 0, spineY: 0, headX: 0, headY: 0, headZ: 0, shL: 0.08, shR: 0.08, shLz: 0.08, shRz: -0.08, elL: -0.15, elR: -0.15, lgL: 0, lgR: 0, knL: 0.05, knR: 0.05, lgLz: 0, lgRz: 0 };
   const a = s.anim;
   const sp = s.speed || 0;
   R.phase += dt * (sp * 2.6 + 0.0001);
@@ -833,6 +837,8 @@ export function animate(R, s, dt) {
         else if (f < 0.86) { const k2 = ramp(0.42, 0.86); P.shR = lerp(-0.6, -2.7, k2); P.shL = lerp(-0.6, -2.7, k2); P.elR = P.elL = -0.2; P.spineX -= k2 * 0.25; }
         else { P.shR = -1.2; P.shL = -0.5; P.spineY = -0.5; }
       }
+    } else if (MORI[ch]) {
+      MORI[ch].victim(P, f, t); // (1.7.0: each killer's own execution, mori.js)
     } else {
       if (ch === 'butcher' || ch === 'bateman') {
         if (f < 0.2 || f > 0.86) downPose();
@@ -889,7 +895,7 @@ export function animate(R, s, dt) {
   j.tilt.rotation.x = q.tiltX;
   j.hips.position.y = (j.hips.userData.y0 ??= j.hips.position.y) + q.hipsY;
   j.spine.rotation.x = q.spineX; j.spine.rotation.y = q.spineY;
-  j.head.rotation.x = q.headX;
+  j.head.rotation.x = q.headX; j.head.rotation.y = q.headY || 0; j.head.rotation.z = q.headZ || 0;
   j.shL.rotation.x = q.shL; j.shR.rotation.x = q.shR; j.shL.rotation.z = q.shLz; j.shR.rotation.z = q.shRz;
   j.elL.rotation.x = q.elL; j.elR.rotation.x = q.elR;
   j.lgL.rotation.x = q.lgL; j.lgR.rotation.x = q.lgR;
