@@ -82,6 +82,8 @@ function load(n) {
 export const photoSet = n => done.get(n) || null;
 if (typeof window !== 'undefined') window.__photoDone = () => [...done.keys()]; // (tests: which scans have arrived)
 export const whenSet = n => load(n);
+// 1.7.0: every scan still loading (the match's warm-up waits for them, so applying them doesn't recompile materials mid-match)
+export const photosPending = () => Promise.all([...pending.values()].map(p => p.catch(() => null)));
 
 function rep(t, r, turn) { if (!t) return null; const k = t.clone(); k.repeat.set(r[0], r[1]); if (turn) k.rotation = Math.PI / 2; return k; }
 

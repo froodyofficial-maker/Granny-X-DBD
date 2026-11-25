@@ -240,6 +240,21 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
   Don't dispose materials of short-lived effects: reuse them. **Freddy is in**: public/models/freddy.glb (the owner's upload, still gitignored:
   Sketchfab Standard licence) is embedded in the exe/APK offline file; it is left out of the Game Jolt web zip (build-web.mjs), so Freddy is
   plain Granny there. Keep the file locally for future builds (or ask the owner again).
+- 1.7.0 third build (APK VC 35, exe unpackDirName GrannyxDBD-1.7.0-c; owner: "still stutters when players throw GTA 6 at the killer, all
+  killer powers, basically everything" + "cutscenes stutter a lot or don't play when rewatched in the profile"):
+  - **Never change the scene's light count mid-match**: Angeline's beam had its own SpotLight, created on first use and shown/hidden with
+    the beam, so every material in the scene recompiled each time. Now one shared `beamLight` (made at start when she's in the match,
+    intensity 0 when unused); City Mode's headlight is made up front too. All other lights are made at build time with intensity 0.
+  - `deferCompile` (after warm-up): `scene.add` mid-match runs `renderer.compileAsync` on the new object (for the composer's half-float
+    target) and keeps it hidden until ready (a `visible` getter/setter keeps what the game sets meanwhile; 1.5 s cap). Needs
+    KHR_parallel_shader_compile (Windows Chrome/Electron have it; SwiftShader and some phones don't).
+  - So the warm-up also builds what devices without it would compile mid-match: the props zoo (exec/bear traps, chest items, GTA VI case
+    + desk, Teddy, Father's lash, Angeline's beam per Angeline), waits for pending photo scans (`photosPending`, pbr.js: they add maps =
+    a recompile) and for the GTA VI / collectable models (`loadViceModels`) when the match can have them.
+  - Replays (moriview.js): no second WebGL context any more. `openMoriView(..., renderer)` draws with the game's renderer into the
+    canvas's bottom-left corner and copies it to its own 2D canvas; main.js's loop calls `moriV.tick(dt)` instead of the menu while
+    it's open; everything (the trap too) is compiled with `compileAsync` before the film starts ("Loading…" until then).
+  - stutter.mjs: `ITEM=gtaps` (bots carry GTA VI cases, main.js `window.__botItem`), `Q=medium`; prints `deferred` / `khr`.
 
 1.6.0 (APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
 - Performance/look: no film grain, GTAO only if `settings.ao`, MSAA render target per quality (`QUALITY[q].msaa`), dynamic resolution only

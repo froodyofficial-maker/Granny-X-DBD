@@ -1191,7 +1191,7 @@ function botSurvivor(i, used) {
   const free = PLAY_S.filter(c => !used.includes(c));
   const char = free.length ? free[Math.floor(Math.random() * free.length)] : PLAY_S[i % 4];
   used.push(char);
-  const r = Math.random(), item = teddyOut() && r < 0.2 ? 'teddy' : r > 0.85 && viOpen() ? 'gtaps' : 'flashlight'; // (Season 2: a bot brings a Teddy now and then; 1.5.3: GTA VI (PlayStation))
+  const r = Math.random(), item = window.__botItem || (teddyOut() && r < 0.2 ? 'teddy' : r > 0.85 && viOpen() ? 'gtaps' : 'flashlight'); // (__botItem: tests) // (Season 2: a bot brings a Teddy now and then; 1.5.3: GTA VI (PlayStation))
   used.names ||= [];
   const pool = BOT_NAMES.filter(n => !used.names.includes(n));
   const nm = pool[Math.floor(Math.random() * pool.length)] || 'Bot ' + i;
@@ -2092,7 +2092,7 @@ async function watchMori(k) {
   const st = $('mv-stage'); st.innerHTML = '';
   const r = (profile.moris || {})[k] || {}, vic = r.victim && SURVIVORS[r.victim] ? r.victim : (SURVIVORS[profile.survivor.char] ? profile.survivor.char : 'mara');
   let capT = 0;
-  moriV = openMoriView(st, k, vic, skinOf(k, skinId(k)), t => { const c = $('mv-cap'); if (!c) return; c.textContent = t; c.classList.add('on'); clearTimeout(capT); capT = setTimeout(() => c.classList.remove('on'), 2200); });
+  moriV = openMoriView(st, k, vic, skinOf(k, skinId(k)), t => { const c = $('mv-cap'); if (!c) return; c.textContent = t; c.classList.add('on'); clearTimeout(capT); capT = setTimeout(() => c.classList.remove('on'), 2200); }, renderer); // (the game's own renderer: the main loop drives it while it's open)
   $('mv-replay').onclick = () => { sound.play('click'); moriV && moriV.replay(); };
 }
 addEventListener('gdbd-mori', e => {
@@ -2343,6 +2343,7 @@ function loop(now) {
     // (an online client still ticks, as that is where its match gets built)
     if (loadingUp()) { if (session && session.tickWhileLoading) session.tick(dt, real); }
     else if (session) session.tick(dt, real);
+    else if (moriV) moriV.tick(dt); // (1.7.0: an execution replay is open: it draws with the game's renderer)
     else if (menu) menu.update(dt, renderer);
   } catch (e) { console.error(e); }
 }

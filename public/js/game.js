@@ -6,14 +6,14 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { initPhoto } from './pbr.js';
+import { initPhoto, photosPending } from './pbr.js';
 import { realistic, nightEnv } from './gfx.js';
 import { KILLERS, SURVIVORS, SURV_PERKS, KILLER_PERKS, RULES, MODES, ITEMS, skinOf, HALF, SIDEKICKS, addonMods } from './config.js';
 import { buildWorld, updateWorld, pointBlocked, QUALITY, qualityOf, GFXO } from './world.js';
 import { chuckyReady } from './chuckyGlb.js';
 import { realismReady } from './realism.js';
 import { slappyReady } from './slappyGlb.js';
-import { updateVice, SEAT_DROP, COLL } from './vice.js';
+import { updateVice, SEAT_DROP, COLL, makeFlyingCase, makeGameDesk, loadViceModels } from './vice.js';
 import { sawOffGun } from './grannyGlb.js';
 import { makeCrow, loadCrow, crowReady, animateCrowPerched, animateCrowFlying, crowFlightOffset } from './crow.js';
 import { grannyReady, grandpaReady, spiderMomReady, makeSpiderMom, slendrinaReady, angelineReady, nosferatuReady, childReady, makeChild, skinModelReady, fatherReady, makeTeddy } from './grannyGlb.js';
@@ -390,6 +390,9 @@ export class Game {
       this.torchLight = new THREE.SpotLight(0xfff0d0, 0, 16, 0.32, 0.55, 1.2);
       this.scene.add(this.torchLight, this.torchLight.target);
       this.torchBest = Infinity;
+      // ...and one for Angeline's Yellow Eyes, there from the start when she's in the match (see updateBeam)
+      const S0 = this.session.state && this.session.state();
+      if (!S0 || S0.players.some(q => q.char === 'angeline')) { this.beamLight = new THREE.SpotLight(0xffd23a, 0, KILLERS.angeline.ability.range, KILLERS.angeline.ability.cone * 1.3, 0.4, 1.2); this.scene.add(this.beamLight, this.beamLight.target); }
     }
     this.blood = new BloodDrops(this.scene, 900, this.settings.quality === 'potato' || this.settings.quality === 'low');
     const lite = this.settings.quality === 'potato' || this.settings.quality === 'low';
@@ -670,16 +673,24 @@ export class Game {
       const m = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       const cone = new THREE.Mesh(geo, m); cone.renderOrder = 6;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('glow').map, color: 0xffd23a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })); glow.scale.setScalar(0.5);
-      const light = new THREE.SpotLight(0xffd23a, 0, L, KILLERS.angeline.ability.cone * 1.3, 0.4, 1.2);
-      const g = new THREE.Group(); g.add(cone, glow, light, light.target); light.target.position.set(0, 0, 4); this.scene.add(g);
-      c.beam = { g, cone, light };
+      // (1.7.0: no light of its own any more. A light added, or shown/hidden with the beam, changes the scene's light count, and
+      // three.js then recompiles EVERY material: the whole game froze each time she used Yellow Eyes. One shared beam light that
+      // is always in the scene (intensity 0 when unused) does the lighting instead.)
+      const g = new THREE.Group(); g.add(cone, glow); this.scene.add(g);
+      c.beam = { g, cone };
     }
-    const B = c.beam; B.g.visible = on; B.light.intensity = on ? 40 : 0;
+    const B = c.beam; B.g.visible = on;
+    const BL = this.beamLight;
+    if (BL && BL.userData.owner === p.id && !on) { BL.intensity = 0; BL.userData.owner = null; }
     if (!on) return;
     const local = p.id === this.myId, yaw = local ? this.camYaw + Math.PI : p.yaw;
     B.g.position.set(R.root.position.x + Math.sin(p.yaw) * 0.15, R.root.position.y + 1.66, R.root.position.z + Math.cos(p.yaw) * 0.15);
     B.g.rotation.set(0.06, local ? p.yaw : yaw, 0, 'YXZ');
     B.cone.material.opacity = 0.22 + Math.sin(this.t * 17) * 0.04;
+    if (BL && (!BL.userData.owner || BL.userData.owner === p.id || local)) {
+      BL.userData.owner = p.id; BL.intensity = 40;
+      B.g.updateMatrixWorld(true); BL.position.setFromMatrixPosition(B.g.matrixWorld); BL.target.position.copy(new THREE.Vector3(0, 0, 4).applyMatrix4(B.g.matrixWorld));
+    }
   }
   // Slendrina's Haunt: where the camera's aim meets the floor, up to her range away
   hauntTarget(me) {
@@ -2825,13 +2836,17 @@ export class Game {
     this.fpsN++; this.fpsT += real;
     if (this.fpsT > 0.5) { if (this.settings.showFps) { if (this.gpuShort == null) { try { const gl = this.renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); this.gpuShort = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '').replace(/^ANGLE \(|\)$/g, '').split(',').slice(-2, -1).join('').replace(/Direct3D.*|\(0x[0-9A-F]+\)/gi, '').trim().slice(0, 40); } catch { this.gpuShort = ''; } } $('fps').textContent = Math.round(this.fpsN / this.fpsT) + ' FPS · ' + (this.pr * 100).toFixed(0) + '% res' + (this.gpuShort ? ' · ' + this.gpuShort : ''); } this.fpsN = 0; this.fpsT = 0; } // (1.6.0: the FPS counter also names the GPU that draws the game)
     if (this.settings.dynres === false) return;
+    // 1.7.0: every change resizes every post-processing buffer (a hitch of its own), and with the old 1.2 s / 0.05 steps a frame
+    // rate near 40 went down, up, down... a hitch every second or two all match. Now: at most every 4 s, bigger steps, and it
+    // only goes back up after a long stretch well above 60 fps.
     this.drT += real;
-    if (this.drT < 1.2) return;
+    if (this.drT < 4) return;
     this.drT = 0;
     const fps = 1 / this.ftAvg;
     let pr = this.pr;
-    if (fps < 40 && pr > this.q.minPixel) pr = Math.max(this.q.minPixel, pr - 0.05);
-    else if (fps > 56 && pr < this.q.pixel) pr = Math.min(this.q.pixel, pr + 0.05);
+    this.drHigh = fps > 66 ? (this.drHigh || 0) + 1 : 0;
+    if (fps < 38 && pr > this.q.minPixel) { pr = Math.max(this.q.minPixel, pr - 0.15); this.drHigh = -4; }
+    else if (this.drHigh >= 4 && pr < this.q.pixel) { pr = Math.min(this.q.pixel, pr + 0.1); this.drHigh = 0; }
     if (pr !== this.pr) { this.pr = pr; this.renderer.setPixelRatio(pr); this.renderer.setSize(innerWidth, innerHeight); if (this.composer) { this.composer.setPixelRatio(pr); this.composer.setSize(innerWidth, innerHeight); } }
   }
 
@@ -3308,6 +3323,11 @@ export class Game {
     if (!r || !sc || !cam || this.disposed) return;
     if (say) say('Lighting the house…');
     await wait();
+    // (1.7.0) photo-scanned textures still loading: let them land now, behind the loading screen (10 s at most)
+    try { await Promise.race([photosPending(), new Promise(res => setTimeout(res, 10000))]); await new Promise(res => setTimeout(res, 50)); } catch (e) {}
+    // ...and the GTA VI case / collectable models when the match can have them (made mid-match otherwise: a compile then)
+    try { const S0 = this.session.state && this.session.state(); if (S0 && ((S0.colls && S0.colls.length) || S0.players.some(q => q.item === 'gtaps'))) { this.viceLoad = true; await Promise.race([loadViceModels((S0.colls || []).map(o => o.c)), new Promise(res => setTimeout(res, 10000))]); } } catch (e) {}
+    if (this.disposed) return;
     // 1) one frame with drawing switched off: characters, props and effects are created
     const comp = this.composer, render = r.render;
     this.composer = null; r.render = () => {};
@@ -3327,7 +3347,12 @@ export class Game {
     const unhid = [];
     // ...and one of each prop that is only made mid-match (bear traps, chest items), for their shaders too
     const props = new THREE.Group(); props.position.set(this.camera.position.x, -50, this.camera.position.z);
-    for (const mk of [() => makeExecTrap(), () => makeBearTrap(), () => pepperModel(), ...['flashlight', 'taser', 'pepper', 'trap'].map(k => () => itemModel(k))]) { try { const o = mk(); if (o) props.add(o); } catch (e) {} }
+    const lash = () => new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.09, 1, 6), new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true }));
+    for (const mk of [() => makeExecTrap(), () => makeBearTrap(), () => pepperModel(), ...['flashlight', 'taser', 'pepper', 'trap'].map(k => () => itemModel(k)), () => makeFlyingCase(), () => makeGameDesk(), () => makeTeddy(), lash]) { try { const o = mk(); if (o) props.add(o); } catch (e) {} }
+    // characters fade (Slendrina's Haunt, Angeline when the camera is close, executions): their see-through materials too
+    const faded = []; for (const c of this.chars.values()) if (c.rig && c.rig.setOpacity && c.rig.root.visible !== false) { try { c.rig.setOpacity(0.5); faded.push(c); } catch (e) {} }
+    // Angeline's Yellow Eyes beam, made now for every Angeline in the match (it's hidden: shown for the warm-up below)
+    try { const S0 = this.session.state && this.session.state(); for (const q of (S0 && S0.players) || []) { if (q.char !== 'angeline') continue; const c = this.chars.get(q.id); if (c && c.rig) this.updateBeam(c, { aim: false, id: q.id, yaw: 0 }, c.rig); } } catch (e) {}
     props.traverse(o => { o.frustumCulled = false; }); sc.add(props);
     sc.traverse(o => { if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite) || !o.material || o.visible) return; for (let q = o; q && q !== sc; q = q.parent) if (!q.visible) { q.visible = true; unhid.push(q); } });
     // 3) shaders in the background, for the same target the match draws into (post-processing: a render target)
@@ -3340,11 +3365,45 @@ export class Game {
       if (this.disposed) return;
     }
     // 4) one real frame behind the loading screen: shadows, post-processing and anything left over
-    if (unhid.length) { try { const ac = this.composer; if (ac) ac.render(); else r.render(sc, cam); } catch (e) {} }
+    // everything drawn once (frustum culling off), so every mesh's data is on the graphics card before the match starts, not
+    // uploaded the first time it comes into view
+    const culled = []; sc.traverse(o => { if (o.frustumCulled && (o.isMesh || o.isPoints || o.isLine || o.isSprite)) { o.frustumCulled = false; culled.push(o); } });
+    try { const ac = this.composer; if (ac) ac.render(); else r.render(sc, cam); } catch (e) {}
+    for (const o of culled) o.frustumCulled = true;
     for (const o of unhid) o.visible = false;
     sc.remove(props);
+    for (const c of faded) { try { c.rig.setOpacity(1); c.anOp = c.slOp = undefined; } catch (e) {} }
     try { this.frame(1 / 60); } catch (e) { console.warn('warm-up frame', e); }
     await wait();
+    this.deferCompile();
+  }
+  // 1.7.0: anything added to the scene once the match runs (a GTA VI desk, a Teddy, a killer's power effect, a trap...) has its
+  // shaders compiled in the background first and appears when they are ready (a frame or two later), instead of the frame
+  // stopping while they compile: on Windows (ANGLE turns every shader into HLSL) that was a visible freeze each time.
+  deferCompile() {
+    const r = this.renderer, sc = this.scene, game = this;
+    if (!r || !sc || sc.__deferred || !r.extensions.has('KHR_parallel_shader_compile')) return;
+    sc.__deferred = true;
+    const add0 = sc.add;
+    sc.add = function (...objs) {
+      const res = add0.apply(this, objs);
+      if (!game.disposed) for (const o of objs) game.compileBefore(o);
+      return res;
+    };
+  }
+  compileBefore(o) {
+    if (!o || !o.isObject3D || o.userData.noDefer) return;
+    let mats = 0, fresh = false;
+    o.traverse(c => { for (const m of [].concat(c.material || [])) { mats++; const pr = this.renderer.properties.get(m); if (!pr || !pr.currentProgram) fresh = true; } });
+    if (!mats || !fresh) return; // nothing new to compile
+    // hidden until compiled; what the game sets meanwhile is kept and applied when it's ready
+    let want = o.visible, hold = true;
+    Object.defineProperty(o, 'visible', { configurable: true, get: () => hold ? false : want, set: v => { want = v; } });
+    const done = () => { if (!hold) return; hold = false; delete o.visible; o.visible = want; };
+    // (compiled for the target the match draws into: with post-processing that's a half-float render target, not the screen)
+    const r = this.renderer, prev = r.getRenderTarget();
+    try { if (this.composer) r.setRenderTarget(this.compileRT ||= new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType })); r.compileAsync(o, this.camera, this.scene).then(done, done); } catch (e) { done(); } finally { r.setRenderTarget(prev); }
+    setTimeout(done, 1500); // never kept hidden for long
   }
 
   dispose() {

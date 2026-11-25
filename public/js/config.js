@@ -544,6 +544,7 @@ export const INBOX = [
       'Skill checks sometimes run counter-clockwise, like in Dead by Daylight.',
       'Loadout: killer cards are marked 1ST (first person) or 3RD (third person).',
       'Invite online friends straight from the lobby.',
+      'Smoother: no more freezes when Grandpa shoots, Angeline uses Yellow Eyes, a GTA VI case is thrown or a trap is set. New effects used to be prepared on the spot (and her beam light made the whole scene re-prepare); now everything is ready before the match starts, or is prepared in the background. Freddy Fazbear has his own model again.',
       'Fixes: the open chest lid is no longer see-through from below; Sawed-Off now shortens the gun in first person too; you can take over a bot after escaping as well; bots at an open exit gate no longer run across the map for a rescue; the scrambled text next to the menu character is gone.',
     ],
   },

@@ -279,8 +279,9 @@ export function updateCity(G, S, dt, me) {
     const v = Math.abs(c.v); o.body.position.y = v > 1 ? Math.sin(G.t * 17 + c.id) * 0.012 : 0;
   }
   // my headlights light the road
+  // (1.7.0: the headlight exists from the first frame, at 0: adding a light mid-match recompiled every material)
+  if (!C.head && !C.lite) { C.head = new THREE.SpotLight(0xfff0d0, 0, 30, 0.5, 0.5, 1.2); scene.add(C.head, C.head.target); }
   if (me && me.car >= 0 && !C.lite) {
-    if (!C.head) { C.head = new THREE.SpotLight(0xfff0d0, 40, 30, 0.5, 0.5, 1.2); scene.add(C.head, C.head.target); }
     const o = C.cars[me.car]; if (o) { const f = { x: Math.sin(o.y), z: Math.cos(o.y) }; C.head.position.set(o.x + f.x * 2.2, 1.0, o.z + f.z * 2.2); C.head.target.position.set(o.x + f.x * 14, 0, o.z + f.z * 14); C.head.intensity = 40; }
   } else if (C.head) C.head.intensity = 0;
   // pedestrians
