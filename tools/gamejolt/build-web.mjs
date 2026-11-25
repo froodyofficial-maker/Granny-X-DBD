@@ -12,6 +12,8 @@ if (!existsSync(join(root, 'index.html'))) throw new Error('run node tools/build
 rmSync(out, { recursive: true, force: true }); mkdirSync(join(out, 'public'), { recursive: true });
 // the files the page fetches (the game looks for public/<x> next to index.html)
 for (const d of ['models', 'audio', 'tex', 'img', 'fonts']) if (existsSync(join(pub, d))) cpSync(join(pub, d), join(out, 'public', d), { recursive: true });
+// freddy.glb (Sketchfab Standard licence: used inside the game, not handed out as a file of its own) stays out of the web zip
+rmSync(join(out, 'public/models/freddy.glb'), { force: true });
 cpSync(join(pub, 'vendor/three/addons/libs/basis'), join(out, 'public/vendor/three/addons/libs/basis'), { recursive: true });
 // the page: phone layout + home-screen app tags
 let html = readFileSync(join(root, 'index.html'), 'utf8');

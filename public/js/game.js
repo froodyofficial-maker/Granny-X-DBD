@@ -812,7 +812,7 @@ export class Game {
     this.updateAuras(S, me);
     this.updateAudio(dt, S, me);
     this.updateHUD(dt, S, me);
-    this.sparks.update(dt); this.blood.update(dt); this.smoke.update(dt); this.decals.update(dt); this.gibs.update(dt); this.updateBleeding(dt, S);
+    this.sparks.update(dt); this.blood.update(dt); this.smoke.update(dt); this.decals.update(dt); this.gibs.update(dt); this.updateTracers(); this.updateBleeding(dt, S);
     { const m = this.mine(); this.scratches.update(dt, !!m && m.role === 'killer'); }
     if (this.rays) {
       const v = this._mv || (this._mv = new THREE.Vector3());
@@ -2084,7 +2084,7 @@ export class Game {
       pos.setXYZ(1, st.ax, st.ay, st.az); pos.needsUpdate = true;
       if (!(p && p.swing) && st.t > 0.15) st.line.material.opacity -= dt * 4;
     }
-    for (const st of this.strands.filter(s => s.line.material.opacity <= 0 || s.t > 3)) { this.scene.remove(st.line); st.line.geometry.dispose(); st.line.material.dispose(); }
+    for (const st of this.strands.filter(s => s.line.material.opacity <= 0 || s.t > 3)) { this.scene.remove(st.line); st.line.geometry.dispose(); }
     this.strands = this.strands.filter(s => s.line.material.opacity > 0 && s.t <= 3);
     for (const z of (this.zaps ||= [])) {
       z.t += dt;
@@ -2389,7 +2389,7 @@ export class Game {
           const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(e.x, 1.35, e.z), new THREE.Vector3(e.tx, e.hit ? 1.3 : 1.1, e.tz)]);
           const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xf2f2ea, transparent: true, opacity: 0.95, depthWrite: false }));
           this.scene.add(line);
-          const t0 = this.t, fade = () => { const k = (this.t - t0) / 0.7; if (k >= 1 || this.disposed) { this.scene.remove(line); g.dispose(); line.material.dispose(); return; } line.material.opacity = 0.95 * (1 - k); requestAnimationFrame(fade); };
+          const t0 = this.t, fade = () => { const k = (this.t - t0) / 0.7; if (k >= 1 || this.disposed) { this.scene.remove(line); g.dispose(); return; } /* (the material is not disposed: that would throw the shader away) */ line.material.opacity = 0.95 * (1 - k); requestAnimationFrame(fade); };
           requestAnimationFrame(fade);
           sound.play('thwip', e.x, e.z);
           this.smoke.spawn(e.tx, 1.2, e.tz, 8, 0xf0f0e8, 0.7, 0.8, -1, 0.3);
@@ -3021,12 +3021,20 @@ export class Game {
   }
 
   // a brief streak of light along the shotgun's path
+  // Grandpa's pellet trail. 1.7.0: a small pool of lines that live all match (each shot used to make and dispose its own
+  // material, so three.js threw the shader away and compiled it again on the next shot: a freeze on every shot)
   tracer(x0, z0, x1, z1) {
-    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x0, 1.45, z0), new THREE.Vector3(x1, 1.2, z1)]);
-    const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffd890, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
-    this.scene.add(l);
-    const t0 = this.t, step = () => { const k = (this.t - t0) / 0.12; if (k >= 1 || this.disposed) { this.scene.remove(l); g.dispose(); l.material.dispose(); return; } l.material.opacity = 0.85 * (1 - k); requestAnimationFrame(step); };
-    requestAnimationFrame(step);
+    const pool = this.tracers ||= [];
+    let T = pool.find(t => !t.on);
+    if (!T) {
+      if (pool.length >= 6) T = pool[0];
+      else { const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]); const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffd890, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); l.frustumCulled = false; this.scene.add(l); T = { l }; pool.push(T); }
+    }
+    const P = T.l.geometry.attributes.position; P.setXYZ(0, x0, 1.45, z0); P.setXYZ(1, x1, 1.2, z1); P.needsUpdate = true;
+    T.on = true; T.t0 = this.t; T.l.material.opacity = 0.85;
+  }
+  updateTracers() {
+    for (const T of this.tracers || []) { if (!T.on) continue; const k = (this.t - T.t0) / 0.12; if (k >= 1) { T.on = false; T.l.material.opacity = 0; } else T.l.material.opacity = 0.85 * (1 - k); }
   }
   // Grandpa (god-tier outfit) is in the match: survivors carry a second, shotgun health bar
   grandpaOn(S) { return !!S && S.players.some(k => k.role === 'killer' && k.char === 'grandpa'); }
@@ -3313,6 +3321,15 @@ export class Game {
       try { r.initTexture(t); } catch (e) { /* uploaded on first use as usual */ }
       if (performance.now() - s > 24) { await wait(); if (this.disposed) return; s = performance.now(); }
     }
+    // 1.7.0: things that only show up mid-match (the shot tracer, blood on the weapon, effects hidden until used) are shown
+    // for the compile and the warm-up frame below, so their shaders don't compile the first time they appear (a freeze)
+    if (!this.tracers || !this.tracers.length) { this.tracer(0, 0, 0, 1); this.tracers[0].on = false; this.tracers[0].l.material.opacity = 0.001; }
+    const unhid = [];
+    // ...and one of each prop that is only made mid-match (bear traps, chest items), for their shaders too
+    const props = new THREE.Group(); props.position.set(this.camera.position.x, -50, this.camera.position.z);
+    for (const mk of [() => makeExecTrap(), () => makeBearTrap(), () => pepperModel(), ...['flashlight', 'taser', 'pepper', 'trap'].map(k => () => itemModel(k))]) { try { const o = mk(); if (o) props.add(o); } catch (e) {} }
+    props.traverse(o => { o.frustumCulled = false; }); sc.add(props);
+    sc.traverse(o => { if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite) || !o.material || o.visible) return; for (let q = o; q && q !== sc; q = q.parent) if (!q.visible) { q.visible = true; unhid.push(q); } });
     // 3) shaders in the background, for the same target the match draws into (post-processing: a render target)
     if (r.extensions.has('KHR_parallel_shader_compile')) {
       const rt = this.composer ? new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType }) : null;
@@ -3323,6 +3340,9 @@ export class Game {
       if (this.disposed) return;
     }
     // 4) one real frame behind the loading screen: shadows, post-processing and anything left over
+    if (unhid.length) { try { const ac = this.composer; if (ac) ac.render(); else r.render(sc, cam); } catch (e) {} }
+    for (const o of unhid) o.visible = false;
+    sc.remove(props);
     try { this.frame(1 / 60); } catch (e) { console.warn('warm-up frame', e); }
     await wait();
   }

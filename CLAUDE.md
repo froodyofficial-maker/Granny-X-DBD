@@ -231,6 +231,15 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
   invite list (`renderLobbyInvite`); chest lid underside; first-person sawed-off (`killerViewParts(.., sawed)` + rebuild); take over after escaping;
   bots skip far rescues once a gate is open; `#show-drag > span` (the scrambled text was its nested span positioned on top of itself).
 - Devlog banner: tools/test/devlog170-page.js (Grandpa's Last Round).
+- 1.7.0 second build (APK VC 34, exe unpackDirName GrannyxDBD-1.7.0-b; owner: "the game often stutters/freezes on shooting or downing
+  survivors" + the Freddy model): tools/test/stutter.mjs <killer> <map> [secs] times every frame / sim / bot step in a bot match and logs any
+  shader program compiled mid-match. Cause: Grandpa's shot tracer made and disposed a LineBasicMaterial per shot, so three.js released the
+  program and recompiled it on every shot (600-980 ms frames in SwiftShader); same pattern on the web strands. Now: a pool of tracer lines
+  (`tracer` / `updateTracers`), transient line materials are never disposed, and `warmUp` shows everything hidden + one of each mid-match
+  prop (exec/bear traps, chest items) for the compile, then hides/removes them. Result: worst frame 24 ms over 110 s, no compiles mid-match.
+  Don't dispose materials of short-lived effects: reuse them. **Freddy is in**: public/models/freddy.glb (the owner's upload, still gitignored:
+  Sketchfab Standard licence) is embedded in the exe/APK offline file; it is left out of the Game Jolt web zip (build-web.mjs), so Freddy is
+  plain Granny there. Keep the file locally for future builds (or ask the owner again).
 
 1.6.0 (APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
 - Performance/look: no film grain, GTAO only if `settings.ao`, MSAA render target per quality (`QUALITY[q].msaa`), dynamic resolution only
@@ -519,7 +528,8 @@ the menu), `onlinestart.mjs` (host + client start a match through the local brok
 - **1.7.0 is shipped** (pushed to `main` and `claude/beautiful-keller-gvarx6`; exe zip (unpackDirName GrannyxDBD-1.7.0), APK VC 33 / VN 1.7.0
   (grannyxdbd-1.3.jks), Game Jolt web zip and devlog banner handed to the owner).
 - Open from 1.7.0: the executions were checked in a cramped spot by the house walls (moritest uses the killer spawn); worth a look in the
-  open and on upper floors. Custom Game is bot-matches only (online lobbies would need the counts synced). Freddy still needs freddy.glb.
+  open and on upper floors. Custom Game is bot-matches only (online lobbies would need the counts synced). freddy.glb lives only in this session's checkout
+  (gitignored): a new session needs the owner's file again.
 - Open from 1.6.0:
   - **Freddy Fazbear skin** still shows plain Granny: freddy.glb is not in the repo (gitignored, Sketchfab Standard licence) and the owner
     hasn't uploaded it yet. Ask for the file (or an old GrannyDBD.html that still has `#nb-freddy-glb`), drop it in public/models/, rebuild.
