@@ -255,6 +255,9 @@ Devlog banner "ANGELINE · SLENDRINA'S MOTHER IS HERE" rendered in-engine.
     canvas's bottom-left corner and copies it to its own 2D canvas; main.js's loop calls `moriV.tick(dt)` instead of the menu while
     it's open; everything (the trap too) is compiled with `compileAsync` before the film starts ("Loading…" until then).
   - stutter.mjs: `ITEM=gtaps` (bots carry GTA VI cases, main.js `window.__botItem`), `Q=medium`; prints `deferred` / `khr`.
+- 1.7.0 fourth build (APK VC 36, exe unpackDirName GrannyxDBD-1.7.0-d): 10 more Freddy codes (owner asked for working codes;
+  the 1.3.2 plain codes were never kept). Their hashes are appended to `SECRET_CODES` (old ones still work); the plain codes
+  were handed to the owner as a file only (not in the repo).
 
 1.6.0 (APK versionCode 28, Windows 1.6.0, NET_PROTOCOL 18): the graphics update + the owner's suggestion list.
 - Performance/look: no film grain, GTAO only if `settings.ao`, MSAA render target per quality (`QUALITY[q].msaa`), dynamic resolution only
